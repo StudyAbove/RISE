@@ -13,9 +13,9 @@ This project was developed as a capstone project at California State University,
 ## Features
 
 - **Summary:** Looks at the next 14 days to gauge student's total workload, starting work before you are overwhelmed.
-- **Add Calendars:** 
-- **[Feature name]:** [Brief explanation of the feature and its value.]
-- **[Feature name]:** [Brief explanation of the feature and its value.]
+- **Add Calendars:** Users can add their personal Apple or Google calendars, features to coordinate with pre-existing calendars to avoid overbooking or double-booking
+- **Assignment Breakdown:** After clicking on assignments, users can see the assignment in specific tasks. This simplifies the user's focus to one thing, and makes it easier to start.
+- **Help Button:** If users have a last-minute assignmetn due, they can click the button to address the fear, take managable steps to address it (breathing, emailing professors, Office Hours). This allows the users to focus back on the work, instead of letting their emotions guide them.
 
 ## Technologies Used
 
