@@ -121,8 +121,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser, or replace 
 
 | Name | Role | Profile |
 | --- | --- | --- |
-| [Name] | [Role] | [Profile URL] |
-| [Name] | [Role] | [Profile URL] |
+| Julia Matinyan | [Role] | [Profile URL] |
+| Bighani Lometillo | [Role] | [Profile URL] |
+| Jesus Vaquero | [Role] | [Profile URL] |
+| Lisseth Zamora Martinez | [Role] | [Profile URL] |
+| Mo Gibson | [Role] | [Profile URL] |
+
 
 ## Contributing
 
