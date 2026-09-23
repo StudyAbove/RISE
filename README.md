@@ -1,19 +1,19 @@
-# [Project Name]
+# RISE
 
-> [A short description of what the project does and who it is for.]
+## A Senior Capstone Design
 
-[Optional: Add a one- or two-sentence introduction explaining the motivation behind the project, the problem it solves, and its current status.]
+As upper classmen in college, we went through the learning curve of tracking assignments, exams, and projects along side life commitments. Even after a couple years under our belt, we stil feel the struggle of procrastination and managing deadlines with different classes. What if there was a better way? That is why we developed RISE. 
 
 ## Overview
 
-[Project Name] is a [web application/mobile application/library/platform] designed to [primary purpose]. It helps [target users] [key outcome or benefit].
+RISE is a mobile application designed to help students manage academic and life responsibilities. It helps university students RISE plan assignments in advance and break them down into microtasks, avoid unneccissary stress and burnout.
 
-This project was developed as [a capstone project/course project/personal project/open-source project] at [organization or school], beginning in [year].
+This project was developed as a capstone project at California State University, Long Beach, beginning in 2026.
 
 ## Features
 
-- **[Feature name]:** [Brief explanation of the feature and its value.]
-- **[Feature name]:** [Brief explanation of the feature and its value.]
+- **Summary:** Looks at the next 14 days to gauge student's total workload, starting work before you are overwhelmed.
+- **Add Calendars:** 
 - **[Feature name]:** [Brief explanation of the feature and its value.]
 - **[Feature name]:** [Brief explanation of the feature and its value.]
 
@@ -137,7 +137,9 @@ Please review [the contribution guidelines](CONTRIBUTING.md), if available, befo
 
 ## License
 
-[Project Name] is licensed under the MIT License. See [LICENSE](LICENSE) for the full license text.
+RISE is licensed under the [License Name]. See [LICENSE](LICENSE) for details.
+
+
 
 ## Disclaimer
 
@@ -145,4 +147,4 @@ Please review [the contribution guidelines](CONTRIBUTING.md), if available, befo
 
 ## Contact
 
-For questions or collaboration inquiries, contact [name or team] at [email address] or open an issue in this repository.
+For questions or collaboration inquiries, contact RISE at rise@gmail.com or open an issue in this repository.
