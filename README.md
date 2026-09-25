@@ -121,11 +121,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser, or replace 
 
 | Name | Role | Profile |
 | --- | --- | --- |
-| Julia Matinyan | [Role] | [Profile URL] |
+| Julia Matinyan | [Role] | https://www.linkedin.com/in/jmatinyan |
 | Bighani Lometillo | [Role] | [Profile URL] |
 | Jesus Vaquero | [Role] | [Profile URL] |
 | Lisseth Zamora Martinez | [Role] | [Profile URL] |
-| Mo Gibson | [Role] | [Profile URL] |
+| Mo Gibson | [Role] | https://www.linkedin.com/in/mo-gibson-5978b7354/ |
 
 
 ## Contributing
