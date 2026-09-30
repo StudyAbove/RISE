@@ -1,0 +1,52 @@
+# =========================
+# Operating System Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor Settings
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# Environment Variables / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs and Temporary Files
+# =========================
+*.log
+*.tmp
+*.temp
+*.swp
+
+# =========================
+# Build / Generated Files
+# =========================
+dist/
+build/
+coverage/
+
+# =========================
+# Dependencies
+# =========================
+node_modules/
+
+# =========================
+# Python Generated Files
+# =========================
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# =========================
+# Testing / Cache Files
+# =========================
+.pytest_cache/
+.cache/
