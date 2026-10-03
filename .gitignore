@@ -50,3 +50,41 @@ venv/
 # =========================
 .pytest_cache/
 .cache/
+
+# =========================
+# Expo / React Native
+# =========================
+.expo/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+
+# =========================
+# Native / iOS / Android Generated Files
+# =========================
+/ios
+/android
+.kotlin/
+
+# =========================
+# Native Secrets / Signing Files
+# =========================
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# =========================
+# Debug / Package Manager Logs
+# =========================
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# =========================
+# Misc Generated Files
+# =========================
+*.orig.*
