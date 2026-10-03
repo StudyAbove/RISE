@@ -23,23 +23,32 @@ This project uses the following technologies and tools.
 
 ### Frontend
 
-- [Framework or library] — [What it is used for]
-- [UI library or styling solution] — [What it is used for]
-- [State management or visualization library] — [What it is used for]
+- **React Native** — Used to build the mobile application.
+- **Expo** — Used for React Native development, testing, and native integrations.
+- **TypeScript** — Used for type safety and shared application models.
 
 ### Backend
 
-- [Backend framework or platform] — [What it is used for]
-- [Database] — [What it is used for]
-- [Authentication or API service] — [What it is used for]
+- **Supabase** — Used as the backend platform.
+- **PostgreSQL** — Used as the application database through Supabase.
+- **Supabase Auth** — Used for user authentication and session management.
+- **Supabase Data API** — Used by the application to communicate with the database.
+
+### Integrations
+
+- **Apple Calendar** — Used to connect a user's Apple calendar.
+- **Google Calendar** — Used to connect a user's Google calendar.
+- **Canvas** — Academic information will be imported through the RISE Canvas integration.
 
 ### Development Tools
 
-- [Programming language]
-- [Type checking or validation tool]
-- [Linting and formatting tools]
-- [Testing tools]
-- [CLI or deployment tools]
+- **Node.js**
+- **npm**
+- **Git and GitHub**
+- **Visual Studio Code**
+- **Xcode / iOS Simulator**
+- **Supabase**
+- **Expo Go**
 
 ## Getting Started
 
@@ -47,50 +56,67 @@ This project uses the following technologies and tools.
 
 Before running the project, make sure you have installed:
 
-- [Runtime and version, such as Node.js 20+]
-- [Package manager]
-- [Database, CLI, or other required service]
+- Node.js
+- npm
+- Git
+- Expo-compatible development tools
+- Xcode if using the iOS Simulator on macOS
 
 ### Installation
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/[username]/[repository].git
-   cd [repository]
+   git clone https://github.com/StudyAbove/RISE.git
+   cd RISE
    ```
 
 2. Install dependencies:
 
    ```bash
-   [package-manager] install
+   npm install
    ```
 
 3. Create an environment file:
 
    ```bash
-   cp .env.example .env.local
+   cp .env.example .env
    ```
 
-4. Add the required values to `.env.local`:
+
+4. Add the required values to `.env`:
 
    ```env
-   [PUBLIC_OR_CLIENT_VARIABLE]=[value]
-   [SERVER_ONLY_VARIABLE]=[value]
+   EXPO_PUBLIC_SUPABASE_URL=
+   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
    ```
+Ask a team member for the shared development Supabase values.
+Do not commit the `.env` file to GitHub.
 
-5. Start the development server:
+5. Start the Expo development server:
 
    ```bash
-   [package-manager] run dev
+   npx expo start
    ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser, or replace the URL with the port used by the project.
+6. To run using the iOS Simulator:
+
+   ```bash
+   npx expo start --tunnel
+   ```
+After Expo starts, press: i
+
 
 ## Available Scripts
 
 | Command | Description |
 | --- | --- |
+| `npm start` | Start the Expo development server. |
+| `npm run ios` | Open the project using the iOS Simulator. |
+| `npm run android` | Open the project using an Android emulator or device. |
+| `npm run web` | Run the Expo web version for development. |
+| `npx expo start --tunnel` | Start Expo using a tunnel connection. |
+Future -
 | `[package-manager] run dev` | Start the development server. |
 | `[package-manager] run build` | Create a production build. |
 | `[package-manager] run start` | Run the production build. |
@@ -100,19 +126,38 @@ Open [http://localhost:3000](http://localhost:3000) in your browser, or replace 
 ## Project Structure
 
 ```text
-[repository]/
-├── [app-or-src]/       # Application source code
-├── [components]/       # Reusable UI components
-├── [lib-or-utils]/     # Shared utilities and services
-├── [public]/           # Static assets
-├── .env.example        # Environment variable template
-└── README.md           # Project documentation
+RISE/
+├── assets/                     # Images and other static assets
+├── src/
+│   ├── components/             # Shared reusable UI components
+│   ├── features/
+│   │   ├── auth/               # Authentication features
+│   │   ├── calendar/           # Calendar integration features
+│   │   ├── canvas/             # Canvas integration features
+│   │   ├── navigation/         # Application navigation
+│   │   ├── onboarding/         # User onboarding
+│   │   ├── settings/           # Settings features
+│   │   └── studyPlan/          # Study planning features
+│   ├── lib/                    # Shared library configuration
+│   ├── mocks/                  # Optional development mock data
+│   ├── models/                 # Shared TypeScript models
+│   ├── repositories/           # Data access layer
+│   ├── services/               # Shared application services
+│   └── utils/                  # Shared helper functions
+├── .env.example                # Environment variable template
+├── App.tsx                     # Application entry component
+├── app.json                    # Expo application configuration
+├── index.ts                    # Application entry point
+├── package.json                # Project dependencies and scripts
+└── tsconfig.json               # TypeScript configuration
 ```
 
 ## Deployment
 
-[Describe where the project is deployed and provide a link, or explain how to deploy it.]
+RISE is currently in active development and is not yet deployed as a production application.
+The project is currently tested through Expo and the iOS Simulator.
 
+Future -
 - **Live application:** [Deployment URL]
 - **Hosting provider:** [Provider]
 - **Required services:** [Database, authentication provider, APIs, or other services]
@@ -130,24 +175,35 @@ Open [http://localhost:3000](http://localhost:3000) in your browser, or replace 
 
 ## Contributing
 
-Contributions are welcome. To propose a change:
+Team members should create a separate branch for each GitHub issue or feature.
 
-1. Fork the repository.
-2. Create a branch: `git checkout -b feature/[name]`.
-3. Make and test your changes.
-4. Open a pull request with a clear description of the change.
+1. Make sure the local `main` branch is up to date.
 
-Please review [the contribution guidelines](CONTRIBUTING.md), if available, before submitting a pull request.
+   ```bash
+   git checkout main
+   git pull
+   ```
+
+2. Create a feature branch using the GitHub issue number. Example: git checkout -b feature/24-create-account
+   
+   ```bash
+   git checkout -b feature/<issue-number>-<short-name>
+   ```
+
+3. Make and test the changes.
+
+4. Push the branch to GitHub.
+
+5. Open a pull request into main.
+
 
 ## License
 
 RISE is licensed under the [License Name]. See [LICENSE](LICENSE) for details.
 
-
-
 ## Disclaimer
 
-[Explain the intended use of the repository, known limitations, and whether it is suitable for production use.]
+RISE is currently being developed as a senior capstone project and is not yet intended for production use. Features, integrations, and application behavior may change during development.
 
 ## Contact
 
