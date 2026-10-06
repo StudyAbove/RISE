@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { RootNavigator } from './src/features/navigation/navigators/RootNavigator';
 import { fontAssets } from './src/theme/fontAssets';
 
 // Keep the splash screen up until fonts load, so text never renders in the fallback font.
@@ -23,22 +26,11 @@ export default function App() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>RISE</Text>
-      <Text>Senior Capstone Project</Text>
-    </View>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>
+      <StatusBar style="dark" />
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-});
