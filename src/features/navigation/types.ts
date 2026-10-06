@@ -9,14 +9,8 @@ export type MainTabParamList = {
   Analytics: undefined;
 };
 
-/**
- * Top-level screens. Only one group is registered at a time, based on the
- * user's auth status (see RootNavigator).
- */
+/** Top-level screens. Sign-in and onboarding screens get added here once they're built. */
 export type RootStackParamList = {
-  SignIn: undefined;
-  CreateAccount: undefined;
-  Onboarding: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
 };
 
