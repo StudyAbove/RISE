@@ -110,15 +110,25 @@ export default function CreateAccountScreen() {
       );
     } catch (err) {
       if (err instanceof Error) {
+        if (err.message === 'EMAIL_ALREADY_REGISTERED') {
+          setError(
+            'An account with this school email already exists. Please log in instead.'
+          );
+          return;
+        }
+
         const message = err.message.toLowerCase();
 
         if (message.includes('rate limit')) {
           setError(
             'Too many verification emails were requested. Please wait a few minutes and try again.'
           );
-        } else {
-          setError(err.message);
+          return;
         }
+
+        setError(
+          'Something went wrong. Please try again.'
+        );
       } else {
         setError(
           'Something went wrong. Please try again.'
