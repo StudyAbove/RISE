@@ -1,64 +1,63 @@
-import { useEffect, useState } from 'react';
-import {
-  Alert,
-  Linking,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useEffect } from 'react';
+import { Alert, Linking } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import CreateAccountScreen from './src/features/auth/screens/CreateAccountScreen';
+import { RootNavigator } from './src/features/navigation/navigators/RootNavigator';
 import { supabase } from './src/lib/supabase';
+import { fontAssets } from './src/theme/fontAssets';
+
+// Keep the splash screen visible until the app fonts finish loading.
+SplashScreen.preventAutoHideAsync();
 
 export default function App() {
-  const [callbackStatus, setCallbackStatus] = useState(
-    'Waiting for authentication callback...'
-  );
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
+  const isReady = fontsLoaded || fontError !== null;
 
+  // Hide the splash screen once the fonts are ready.
+  useEffect(() => {
+    if (isReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [isReady]);
+
+  // Handle Supabase authentication links that open RISE.
   useEffect(() => {
     async function handleAuthCallback(url: string) {
-      setCallbackStatus('RISE received the authentication link.');
-
       try {
         const parsedUrl = new URL(url);
 
-        // PKCE flow
+        // PKCE flow:
+        // Supabase may return a one-time authentication code.
         const code = parsedUrl.searchParams.get('code');
 
         if (code) {
-          setCallbackStatus(
-            'Authentication code received. Creating session...'
-          );
-
           const { error } =
             await supabase.auth.exchangeCodeForSession(code);
 
           if (error) {
-            setCallbackStatus(
-              `Session error: ${error.message}`
-            );
-
             Alert.alert(
               'Sign in failed',
-              'We could not finish signing you in.'
+              'We could not finish signing you in. Please try again.'
             );
 
             return;
           }
-
-          setCallbackStatus(
-            'Success: Supabase session created.'
-          );
 
           Alert.alert(
             'Success',
             'Your RISE account is now signed in.'
           );
 
+          // Later:
+          // New accounts will continue to onboarding here.
           return;
         }
 
-        // Implicit flow
+        // Fallback for links that return access and refresh tokens.
         const hashPart = url.split('#')[1];
 
         if (hashPart) {
@@ -68,49 +67,30 @@ export default function App() {
           const refreshToken = params.get('refresh_token');
 
           if (accessToken && refreshToken) {
-            setCallbackStatus(
-              'Authentication tokens received. Creating session...'
-            );
-
             const { error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
 
             if (error) {
-              setCallbackStatus(
-                `Session error: ${error.message}`
-              );
-
               Alert.alert(
                 'Sign in failed',
-                'We could not finish signing you in.'
+                'We could not finish signing you in. Please try again.'
               );
 
               return;
             }
-
-            setCallbackStatus(
-              'Success: Supabase session created.'
-            );
 
             Alert.alert(
               'Success',
               'Your RISE account is now signed in.'
             );
 
-            return;
+            // Later:
+            // New accounts will continue to onboarding here.
           }
         }
-
-        setCallbackStatus(
-          'RISE opened, but no authentication code or tokens were found.'
-        );
-      } catch (error) {
-        setCallbackStatus(
-          'Something went wrong while processing the authentication link.'
-        );
-
+      } catch {
         Alert.alert(
           'Sign in failed',
           'Something went wrong while signing you in.'
@@ -118,6 +98,7 @@ export default function App() {
       }
     }
 
+    // Handles a link while RISE is already running.
     const subscription = Linking.addEventListener(
       'url',
       ({ url }) => {
@@ -125,6 +106,7 @@ export default function App() {
       }
     );
 
+    // Handles a link that launches RISE from a closed state.
     Linking.getInitialURL().then((url) => {
       if (url) {
         handleAuthCallback(url);
@@ -136,39 +118,17 @@ export default function App() {
     };
   }, []);
 
-  return (
-    <View style={styles.container}>
-      <CreateAccountScreen />
+  if (!isReady) {
+    return null;
+  }
 
-      <View style={styles.debugBox}>
-        <Text style={styles.debugText}>
-          {callbackStatus}
-        </Text>
-      </View>
-    </View>
+  return (
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>
+
+      <StatusBar style="dark" />
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-
-  debugBox: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DCE8D7',
-    borderRadius: 10,
-    padding: 10,
-  },
-
-  debugText: {
-    fontSize: 12,
-    color: '#35433B',
-    textAlign: 'center',
-  },
-});
