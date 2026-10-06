@@ -10,7 +10,13 @@ import { MainTabNavigator } from './MainTabNavigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export function RootNavigator() {
+type RootNavigatorProps = {
+  authLinkError?: string;
+};
+
+export function RootNavigator({
+  authLinkError = '',
+}: RootNavigatorProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] =
@@ -81,10 +87,13 @@ export function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isSignedIn ? (
-        <Stack.Screen
-          name="CreateAccount"
-          component={CreateAccountScreen}
-        />
+        <Stack.Screen name="CreateAccount">
+          {() => (
+            <CreateAccountScreen
+              authLinkError={authLinkError}
+            />
+          )}
+        </Stack.Screen>
       ) : !hasCompletedOnboarding ? (
         <Stack.Screen name="Onboarding">
           {() => (

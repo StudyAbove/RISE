@@ -20,7 +20,13 @@ const INPUT_FOCUS_SCROLL_Y = 180;
 // Extra scroll when an error message is visible.
 const ERROR_SCROLL_EXTRA = 45;
 
-export default function CreateAccountScreen() {
+type CreateAccountScreenProps = {
+  authLinkError?: string;
+};
+
+export default function CreateAccountScreen({
+  authLinkError = '',
+}: CreateAccountScreenProps) {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -33,6 +39,13 @@ export default function CreateAccountScreen() {
   useEffect(() => {
     errorRef.current = error;
   }, [error]);
+
+  useEffect(() => {
+    if (authLinkError) {
+      setSuccessMessage('');
+      setError(authLinkError);
+    }
+  }, [authLinkError]);
 
   useEffect(() => {
     function handleKeyboardShow(event: KeyboardEvent) {

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Alert, Linking } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
@@ -13,8 +13,13 @@ import { fontAssets } from './src/theme/fontAssets';
 // Keep the splash screen visible until the app fonts finish loading.
 SplashScreen.preventAutoHideAsync();
 
+const INVALID_LINK_MESSAGE =
+  'This verification link is invalid, expired, or has already been used. Please request a new link.';
+
 export default function App() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
+  const [authLinkError, setAuthLinkError] = useState('');
+
   const isReady = fontsLoaded || fontError !== null;
 
   // Hide the splash screen once the fonts are ready.
@@ -39,16 +44,11 @@ export default function App() {
             await supabase.auth.exchangeCodeForSession(code);
 
           if (error) {
-            Alert.alert(
-              'Sign in failed',
-              'We could not finish signing you in. Please try again.'
-            );
-
+            setAuthLinkError(INVALID_LINK_MESSAGE);
             return;
           }
 
-          // Later:
-          // New accounts will continue to onboarding here.
+          setAuthLinkError('');
           return;
         }
 
@@ -68,23 +68,15 @@ export default function App() {
             });
 
             if (error) {
-              Alert.alert(
-                'Sign in failed',
-                'We could not finish signing you in. Please try again.'
-              );
-
+              setAuthLinkError(INVALID_LINK_MESSAGE);
               return;
             }
-            
-            // Later:
-            // New accounts will continue to onboarding here.
+
+            setAuthLinkError('');
           }
         }
       } catch {
-        Alert.alert(
-          'Sign in failed',
-          'Something went wrong while signing you in.'
-        );
+        setAuthLinkError(INVALID_LINK_MESSAGE);
       }
     }
 
@@ -115,7 +107,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <RootNavigator />
+        <RootNavigator authLinkError={authLinkError} />
       </NavigationContainer>
 
       <StatusBar style="dark" />
