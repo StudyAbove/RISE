@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { BottomNavBar } from '../components/BottomNavBar';
+import { TabBarIcon } from '../components/TabBarIcon';
 import { MAIN_TABS } from '../config/mainTabs';
 import type { MainTabParamList } from '../types';
 
@@ -11,7 +12,8 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
  * Every page in here gets the bottom nav bar.
  *
  * To give a tab detail screens (e.g. assignment details), replace its
- * `component` with a native stack navigator.
+ * `component` with a native stack navigator. The nav bar keeps that tab
+ * highlighted while its detail screens are open.
  */
 export function MainTabNavigator() {
   return (
@@ -20,7 +22,7 @@ export function MainTabNavigator() {
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <BottomNavBar {...props} />}
     >
-      {MAIN_TABS.map(({ name, label, component, icon: { Icon, width, height } }) => (
+      {MAIN_TABS.map(({ name, label, component, icon }) => (
         <Tab.Screen
           key={name}
           name={name}
@@ -28,7 +30,9 @@ export function MainTabNavigator() {
           options={{
             tabBarLabel: label,
             tabBarButtonTestID: `nav-tab-${name}`,
-            tabBarIcon: ({ color }) => <Icon width={width} height={height} color={color} />,
+            tabBarIcon: ({ focused, color }) => (
+              <TabBarIcon icon={icon} focused={focused} color={color} />
+            ),
           }}
         />
       ))}

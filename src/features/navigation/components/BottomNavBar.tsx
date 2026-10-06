@@ -62,6 +62,7 @@ export function BottomNavBar({ state, descriptors, navigation, insets }: BottomT
               color: colors.deepOlive,
               size: ICON_SIZE,
             })}
+            isSelected={isSelected}
             onPress={handlePress}
             onLongPress={handleLongPress}
             testID={options.tabBarButtonTestID}

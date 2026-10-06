@@ -1,16 +1,21 @@
-import type { ComponentType, FC } from 'react';
-import type { SvgProps } from 'react-native-svg';
+import type { ComponentType } from 'react';
 
-import AnalyticsIcon from '../../../../assets/icons/navigation/analytics-outline.svg';
-import CalendarIcon from '../../../../assets/icons/navigation/calendar-outline.svg';
-import HomeIcon from '../../../../assets/icons/navigation/home-outline.svg';
-import ListIcon from '../../../../assets/icons/navigation/list-outline.svg';
-import StudyIcon from '../../../../assets/icons/navigation/study-outline.svg';
+import AnalyticsFilledIcon from '../../../../assets/icons/navigation/analytics-filled.svg';
+import AnalyticsOutlineIcon from '../../../../assets/icons/navigation/analytics-outline.svg';
+import CalendarFilledIcon from '../../../../assets/icons/navigation/calendar-filled.svg';
+import CalendarOutlineIcon from '../../../../assets/icons/navigation/calendar-outline.svg';
+import HomeFilledIcon from '../../../../assets/icons/navigation/home-filled.svg';
+import HomeOutlineIcon from '../../../../assets/icons/navigation/home-outline.svg';
+import ListFilledIcon from '../../../../assets/icons/navigation/list-filled.svg';
+import ListOutlineIcon from '../../../../assets/icons/navigation/list-outline.svg';
+import StudyFilledIcon from '../../../../assets/icons/navigation/study-filled.svg';
+import StudyOutlineIcon from '../../../../assets/icons/navigation/study-outline.svg';
 import { AnalyticsScreen } from '../../analytics/screens/AnalyticsScreen';
 import { AssignmentsScreen } from '../../assignments/screens/AssignmentsScreen';
 import { CalendarScreen } from '../../calendar/screens/CalendarScreen';
 import { HomeScreen } from '../../home/screens/HomeScreen';
 import { StudyScreen } from '../../studyPlan/screens/StudyScreen';
+import type { TabBarIconSource } from '../components/TabBarIcon';
 import type { MainTabParamList } from '../types';
 
 export interface MainTabConfig {
@@ -18,7 +23,7 @@ export interface MainTabConfig {
   /** Short text shown under the icon and read by VoiceOver. */
   label: string;
   component: ComponentType;
-  icon: { Icon: FC<SvgProps>; width: number; height: number };
+  icon: TabBarIconSource;
 }
 
 // Icon sizes match the Figma "Final - Bar" component.
@@ -34,30 +39,30 @@ export const MAIN_TABS: MainTabConfig[] = [
     name: 'Home',
     label: 'Home',
     component: HomeScreen,
-    icon: { Icon: HomeIcon, ...STANDARD_ICON_SIZE },
+    icon: { Filled: HomeFilledIcon, Outline: HomeOutlineIcon, ...STANDARD_ICON_SIZE },
   },
   {
     name: 'Calendar',
     label: 'Calendar',
     component: CalendarScreen,
-    icon: { Icon: CalendarIcon, ...CALENDAR_ICON_SIZE },
+    icon: { Filled: CalendarFilledIcon, Outline: CalendarOutlineIcon, ...CALENDAR_ICON_SIZE },
   },
   {
     name: 'Study',
     label: 'Study',
     component: StudyScreen,
-    icon: { Icon: StudyIcon, ...STANDARD_ICON_SIZE },
+    icon: { Filled: StudyFilledIcon, Outline: StudyOutlineIcon, ...STANDARD_ICON_SIZE },
   },
   {
     name: 'List',
     label: 'List',
     component: AssignmentsScreen,
-    icon: { Icon: ListIcon, ...STANDARD_ICON_SIZE },
+    icon: { Filled: ListFilledIcon, Outline: ListOutlineIcon, ...STANDARD_ICON_SIZE },
   },
   {
     name: 'Analytics',
     label: 'Analytics',
     component: AnalyticsScreen,
-    icon: { Icon: AnalyticsIcon, ...STANDARD_ICON_SIZE },
+    icon: { Filled: AnalyticsFilledIcon, Outline: AnalyticsOutlineIcon, ...STANDARD_ICON_SIZE },
   },
 ];
