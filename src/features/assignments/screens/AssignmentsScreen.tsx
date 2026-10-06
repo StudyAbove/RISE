@@ -1,6 +1,6 @@
 import { TabPlaceholderScreen } from '../../../components/TabPlaceholderScreen';
 
-// Main page of the Assignments tab. Placeholder until the real screen is built.
+// Main page of the List tab (assignments). Placeholder until the real screen is built.
 export function AssignmentsScreen() {
-  return <TabPlaceholderScreen title="Assignments" />;
+  return <TabPlaceholderScreen title="List" />;
 }

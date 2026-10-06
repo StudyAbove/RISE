@@ -5,7 +5,7 @@ export type MainTabParamList = {
   Home: undefined;
   Calendar: undefined;
   Study: undefined;
-  Assignments: undefined;
+  List: undefined;
   Analytics: undefined;
 };
 

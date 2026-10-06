@@ -49,8 +49,8 @@ export const MAIN_TABS: MainTabConfig[] = [
     icon: { Icon: StudyIcon, ...STANDARD_ICON_SIZE },
   },
   {
-    name: 'Assignments',
-    label: 'Assignments',
+    name: 'List',
+    label: 'List',
     component: AssignmentsScreen,
     icon: { Icon: ListIcon, ...STANDARD_ICON_SIZE },
   },

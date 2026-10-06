@@ -133,7 +133,7 @@ RISE/
 │   ├── components/             # Shared reusable UI components
 │   ├── features/
 │   │   ├── analytics/          # Analytics tab
-│   │   ├── assignments/        # Assignments tab
+│   │   ├── assignments/        # Assignments (List tab)
 │   │   ├── auth/               # Authentication features
 │   │   ├── calendar/           # Calendar integration features
 │   │   ├── canvas/             # Canvas integration features
