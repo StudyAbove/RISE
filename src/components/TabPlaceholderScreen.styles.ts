@@ -4,14 +4,6 @@ import { colors } from '../theme/colors';
 import { textStyles } from '../theme/typography';
 
 export const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-    backgroundColor: colors.warmCream,
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
   title: {
     ...textStyles.screenHeading,
     color: colors.deepOlive,

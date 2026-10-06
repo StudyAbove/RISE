@@ -13,7 +13,8 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
  *
  * To give a tab detail screens (e.g. assignment details), replace its
  * `component` with a native stack navigator. The nav bar keeps that tab
- * highlighted while its detail screens are open.
+ * highlighted while its detail screens are open, and re-tapping the tab
+ * pops back to its main page.
  */
 export function MainTabNavigator() {
   return (

@@ -36,7 +36,8 @@ export function BottomNavBar({ state, descriptors, navigation, insets }: BottomT
             : (options.title ?? route.name);
 
         const handlePress = () => {
-          // Emit the event first so screens and nested navigators can react to it.
+          // Emit the event first. Screens listen for it to scroll to the top
+          // or pop back to their main page when their tab is tapped again.
           const event = navigation.emit({
             type: 'tabPress',
             target: route.key,
