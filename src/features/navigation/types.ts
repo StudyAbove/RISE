@@ -9,12 +9,14 @@ export type MainTabParamList = {
   Analytics: undefined;
 };
 
-/** Top-level screens. Sign-in and onboarding screens get added here once they're built. */
+/** Top-level screens controlled by authentication and onboarding state. */
 export type RootStackParamList = {
+  CreateAccount: undefined;
+  Onboarding: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
 };
 
-// Lets `useNavigation()` know the app's routes without passing a type each time.
+// Lets useNavigation() know the app's routes without passing a type each time.
 declare global {
   namespace ReactNavigation {
     interface RootParamList extends RootStackParamList {}

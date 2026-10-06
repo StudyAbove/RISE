@@ -47,11 +47,6 @@ export default function App() {
             return;
           }
 
-          Alert.alert(
-            'Success',
-            'Your RISE account is now signed in.'
-          );
-
           // Later:
           // New accounts will continue to onboarding here.
           return;
@@ -80,12 +75,7 @@ export default function App() {
 
               return;
             }
-
-            Alert.alert(
-              'Success',
-              'Your RISE account is now signed in.'
-            );
-
+            
             // Later:
             // New accounts will continue to onboarding here.
           }
