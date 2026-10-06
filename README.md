@@ -116,24 +116,28 @@ After Expo starts, press: i
 | `npm run android` | Open the project using an Android emulator or device. |
 | `npm run web` | Run the Expo web version for development. |
 | `npx expo start --tunnel` | Start Expo using a tunnel connection. |
+| `npm test` | Run the test suite. |
 Future -
 | `[package-manager] run dev` | Start the development server. |
 | `[package-manager] run build` | Create a production build. |
 | `[package-manager] run start` | Run the production build. |
 | `[package-manager] run lint` | Check the codebase for linting issues. |
-| `[package-manager] run test` | Run the test suite. |
 
 ## Project Structure
 
 ```text
 RISE/
-├── assets/                     # Images and other static assets
+├── assets/                     # Images, icons, and other static assets
+├── jest/                       # Test setup and mocks
 ├── src/
 │   ├── components/             # Shared reusable UI components
 │   ├── features/
+│   │   ├── analytics/          # Analytics tab
+│   │   ├── assignments/        # Assignments (List tab)
 │   │   ├── auth/               # Authentication features
 │   │   ├── calendar/           # Calendar integration features
 │   │   ├── canvas/             # Canvas integration features
+│   │   ├── home/               # Home tab
 │   │   ├── navigation/         # Application navigation
 │   │   ├── onboarding/         # User onboarding
 │   │   ├── settings/           # Settings features
@@ -144,11 +148,13 @@ RISE/
 │   ├── repositories/           # Data access layer
 │   ├── services/               # Shared application services
 │   ├── theme/                  # Colors, fonts, and text styles
+│   ├── types/                  # Global TypeScript declarations
 │   └── utils/                  # Shared helper functions
 ├── .env.example                # Environment variable template
 ├── App.tsx                     # Application entry component
 ├── app.json                    # Expo application configuration
 ├── index.ts                    # Application entry point
+├── metro.config.js             # Bundler configuration (SVG imports)
 ├── package.json                # Project dependencies and scripts
 └── tsconfig.json               # TypeScript configuration
 ```
