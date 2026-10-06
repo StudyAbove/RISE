@@ -56,7 +56,7 @@ This project uses the following technologies and tools.
 
 Before running the project, make sure you have installed:
 
-- Node.js
+- Node.js 20.19.4 or newer (required by Expo SDK 57)
 - npm
 - Git
 - Expo-compatible development tools
@@ -143,6 +143,7 @@ RISE/
 │   ├── models/                 # Shared TypeScript models
 │   ├── repositories/           # Data access layer
 │   ├── services/               # Shared application services
+│   ├── theme/                  # Colors, fonts, and text styles
 │   └── utils/                  # Shared helper functions
 ├── .env.example                # Environment variable template
 ├── App.tsx                     # Application entry component
