@@ -4,6 +4,8 @@ declare module '*.svg' {
   import type { FC } from 'react';
   import type { SvgProps } from 'react-native-svg';
 
-  const SvgComponent: FC<SvgProps>;
+  // `fillColor` is available on icons whose folder has a `.svgrrc` that maps
+  // their hardcoded fill to this prop (see assets/icons/navigation/.svgrrc).
+  const SvgComponent: FC<SvgProps & { fillColor?: string }>;
   export default SvgComponent;
 }
