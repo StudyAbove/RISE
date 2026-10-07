@@ -1,7 +1,8 @@
 {
   "replaceAttrValues": {
     "black": "currentColor",
-    "#35433A": "currentColor"
+    "#35433A": "currentColor",
+    "white": "{props.fillColor}"
   },
   "svgoConfig": {
     "plugins": [

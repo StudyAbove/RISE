@@ -12,6 +12,7 @@ describe('RootNavigator', () => {
     );
 
     expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(screen.getByRole('tab', { name: 'Home' })).toBeSelected();
     expect(screen.getByRole('header', { name: 'Home' })).toBeOnTheScreen();
   });
 });

@@ -11,16 +11,18 @@ interface BottomNavBarItemProps {
   label: string;
   accessibilityLabel: string;
   icon: ReactNode;
+  isSelected: boolean;
   onPress: () => void;
   onLongPress: () => void;
   testID?: string;
 }
 
-/** A single tab button in the bottom nav bar: an icon with a text label. */
+/** A single tab button in the bottom nav bar: icon with a highlight, plus a text label. */
 export function BottomNavBarItem({
   label,
   accessibilityLabel,
   icon,
+  isSelected,
   onPress,
   onLongPress,
   testID,
@@ -29,17 +31,20 @@ export function BottomNavBarItem({
     <Pressable
       accessibilityRole="tab"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected: isSelected }}
       onPress={onPress}
       onLongPress={onLongPress}
       testID={testID}
       style={styles.item}
     >
-      <View style={styles.iconContainer}>{icon}</View>
+      <View style={[styles.iconContainer, isSelected && styles.iconContainerSelected]}>
+        {icon}
+      </View>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
         maxFontSizeMultiplier={MAX_LABEL_FONT_SCALE}
-        style={styles.label}
+        style={[styles.label, isSelected && styles.labelSelected]}
       >
         {label}
       </Text>
