@@ -1,12 +1,14 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { SettingsScreen } from '../../settings/screens/SettingsScreen';
 import type { RootStackParamList } from '../types';
 import { MainTabNavigator } from './MainTabNavigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
- * Top-level navigator.
+ * Top-level navigator. Screens registered after MainTabs open on top of the
+ * tabs, so the nav bar is hidden while they're showing.
  *
  * TODO(auth): Once the sign-in and onboarding screens are ready, register
  * them here and only register MainTabs for signed-in, onboarded users, so
@@ -16,6 +18,7 @@ export function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
     </Stack.Navigator>
   );
 }
