@@ -11,7 +11,7 @@ const PLACEHOLDER_BLOCK_COUNT = 8;
 
 interface TabPlaceholderScreenProps {
   title: string;
-  /** Shows the settings gear in the top-right, on the pages that have it in Figma. */
+  /** Shows the settings gear in the top-right (every main page except Calendar). */
   showSettingsButton?: boolean;
 }
 
