@@ -12,6 +12,7 @@ export type MainTabParamList = {
 /** Top-level screens. Sign-in and onboarding screens get added here once they're built. */
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
+  Settings: undefined;
 };
 
 // Lets `useNavigation()` know the app's routes without passing a type each time.

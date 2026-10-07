@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Text, View } from 'react-native';
 
+import { SettingsButton } from '../features/settings/components/SettingsButton';
 import { TabScreenScrollView } from './TabScreenScrollView';
 import { styles } from './TabPlaceholderScreen.styles';
 
@@ -10,17 +11,24 @@ const PLACEHOLDER_BLOCK_COUNT = 8;
 
 interface TabPlaceholderScreenProps {
   title: string;
+  /** Shows the settings gear in the top-right, on the pages that have it in Figma. */
+  showSettingsButton?: boolean;
 }
 
 /**
  * Temporary main page for a bottom tab that has not been built yet.
  * Replace with the real screen (built on TabScreenScrollView) when it's ready.
  */
-export function TabPlaceholderScreen({ title }: TabPlaceholderScreenProps) {
+export function TabPlaceholderScreen({
+  title,
+  showSettingsButton = false,
+}: TabPlaceholderScreenProps) {
   const titleRef = useRef<Text>(null);
 
   return (
     <TabScreenScrollView focusTargetRef={titleRef}>
+      {/* Same height on every tab, so titles line up whether or not the gear is shown. */}
+      <View style={styles.headerRow}>{showSettingsButton && <SettingsButton />}</View>
       <Text ref={titleRef} accessibilityRole="header" style={styles.title}>
         {title}
       </Text>
