@@ -9,7 +9,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 2,
   },
-  // Size matches the icon area in the Figma "Final - Bar" component.
+  // Highlight size and corner radius match the "Active BG" layer in Figma.
   iconContainer: {
     width: 44,
     height: 44,
@@ -17,11 +17,18 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconContainerSelected: {
+    backgroundColor: colors.softSage,
+  },
   label: {
     fontFamily: fonts.body.medium,
     fontSize: 12,
     marginTop: 2,
     textAlign: 'center',
     color: colors.deepOlive,
+  },
+  // A heavier label marks the selected tab, so the selected state doesn't rely on color alone.
+  labelSelected: {
+    fontFamily: fonts.body.bold,
   },
 });
