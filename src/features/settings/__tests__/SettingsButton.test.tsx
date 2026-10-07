@@ -23,7 +23,7 @@ describe('SettingsButton', () => {
     expect(screen.getByRole('header', { name: 'Home' })).toBeOnTheScreen();
   });
 
-  it.each(['Study', 'List'])('is shown on the %s page', async (tab) => {
+  it.each(['Study', 'List', 'Analytics'])('is shown on the %s page', async (tab) => {
     await renderApp();
 
     await fireEvent.press(screen.getByRole('tab', { name: tab }));
@@ -31,10 +31,10 @@ describe('SettingsButton', () => {
     expect(screen.getByRole('button', { name: 'Settings' })).toBeOnTheScreen();
   });
 
-  it.each(['Calendar', 'Analytics'])('is not shown on the %s page', async (tab) => {
+  it('is not shown on the Calendar page', async () => {
     await renderApp();
 
-    await fireEvent.press(screen.getByRole('tab', { name: tab }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Calendar' }));
 
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeOnTheScreen();
   });
