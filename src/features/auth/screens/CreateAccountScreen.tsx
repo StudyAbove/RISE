@@ -12,13 +12,12 @@ import {
   View,
 } from 'react-native';
 
+import { colors, statusColors } from '../../../theme/colors';
+import { fonts } from '../../../theme/typography';
 import { createAccountWithSchoolEmail } from '../services/authService';
 
-// Normal keyboard-open scroll position.
-const INPUT_FOCUS_SCROLL_Y = 180;
-
-// Extra scroll when an error message is visible.
-const ERROR_SCROLL_EXTRA = 45;
+const INPUT_FOCUS_SCROLL_Y = 140;
+const ERROR_SCROLL_EXTRA = 40;
 
 type CreateAccountScreenProps = {
   authLinkError?: string;
@@ -74,12 +73,12 @@ export default function CreateAccountScreen({
 
     const showSubscription = Keyboard.addListener(
       'keyboardDidShow',
-      handleKeyboardShow
+      handleKeyboardShow,
     );
 
     const hideSubscription = Keyboard.addListener(
       'keyboardDidHide',
-      handleKeyboardHide
+      handleKeyboardHide,
     );
 
     return () => {
@@ -119,13 +118,13 @@ export default function CreateAccountScreen({
       await createAccountWithSchoolEmail(trimmedEmail);
 
       setSuccessMessage(
-        'Check your school email for a verification link.'
+        'Check your school email for a verification link.',
       );
     } catch (err) {
       if (err instanceof Error) {
         if (err.message === 'EMAIL_ALREADY_REGISTERED') {
           setError(
-            'An account with this school email already exists. Please log in instead.'
+            'An account with this school email already exists. Please log in instead.',
           );
           return;
         }
@@ -134,18 +133,14 @@ export default function CreateAccountScreen({
 
         if (message.includes('rate limit')) {
           setError(
-            'Too many verification emails were requested. Please wait a few minutes and try again.'
+            'Too many verification emails were requested. Please wait a few minutes and try again.',
           );
           return;
         }
 
-        setError(
-          'Something went wrong. Please try again.'
-        );
+        setError('Something went wrong. Please try again.');
       } else {
-        setError(
-          'Something went wrong. Please try again.'
-        );
+        setError('Something went wrong. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -178,97 +173,106 @@ export default function CreateAccountScreen({
       >
         <View style={styles.screenContent}>
           <ImageBackground
-            source={require('../../../../assets/rise-header.png')}
+            source={require('../../../../assets/images/auth/rise-auth-header.png')}
             style={styles.header}
+            imageStyle={styles.headerImage}
             resizeMode="cover"
-          >
-            <Text style={styles.logo}>RISE</Text>
-          </ImageBackground>
+          />
 
-          <View style={styles.content}>
-            <Text style={styles.title}>Welcome!</Text>
+          <View style={styles.contentCard}>
+            <View>
+              <Text style={styles.title}>Welcome!</Text>
 
-            <Text style={styles.subtitle}>
-              Create your RISE account to start organizing
-              your school life.
-            </Text>
-
-            <View style={styles.formSection}>
-              <Text style={styles.label}>
-                Enter your school email below:
+              <Text style={styles.subtitle}>
+                Create your RISE account to start organizing your
+                school life.
               </Text>
 
-              <TextInput
-                style={[
-                  styles.input,
-                  error ? styles.inputError : undefined,
-                ]}
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
+              <View style={styles.formSection}>
+                <Text style={styles.label}>School email</Text>
 
-                  if (error) {
-                    setError('');
-                  }
+                <TextInput
+                  style={[
+                    styles.input,
+                    error ? styles.inputError : undefined,
+                  ]}
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
 
-                  if (successMessage) {
-                    setSuccessMessage('');
-                  }
-                }}
-                placeholder="Enter your email ending with .edu"
-                placeholderTextColor="#8A918B"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                editable={!isSubmitting}
-                onSubmitEditing={handleCreateAccount}
-              />
+                    if (error) {
+                      setError('');
+                    }
 
-              {error ? (
-                <Text style={styles.errorText}>
-                  {error}
-                </Text>
-              ) : null}
+                    if (successMessage) {
+                      setSuccessMessage('');
+                    }
+                  }}
+                  placeholder="Enter your email ending with .edu"
+                  placeholderTextColor={colors.mutedGrayGreen}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  editable={!isSubmitting}
+                  onSubmitEditing={handleCreateAccount}
+                  accessibilityLabel="School email"
+                />
 
-              {successMessage ? (
-                <Text style={styles.successText}>
-                  {successMessage}
-                </Text>
-              ) : null}
+                {error ? (
+                  <Text style={styles.errorText}>
+                    {error}
+                  </Text>
+                ) : null}
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.arrowButton,
-                  pressed && styles.arrowButtonPressed,
-                  isSubmitting &&
-                    styles.arrowButtonDisabled,
-                ]}
-                onPress={handleCreateAccount}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.arrow}>
-                  {isSubmitting ? '...' : '→'}
-                </Text>
-              </Pressable>
-
-              <View style={styles.loginRow}>
-                <Text style={styles.loginText}>
-                  Already have an account?{' '}
-                </Text>
+                {successMessage ? (
+                  <Text style={styles.successText}>
+                    {successMessage}
+                  </Text>
+                ) : null}
 
                 <Pressable
-                  onPress={() => {
-                    Keyboard.dismiss();
-
-                    // Login navigation will be added later.
-                  }}
+                  style={({ pressed }) => [
+                    styles.signUpButton,
+                    pressed && styles.signUpButtonPressed,
+                    isSubmitting && styles.signUpButtonDisabled,
+                  ]}
+                  onPress={handleCreateAccount}
+                  disabled={isSubmitting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign up"
                 >
-                  <Text style={styles.loginLink}>
-                    Log in
+                  <Text style={styles.signUpButtonText}>
+                    {isSubmitting ? 'Sending link...' : 'Sign up'}
                   </Text>
                 </Pressable>
               </View>
+            </View>
+
+            <View style={styles.loginSection}>
+              <View style={styles.loginPromptRow}>
+                <View style={styles.divider} />
+
+                <Text style={styles.loginText}>
+                  Already have an account?
+                </Text>
+
+                <View style={styles.divider} />
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Log in"
+                onPress={() => {
+                  Keyboard.dismiss();
+
+                  // Login navigation will be added later.
+                }}
+              >
+                <Text style={styles.loginLink}>
+                  Log in
+                </Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -280,7 +284,7 @@ export default function CreateAccountScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FAF8F1',
+    backgroundColor: colors.warmCream,
   },
 
   scrollContent: {
@@ -289,125 +293,147 @@ const styles = StyleSheet.create({
 
   screenContent: {
     flexGrow: 1,
-    backgroundColor: '#FAF8F1',
+    backgroundColor: colors.warmCream,
   },
 
   header: {
-    height: 235,
-    justifyContent: 'flex-start',
-    paddingTop: 118,
-    paddingHorizontal: 32,
+    height: 336,
+    width: '100%',
+    overflow: 'hidden',
   },
 
-  logo: {
-    fontSize: 31,
-    fontWeight: '700',
-    letterSpacing: 3,
-    color: '#35312F',
+  headerImage: {
+    transform: [
+      { scale: 1.06 },
+      { translateY: 14 },
+    ],
   },
 
-  content: {
+  contentCard: {
     flex: 1,
+    marginTop: -32,
+    backgroundColor: colors.warmCream,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingHorizontal: 28,
-    paddingTop: 38,
-    paddingBottom: 40,
+    paddingTop: 30,
+    paddingBottom: 22,
+    justifyContent: 'space-between',
   },
 
   title: {
-    fontSize: 29,
-    fontWeight: '700',
-    color: '#35433B',
+    fontFamily: fonts.heading.bold,
+    fontSize: 30,
+    color: colors.deepOlive,
   },
 
   subtitle: {
-    marginTop: 42,
-    fontSize: 21,
-    lineHeight: 30,
-    fontWeight: '600',
-    color: '#35433B',
-    maxWidth: 380,
+    marginTop: 12,
+    maxWidth: 340,
+    fontFamily: fonts.body.regular,
+    fontSize: 16,
+    lineHeight: 23,
+    color: colors.mutedGrayGreen,
   },
 
   formSection: {
-    marginTop: 120,
+    marginTop: 34,
   },
 
   label: {
-    fontSize: 21,
-    fontWeight: '600',
-    color: '#35433B',
-    marginBottom: 20,
+    marginBottom: 10,
+    fontFamily: fonts.body.semiBold,
+    fontSize: 15,
+    color: colors.deepOlive,
   },
 
   input: {
-    height: 74,
-    borderWidth: 2,
-    borderColor: '#DCE8D7',
+    height: 56,
+    borderWidth: 1.5,
+    borderColor: colors.mistGreen,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.softWhite,
     paddingHorizontal: 16,
-    fontSize: 18,
-    color: '#35433B',
+    fontFamily: fonts.body.regular,
+    fontSize: 15,
+    color: colors.deepOlive,
   },
 
   inputError: {
-    borderColor: '#C85C54',
+    borderColor: statusColors.urgentRed,
   },
 
   errorText: {
-    marginTop: 10,
-    fontSize: 15,
-    lineHeight: 21,
-    color: '#C85C54',
+    marginTop: 8,
+    fontFamily: fonts.body.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: statusColors.urgentRed,
   },
 
   successText: {
-    marginTop: 10,
-    fontSize: 15,
-    lineHeight: 21,
-    color: '#5F7D66',
+    marginTop: 8,
+    fontFamily: fonts.body.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.eucalyptus,
   },
 
-  arrowButton: {
-    alignSelf: 'flex-end',
-    marginTop: 36,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#DFECDC',
+  signUpButton: {
+    marginTop: 26,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.eucalyptus,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  arrowButtonPressed: {
-    opacity: 0.7,
+  signUpButtonPressed: {
+    opacity: 0.82,
   },
 
-  arrowButtonDisabled: {
+  signUpButtonDisabled: {
     opacity: 0.5,
   },
 
-  arrow: {
-    fontSize: 34,
-    lineHeight: 38,
-    color: '#35433B',
-    fontWeight: '400',
+  signUpButtonText: {
+    fontFamily: fonts.body.semiBold,
+    fontSize: 16,
+    color: colors.softWhite,
   },
 
-  loginRow: {
+  loginSection: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 48,
+  },
+
+  loginPromptRow: {
+    width: '100%',
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 28,
+  },
+
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.mistGreen,
+    maxWidth: 80,
   },
 
   loginText: {
-    fontSize: 16,
-    color: '#6F7772',
+    marginHorizontal: 14,
+    fontFamily: fonts.body.regular,
+    fontSize: 14,
+    color: colors.mutedGrayGreen,
   },
 
   loginLink: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#35433B',
+    marginTop: 10,
+    fontFamily: fonts.body.semiBold,
+    fontSize: 17,
+    color: colors.eucalyptus,
+    textDecorationLine: 'underline',
   },
 });
