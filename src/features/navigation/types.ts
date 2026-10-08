@@ -14,6 +14,7 @@ export type RootStackParamList = {
   CreateAccount: undefined;
   Onboarding: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
+  Settings: undefined;
 };
 
 // Lets useNavigation() know the app's routes without passing a type each time.

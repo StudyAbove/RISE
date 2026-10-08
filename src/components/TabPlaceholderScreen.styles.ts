@@ -4,18 +4,16 @@ import { colors } from '../theme/colors';
 import { textStyles } from '../theme/typography';
 
 export const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-    backgroundColor: colors.warmCream,
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
+  headerRow: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   title: {
     ...textStyles.screenHeading,
     color: colors.deepOlive,
-    marginTop: 16,
+    marginTop: 4,
   },
   subtitle: {
     ...textStyles.subtitle,

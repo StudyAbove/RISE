@@ -142,6 +142,7 @@ RISE/
 │   │   ├── onboarding/         # User onboarding
 │   │   ├── settings/           # Settings features
 │   │   └── studyPlan/          # Study planning features
+│   ├── hooks/                  # Shared React hooks
 │   ├── lib/                    # Shared library configuration
 │   ├── mocks/                  # Optional development mock data
 │   ├── models/                 # Shared TypeScript models

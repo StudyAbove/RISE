@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import CreateAccountScreen from '../../auth/screens/CreateAccountScreen';
 import OnboardingScreen from '../../onboarding/screens/OnboardingScreen';
+import { SettingsScreen } from '../../settings/screens/SettingsScreen';
 import { supabase } from '../../../lib/supabase';
 import type { RootStackParamList } from '../types';
 import { MainTabNavigator } from './MainTabNavigator';
@@ -105,10 +106,17 @@ export function RootNavigator({
           )}
         </Stack.Screen>
       ) : (
-        <Stack.Screen
-          name="MainTabs"
-          component={MainTabNavigator}
-        />
+        <>
+          <Stack.Screen
+            name="MainTabs"
+            component={MainTabNavigator}
+          />
+
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+          />
+        </>
       )}
     </Stack.Navigator>
   );
