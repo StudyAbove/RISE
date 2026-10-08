@@ -35,6 +35,29 @@ export default function App() {
       try {
         const parsedUrl = new URL(url);
 
+        // Supabase can return auth errors in either:
+        // - the query string
+        // - the URL fragment after #
+        //
+        // This is important for expired or already-used magic links.
+        const hashPart = url.split('#')[1];
+        const hashParams = hashPart
+          ? new URLSearchParams(hashPart)
+          : null;
+
+        const callbackError =
+          parsedUrl.searchParams.get('error') ||
+          parsedUrl.searchParams.get('error_code') ||
+          parsedUrl.searchParams.get('error_description') ||
+          hashParams?.get('error') ||
+          hashParams?.get('error_code') ||
+          hashParams?.get('error_description');
+
+        if (callbackError) {
+          setAuthLinkError(INVALID_LINK_MESSAGE);
+          return;
+        }
+
         // PKCE flow:
         // Supabase may return a one-time authentication code.
         const code = parsedUrl.searchParams.get('code');
@@ -53,13 +76,9 @@ export default function App() {
         }
 
         // Fallback for links that return access and refresh tokens.
-        const hashPart = url.split('#')[1];
-
-        if (hashPart) {
-          const params = new URLSearchParams(hashPart);
-
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
+        if (hashParams) {
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
 
           if (accessToken && refreshToken) {
             const { error } = await supabase.auth.setSession({
@@ -73,6 +92,7 @@ export default function App() {
             }
 
             setAuthLinkError('');
+            return;
           }
         }
       } catch {
