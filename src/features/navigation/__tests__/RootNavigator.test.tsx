@@ -128,7 +128,7 @@ describe('RootNavigator', () => {
       ).toBeSelected();
 
       expect(
-        screen.getByRole('header', { name: 'Home' }),
+        screen.getByText('RISE'),
       ).toBeOnTheScreen();
     });
   });
