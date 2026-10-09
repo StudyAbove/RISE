@@ -15,18 +15,18 @@ import { useNavigation } from '@react-navigation/native';
 
 import { colors, statusColors } from '../../../theme/colors';
 import { fonts } from '../../../theme/typography';
-import { createAccountWithSchoolEmail } from '../services/authService';
+import { loginWithSchoolEmail } from '../services/authService';
 
 const INPUT_FOCUS_SCROLL_Y = 140;
 const ERROR_SCROLL_EXTRA = 40;
 
-type CreateAccountScreenProps = {
+type LoginScreenProps = {
   authLinkError?: string;
 };
 
-export default function CreateAccountScreen({
+export default function LoginScreen({
   authLinkError = '',
-}: CreateAccountScreenProps) {
+}: LoginScreenProps) {
   const navigation = useNavigation();
 
   const [email, setEmail] = useState('');
@@ -90,7 +90,7 @@ export default function CreateAccountScreen({
     };
   }, []);
 
-  async function handleCreateAccount() {
+  async function handleLogin() {
     Keyboard.dismiss();
 
     const trimmedEmail = email.trim().toLowerCase();
@@ -118,16 +118,16 @@ export default function CreateAccountScreen({
     setIsSubmitting(true);
 
     try {
-      await createAccountWithSchoolEmail(trimmedEmail);
+      await loginWithSchoolEmail(trimmedEmail);
 
       setSuccessMessage(
-        'Check your school email for a verification link.',
+        'Check your school email for a login link.',
       );
     } catch (err) {
       if (err instanceof Error) {
-        if (err.message === 'EMAIL_ALREADY_REGISTERED') {
+        if (err.message === 'EMAIL_NOT_REGISTERED') {
           setError(
-            'An account with this school email already exists. Please log in instead.',
+            'No account was found with this school email. Please sign up first.',
           );
           return;
         }
@@ -136,7 +136,7 @@ export default function CreateAccountScreen({
 
         if (message.includes('rate limit')) {
           setError(
-            'Too many verification emails were requested. Please wait a few minutes and try again.',
+            'Too many login emails were requested. Please wait a few minutes and try again.',
           );
           return;
         }
@@ -184,11 +184,10 @@ export default function CreateAccountScreen({
 
           <View style={styles.contentCard}>
             <View>
-              <Text style={styles.title}>Welcome!</Text>
+              <Text style={styles.title}>Welcome Back!</Text>
 
               <Text style={styles.subtitle}>
-                Create your RISE account to start organizing your
-                school life.
+                Log in with your school email to continue using RISE.
               </Text>
 
               <View style={styles.formSection}>
@@ -218,7 +217,7 @@ export default function CreateAccountScreen({
                   autoCorrect={false}
                   returnKeyType="done"
                   editable={!isSubmitting}
-                  onSubmitEditing={handleCreateAccount}
+                  onSubmitEditing={handleLogin}
                   accessibilityLabel="School email"
                 />
 
@@ -236,28 +235,28 @@ export default function CreateAccountScreen({
 
                 <Pressable
                   style={({ pressed }) => [
-                    styles.signUpButton,
-                    pressed && styles.signUpButtonPressed,
-                    isSubmitting && styles.signUpButtonDisabled,
+                    styles.loginButton,
+                    pressed && styles.loginButtonPressed,
+                    isSubmitting && styles.loginButtonDisabled,
                   ]}
-                  onPress={handleCreateAccount}
+                  onPress={handleLogin}
                   disabled={isSubmitting}
                   accessibilityRole="button"
-                  accessibilityLabel="Sign up"
+                  accessibilityLabel="Log in"
                 >
-                  <Text style={styles.signUpButtonText}>
-                    {isSubmitting ? 'Sending link...' : 'Sign up'}
+                  <Text style={styles.loginButtonText}>
+                    {isSubmitting ? 'Sending link...' : 'Log in'}
                   </Text>
                 </Pressable>
               </View>
             </View>
 
-            <View style={styles.loginSection}>
-              <View style={styles.loginPromptRow}>
+            <View style={styles.signUpSection}>
+              <View style={styles.signUpPromptRow}>
                 <View style={styles.divider} />
 
-                <Text style={styles.loginText}>
-                  Already have an account?
+                <Text style={styles.signUpText}>
+                  Don’t have an account?
                 </Text>
 
                 <View style={styles.divider} />
@@ -265,14 +264,14 @@ export default function CreateAccountScreen({
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Log in"
+                accessibilityLabel="Sign up"
                 onPress={() => {
                   Keyboard.dismiss();
-                  navigation.navigate('Login');
+                  navigation.navigate('CreateAccount');
                 }}
               >
-                <Text style={styles.loginLink}>
-                  Log in
+                <Text style={styles.signUpLink}>
+                  Sign up
                 </Text>
               </Pressable>
             </View>
@@ -381,7 +380,7 @@ const styles = StyleSheet.create({
     color: colors.eucalyptus,
   },
 
-  signUpButton: {
+  loginButton: {
     marginTop: 26,
     height: 52,
     borderRadius: 14,
@@ -390,27 +389,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  signUpButtonPressed: {
+  loginButtonPressed: {
     opacity: 0.82,
   },
 
-  signUpButtonDisabled: {
+  loginButtonDisabled: {
     opacity: 0.5,
   },
 
-  signUpButtonText: {
+  loginButtonText: {
     fontFamily: fonts.body.semiBold,
     fontSize: 16,
     color: colors.softWhite,
   },
 
-  loginSection: {
+  signUpSection: {
     alignItems: 'center',
     marginTop: 40,
     marginBottom: 48,
   },
 
-  loginPromptRow: {
+  signUpPromptRow: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
@@ -424,14 +423,14 @@ const styles = StyleSheet.create({
     maxWidth: 80,
   },
 
-  loginText: {
+  signUpText: {
     marginHorizontal: 14,
     fontFamily: fonts.body.regular,
     fontSize: 14,
     color: colors.mutedGrayGreen,
   },
 
-  loginLink: {
+  signUpLink: {
     marginTop: 10,
     fontFamily: fonts.body.semiBold,
     fontSize: 17,

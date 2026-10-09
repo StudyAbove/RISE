@@ -11,7 +11,9 @@ export type MainTabParamList = {
 
 /** Top-level screens controlled by authentication and onboarding state. */
 export type RootStackParamList = {
+  Welcome: undefined;
   CreateAccount: undefined;
+  Login: undefined;
   Onboarding: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
