@@ -5,8 +5,13 @@ import { TabPlaceholderScreen } from '../../../components/TabPlaceholderScreen';
 export function AssignmentsScreen() {
   return <TabPlaceholderScreen title="List" showSettingsButton />;
 }
-*/
+
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+*/import { useRef } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
+import { SettingsButton } from '../../settings/components/SettingsButton';
 
 type Assignment = {
   id: string;
@@ -77,10 +82,21 @@ const mockAssignments: Assignment[] = [
 ];
 
 export function AssignmentsScreen() {
+  const titleRef = useRef<Text>(null);
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <TabScreenScrollView
+      focusTargetRef={titleRef}
+      contentContainerStyle={styles.container}
+    >
+      <View style={styles.headerRow}>
+        <SettingsButton />
+      </View>
+
       <View style={styles.header}>
-        <Text style={styles.title}>List</Text>
+        <Text ref={titleRef} accessibilityRole="header" style={styles.title}>
+          List
+        </Text>
         <Text style={styles.subtitle}>Look at an overview of the future</Text>
       </View>
 
@@ -122,16 +138,20 @@ export function AssignmentsScreen() {
           </View>
         ))}
       </View>
-    </ScrollView>
+    </TabScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 18,
-    paddingTop: 24,
     paddingBottom: 36,
     backgroundColor: '#FAF8F1',
+  },
+  headerRow: {
+    minHeight: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   header: {
     marginBottom: 16,
