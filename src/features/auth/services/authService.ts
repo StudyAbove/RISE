@@ -2,7 +2,14 @@ import { supabase } from '../../../lib/supabase';
 
 const EMAIL_REDIRECT_URL = 'rise://auth/callback';
 
-export async function checkSchoolEmailExists(email: string) {
+type SchoolEmailStatus = {
+  exists: boolean;
+  verified: boolean;
+};
+
+export async function checkSchoolEmailExists(
+  email: string
+): Promise<SchoolEmailStatus> {
   const { data, error } = await supabase.functions.invoke(
     'check-email-exists',
     {
@@ -16,13 +23,16 @@ export async function checkSchoolEmailExists(email: string) {
     throw error;
   }
 
-  return Boolean(data?.exists);
+  return {
+    exists: Boolean(data?.exists),
+    verified: Boolean(data?.verified),
+  };
 }
 
 export async function createAccountWithSchoolEmail(email: string) {
-  const emailExists = await checkSchoolEmailExists(email);
+  const emailStatus = await checkSchoolEmailExists(email);
 
-  if (emailExists) {
+  if (emailStatus.exists && emailStatus.verified) {
     throw new Error('EMAIL_ALREADY_REGISTERED');
   }
 
