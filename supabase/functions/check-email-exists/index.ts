@@ -61,7 +61,9 @@ Deno.serve(async (req) => {
 
     let page = 1;
     const perPage = 1000;
+
     let emailExists = false;
+    let emailVerified = false;
 
     while (true) {
       const { data, error } =
@@ -74,12 +76,20 @@ Deno.serve(async (req) => {
         throw error;
       }
 
-      emailExists = data.users.some(
+      const matchingUser = data.users.find(
         (user) =>
           user.email?.toLowerCase() === normalizedEmail
       );
 
-      if (emailExists || data.users.length < perPage) {
+      if (matchingUser) {
+        emailExists = true;
+        emailVerified = Boolean(
+          matchingUser.email_confirmed_at
+        );
+        break;
+      }
+
+      if (data.users.length < perPage) {
         break;
       }
 
@@ -89,6 +99,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         exists: emailExists,
+        verified: emailVerified,
       }),
       {
         status: 200,
