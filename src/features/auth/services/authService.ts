@@ -50,3 +50,25 @@ export async function createAccountWithSchoolEmail(email: string) {
 
   return data;
 }
+
+export async function loginWithSchoolEmail(email: string) {
+  const emailStatus = await checkSchoolEmailExists(email);
+
+  if (!emailStatus.exists) {
+    throw new Error('EMAIL_NOT_REGISTERED');
+  }
+
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo: EMAIL_REDIRECT_URL,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
