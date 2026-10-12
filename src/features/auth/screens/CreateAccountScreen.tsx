@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import { colors, statusColors } from '../../../theme/colors';
 import { fonts } from '../../../theme/typography';
@@ -26,6 +27,8 @@ type CreateAccountScreenProps = {
 export default function CreateAccountScreen({
   authLinkError = '',
 }: CreateAccountScreenProps) {
+  const navigation = useNavigation();
+
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -265,8 +268,7 @@ export default function CreateAccountScreen({
                 accessibilityLabel="Log in"
                 onPress={() => {
                   Keyboard.dismiss();
-
-                  // Login navigation will be added later.
+                  navigation.navigate('Login');
                 }}
               >
                 <Text style={styles.loginLink}>

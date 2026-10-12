@@ -37,7 +37,7 @@ describe('RootNavigator', () => {
     });
   });
 
-  it('shows Create Account when there is no signed-in session', async () => {
+  it('shows Welcome when there is no signed-in session', async () => {
     mockGetSession.mockResolvedValue({
       data: {
         session: null,
@@ -52,7 +52,15 @@ describe('RootNavigator', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Welcome!'),
+        screen.getByRole('button', {
+          name: 'Create Account',
+        }),
+      ).toBeOnTheScreen();
+
+      expect(
+        screen.getByRole('button', {
+          name: 'Log In',
+        }),
       ).toBeOnTheScreen();
     });
   });

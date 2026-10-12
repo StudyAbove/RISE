@@ -3,6 +3,8 @@ import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import CreateAccountScreen from '../../auth/screens/CreateAccountScreen';
+import LoginScreen from '../../auth/screens/LoginScreen';
+import WelcomeScreen from '../../auth/screens/WelcomeScreen';
 import OnboardingScreen from '../../onboarding/screens/OnboardingScreen';
 import { SettingsScreen } from '../../settings/screens/SettingsScreen';
 import { supabase } from '../../../lib/supabase';
@@ -24,6 +26,8 @@ export function RootNavigator({
     useState(false);
 
   async function loadAuthState() {
+    setIsLoading(true);
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -34,8 +38,6 @@ export function RootNavigator({
       setIsLoading(false);
       return;
     }
-
-    setIsSignedIn(true);
 
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -53,7 +55,7 @@ export function RootNavigator({
     setHasCompletedOnboarding(
       profile?.onboarding_completed ?? false
     );
-
+    setIsSignedIn(true);
     setIsLoading(false);
   }
 
@@ -78,6 +80,7 @@ export function RootNavigator({
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
+          backgroundColor: '#FAF8F1',
         }}
       >
         <ActivityIndicator />
@@ -88,13 +91,28 @@ export function RootNavigator({
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isSignedIn ? (
-        <Stack.Screen name="CreateAccount">
-          {() => (
-            <CreateAccountScreen
-              authLinkError={authLinkError}
-            />
-          )}
-        </Stack.Screen>
+        <>
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+          />
+
+          <Stack.Screen name="CreateAccount">
+            {() => (
+              <CreateAccountScreen
+                authLinkError={authLinkError}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen name="Login">
+            {() => (
+              <LoginScreen
+                authLinkError={authLinkError}
+              />
+            )}
+          </Stack.Screen>
+        </>
       ) : !hasCompletedOnboarding ? (
         <Stack.Screen name="Onboarding">
           {() => (
