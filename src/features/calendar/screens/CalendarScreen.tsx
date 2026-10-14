@@ -1,11 +1,16 @@
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { format, startOfDay } from 'date-fns';
 
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
 import { MonthGrid } from '../components/MonthGrid';
-import { shiftAnchorDate, type CalendarViewMode } from '../utils/calendarDates';
+import { TimeGrid } from '../components/TimeGrid';
+import {
+  getTimeGridDays,
+  shiftAnchorDate,
+  type CalendarViewMode,
+} from '../utils/calendarDates';
 import { styles } from './CalendarScreen.styles';
 
 // How far the ‹ › arrows move in each view, used in their VoiceOver labels.
@@ -43,12 +48,9 @@ export function CalendarScreen() {
           <MonthGrid month={anchorDate} />
         </ScrollView>
       ) : (
-        // Placeholder until the hourly views are built.
-        <View style={[styles.body, styles.placeholder]}>
-          <Text style={styles.placeholderText}>
-            {format(anchorDate, 'EEEE, MMMM d')}
-          </Text>
-        </View>
+        // The key gives each hourly view a fresh grid, so switching views
+        // always opens at 7 AM instead of keeping the last view's scroll position.
+        <TimeGrid key={view} days={getTimeGridDays(view, anchorDate)} view={view} />
       )}
     </View>
   );

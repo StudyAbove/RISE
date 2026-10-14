@@ -15,8 +15,12 @@ export const calendarColors = {
   gridLine: '#D9D4D4',
   // deepOlive family: month label and unselected switcher text
   labelText: '#353333',
-  // deepOlive family: month grid dates
+  // deepOlive family: month grid dates, and day names and dates above the 2 Day / Day grid
   dateText: '#000000',
-  // mutedGrayGreen family: S M T W T F S weekday letters
+  // deepOlive family: dates above the Week grid
+  weekHeaderNumber: '#1E1E1E',
+  // mutedGrayGreen family: weekday letters and names (S M T…, SUN MON…)
   weekdayText: '#676767',
+  // mutedGrayGreen family: "7 AM" hour labels
+  hourLabel: '#5E5B5B',
 } as const;
