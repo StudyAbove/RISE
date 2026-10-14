@@ -1,9 +1,30 @@
-import { formatLongDate, getFirstName, getTimeOfDayGreeting } from '../utils/greeting';
+import {
+  formatLongDate,
+  getFirstName,
+  getTimeOfDay,
+  getTimeOfDayGreeting,
+} from '../utils/greeting';
 
 // November 13, 2026 at the given local hour and minute.
 function atTime(hour: number, minute = 0) {
   return new Date(2026, 10, 13, hour, minute);
 }
+
+describe('getTimeOfDay', () => {
+  it.each([
+    [5, 0, 'morning'],
+    [11, 59, 'morning'],
+    [12, 0, 'afternoon'],
+    [16, 59, 'afternoon'],
+    [17, 0, 'evening'],
+    [19, 59, 'evening'],
+    [20, 0, 'night'],
+    [0, 0, 'night'],
+    [4, 59, 'night'],
+  ])('at %i:%i it is %s', (hour, minute, expected) => {
+    expect(getTimeOfDay(atTime(hour, minute))).toBe(expected);
+  });
+});
 
 describe('getTimeOfDayGreeting', () => {
   it.each([
