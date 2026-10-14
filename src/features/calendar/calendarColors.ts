@@ -12,7 +12,7 @@ export const calendarColors = {
   selectedGreen: '#658370',
   // warmCream family: switcher background
   switcherBackground: '#E9E7E0',
-  // mistGreen family: switcher outline and dividers
+  // mistGreen family: switcher outline and dividers, and the lines in the today card
   hairline: '#CECECE',
   // mistGreen family: calendar grid lines
   gridLine: '#D9D4D4',
@@ -28,6 +28,8 @@ export const calendarColors = {
   hourLabel: '#5E5B5B',
   // paleSun family: background of an event chip
   eventChip: '#FBEFDE',
+  // warmCream family: band behind the today card under the month grid
+  todayCardBand: '#EFEEE9',
 } as const;
 
 /**

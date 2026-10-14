@@ -221,6 +221,7 @@ describe('CalendarScreen', () => {
 
       await render(<CalendarScreen />);
 
+      // Look inside the grid cells only; the today card lists the same events.
       const todayCell = await screen.findByLabelText('Today, Friday, November 13, 4 events');
       expect(within(todayCell).getByText('Lecture')).toBeOnTheScreen();
       expect(within(todayCell).getByText('Lab')).toBeOnTheScreen();
@@ -232,21 +233,63 @@ describe('CalendarScreen', () => {
     });
   });
 
+  describe('today card under the month grid', () => {
+    it("lists today's events with their times", async () => {
+      mockGetCalendarEventsInRange.mockResolvedValue([
+        makeEvent('Biology Lecture', new Date(2026, 10, 13, 9, 0), new Date(2026, 10, 13, 10, 30)),
+        makeEvent('Osmosis Lab Report', new Date(2026, 10, 13, 23, 59), new Date(2026, 10, 13, 23, 59)),
+        makeEvent('Algebra Quiz', new Date(2026, 10, 18, 12, 0), new Date(2026, 10, 18, 13, 0)),
+      ]);
+
+      await render(<CalendarScreen />);
+
+      expect(screen.getByRole('header', { name: 'November 13, Friday' })).toBeOnTheScreen();
+      expect(await screen.findByText('9:00 AM – 10:30 AM')).toBeOnTheScreen();
+      // A deadline has no end time, so only its start is shown.
+      expect(screen.getByText('At 11:59 PM')).toBeOnTheScreen();
+      // Events on other days stay in the grid only.
+      expect(screen.queryByText('12:00 PM – 1:00 PM')).not.toBeOnTheScreen();
+    });
+
+    it('says so when there are no events today', async () => {
+      await render(<CalendarScreen />);
+
+      expect(await screen.findByText('No events today.')).toBeOnTheScreen();
+    });
+
+    it('keeps showing today while browsing other months', async () => {
+      await render(<CalendarScreen />);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Next month' }));
+
+      expect(screen.getByRole('header', { name: 'November 13, Friday' })).toBeOnTheScreen();
+    });
+  });
+
   describe('loading and errors', () => {
     it("shows a message with Retry when events can't load, and loads again on Retry", async () => {
       // The hook logs the error; keep the test output clean.
       const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-      mockGetCalendarEventsInRange
-        .mockRejectedValueOnce(new Error('permission denied for table calendar_events'))
-        .mockResolvedValueOnce([makeEvent('Lecture', new Date(2026, 10, 13, 9), new Date(2026, 10, 13, 10))]);
+      let databaseIsDown = true;
+      mockGetCalendarEventsInRange.mockImplementation(() =>
+        databaseIsDown
+          ? Promise.reject(new Error('permission denied for table calendar_events'))
+          : Promise.resolve([makeEvent('Lecture', new Date(2026, 10, 13, 9), new Date(2026, 10, 13, 10))])
+      );
 
       await render(<CalendarScreen />);
 
       expect(await screen.findByText("Couldn't load events.")).toBeOnTheScreen();
-      await fireEvent.press(screen.getByRole('button', { name: 'Retry' }));
+      expect(screen.getByText("Couldn't load today's events.")).toBeOnTheScreen();
 
-      expect(await screen.findByText('Lecture')).toBeOnTheScreen();
+      databaseIsDown = false;
+      await fireEvent.press(screen.getByRole('button', { name: 'Retry' }));
+      expect(await screen.findByLabelText('Today, Friday, November 13, 1 event')).toBeOnTheScreen();
       expect(screen.queryByText("Couldn't load events.")).not.toBeOnTheScreen();
+
+      // The today card retries on its own.
+      await fireEvent.press(screen.getByRole('button', { name: "Retry today's events" }));
+      expect(await screen.findByText('9:00 AM – 10:00 AM')).toBeOnTheScreen();
       logSpy.mockRestore();
     });
 

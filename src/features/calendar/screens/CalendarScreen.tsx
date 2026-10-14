@@ -7,6 +7,7 @@ import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
+import { TodayEventsCard } from '../components/TodayEventsCard';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import {
   getTimeGridDays,
@@ -51,8 +52,9 @@ export function CalendarScreen() {
       <View style={styles.body}>
         {view === 'month' ? (
           // Scrolls so six-week months still fit on smaller iPhones.
-          <ScrollView style={styles.body}>
+          <ScrollView style={styles.body} contentContainerStyle={styles.monthContent}>
             <MonthGrid month={anchorDate} events={events} />
+            <TodayEventsCard />
           </ScrollView>
         ) : (
           // The key gives each hourly view a fresh grid, so switching views
