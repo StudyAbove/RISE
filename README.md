@@ -114,7 +114,7 @@ To test screens without signing in with a magic link, add this to your `.env`:
 EXPO_PUBLIC_DEV_SKIP_AUTH=true
 ```
 
-Then restart Expo with a cleared cache (`npx expo start -c`). The app opens on the home tabs as if you were signed in. There is no real signed-in user, so Supabase data will be empty.
+Then restart Expo with a cleared cache (`npx expo start -c`). The app opens on the home tabs as if you were signed in, and the Calendar shows sample events (placed around today) instead of Supabase data. There is no real signed-in user, so other Supabase data will be empty.
 
 The switch only works in development builds and is off unless your `.env` turns it on. It lives in `src/lib/devFlags.ts`. Set it back to `false` (or remove the line) to test the real login flow.
 

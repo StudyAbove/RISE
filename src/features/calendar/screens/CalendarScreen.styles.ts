@@ -12,4 +12,8 @@ export const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
+  // Lets the today card's band stretch to the bottom when the month is short.
+  monthContent: {
+    flexGrow: 1,
+  },
 });

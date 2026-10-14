@@ -1,6 +1,10 @@
 import { ScrollView, Text, View } from 'react-native';
 import { format, isToday } from 'date-fns';
 
+import type { CalendarEvent } from '../../../models/CalendarEvent';
+import { getDaySegments, layoutDaySegments } from '../utils/calendarEvents';
+import { EventChip } from './EventChip';
+import { EVENT_CHIP_MIN_HEIGHT, EVENT_TITLE_LINE_HEIGHT } from './EventChip.styles';
 import { GRID_SIZES, styles, type TimeGridView } from './TimeGrid.styles';
 
 const HOURS_IN_DAY = 24;
@@ -12,21 +16,50 @@ const HOUR_LABELS = Array.from({ length: HOURS_IN_DAY }, (_, hour) =>
   format(new Date(2000, 0, 1, hour), 'h a')
 );
 
+// How far right each overlapping event in Week starts, as a share of the column.
+const WEEK_CASCADE_STEP_PERCENT = 35;
+// Keeps the last cascaded event at least this wide when many overlap.
+const WEEK_CASCADE_MAX_OFFSET_PERCENT = 70;
+
+/**
+ * Where an event sits across its day column. 2 Day and Day have room to split
+ * the width between overlapping events. Week columns are about 49pt wide, too
+ * narrow to split, so overlapping events cascade instead (like Google Calendar):
+ * each later one starts further right and sits on top of the earlier ones.
+ */
+function getHorizontalPlacement(view: TimeGridView, column: number, columnCount: number) {
+  if (view !== 'week') {
+    const width = 100 / columnCount;
+    return { left: `${column * width}%`, width: `${width}%` } as const;
+  }
+
+  const step =
+    columnCount > 1
+      ? Math.min(WEEK_CASCADE_STEP_PERCENT, WEEK_CASCADE_MAX_OFFSET_PERCENT / (columnCount - 1))
+      : 0;
+  return { left: `${column * step}%`, width: `${100 - column * step}%` } as const;
+}
+
 interface TimeGridProps {
   /** The day columns to show, left to right (7 for Week, 2 for 2 Day, 1 for Day). */
   days: Date[];
   /** Which hourly view this is; sets the sizes and header style. */
   view: TimeGridView;
+  /** Events for the visible days; each is drawn on the day(s) it falls on. */
+  events: CalendarEvent[];
 }
 
 /**
  * Hourly calendar shared by the Week, 2 Day, and Day views: a row of day
  * names and dates (today circled) over a scrollable 24-hour grid.
  */
-export function TimeGrid({ days, view }: TimeGridProps) {
+export function TimeGrid({ days, view, events }: TimeGridProps) {
   const { hourRowHeight, hourGutterWidth } = GRID_SIZES[view];
   // 2 Day and Day use the darker header text from their Figma frames.
   const isFocusView = view !== 'week';
+  const chipSize = isFocusView ? 'regular' : 'compact';
+  const chipMinHeight = EVENT_CHIP_MIN_HEIGHT[chipSize];
+  const minutesToPoints = (minutes: number) => (minutes / 60) * hourRowHeight;
 
   const renderDayHeader = (day: Date, width?: number) => {
     const today = isToday(day);
@@ -86,6 +119,40 @@ export function TimeGrid({ days, view }: TimeGridProps) {
                 <View key={label} style={[styles.hourCell, { height: hourRowHeight }]} />
               ))}
 
+              <View style={styles.eventLayer} pointerEvents="box-none">
+                {layoutDaySegments(
+                  getDaySegments(events, day),
+                  (chipMinHeight / hourRowHeight) * 60
+                ).map(({ event, startMinute, endMinute, column, columnCount }) => {
+                  // Short events are drawn at the chip's minimum height so the title fits.
+                  const height = Math.max(minutesToPoints(endMinute - startMinute), chipMinHeight);
+                  const isCascaded = view === 'week' && column > 0;
+
+                  return (
+                    <View
+                      key={event.id}
+                      style={[
+                        styles.eventSlot,
+                        isCascaded && styles.cascadedEventSlot,
+                        { top: minutesToPoints(startMinute), height },
+                        getHorizontalPlacement(view, column, columnCount),
+                      ]}
+                    >
+                      <EventChip
+                        event={event}
+                        size={chipSize}
+                        // Week columns are too narrow to wrap words, so titles stay on one line.
+                        maxTitleLines={
+                          isFocusView
+                            ? Math.max(1, Math.floor((height - chipMinHeight) / EVENT_TITLE_LINE_HEIGHT) + 1)
+                            : 1
+                        }
+                        style={styles.eventChip}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           ))}
         </View>

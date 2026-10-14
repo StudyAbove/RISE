@@ -1,10 +1,21 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 
+import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { CalendarScreen } from '../screens/CalendarScreen';
+
+const mockGetCalendarEventsInRange = jest.fn();
+jest.mock('../../../repositories/calendarEventsRepository', () => ({
+  getCalendarEventsInRange: (...args: unknown[]) => mockGetCalendarEventsInRange(...args),
+}));
+
+function makeEvent(title: string, start: Date, end: Date): CalendarEvent {
+  return { id: title, userId: 'user-1', title, startAt: start.toISOString(), endAt: end.toISOString(), source: 'rise' };
+}
 
 // Pin "today" to Friday, November 13, 2026 (the day used in the Figma frames).
 beforeEach(() => {
   jest.useFakeTimers({ now: new Date(2026, 10, 13, 9, 30) });
+  mockGetCalendarEventsInRange.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -155,6 +166,154 @@ describe('CalendarScreen', () => {
 
       expect(screen.getByRole('header', { name: 'Thursday, November 12' })).toBeOnTheScreen();
       expect(screen.queryByRole('header', { name: /November 13/ })).not.toBeOnTheScreen();
+    });
+  });
+
+  describe('events on the hourly views', () => {
+    const lecture = makeEvent('Biology Lecture', new Date(2026, 10, 13, 9, 0), new Date(2026, 10, 13, 10, 30));
+    const lateReview = makeEvent('Late-Night Review', new Date(2026, 10, 13, 23, 30), new Date(2026, 10, 14, 1, 0));
+
+    beforeEach(() => {
+      mockGetCalendarEventsInRange.mockResolvedValue([lecture, lateReview]);
+    });
+
+    it('shows the same event at the same time in Week, 2 Day, and Day (AC6)', async () => {
+      await render(<CalendarScreen />);
+
+      for (const view of ['Week', '2 Day', 'Day']) {
+        await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+        expect(await screen.findByLabelText('Biology Lecture, 9:00 AM to 10:30 AM')).toBeOnTheScreen();
+      }
+    });
+
+    it('draws an event that crosses midnight on both days', async () => {
+      await render(<CalendarScreen />);
+
+      await fireEvent.press(screen.getByRole('tab', { name: '2 Day' }));
+
+      expect(await screen.findAllByLabelText('Late-Night Review, 11:30 PM to 1:00 AM')).toHaveLength(2);
+    });
+
+    it('loads events for the dates on screen when the view changes', async () => {
+      await render(<CalendarScreen />);
+
+      await fireEvent.press(screen.getByRole('tab', { name: 'Day' }));
+
+      expect(mockGetCalendarEventsInRange).toHaveBeenLastCalledWith(
+        new Date(2026, 10, 13),
+        new Date(2026, 10, 14)
+      );
+    });
+  });
+
+  describe('events in the month view', () => {
+    const at = (day: number, hour: number) => new Date(2026, 10, day, hour, 0);
+
+    it('shows up to two events under a date, then "+N more"', async () => {
+      mockGetCalendarEventsInRange.mockResolvedValue([
+        makeEvent('Lecture', at(13, 9), at(13, 10)),
+        makeEvent('Lab', at(13, 11), at(13, 12)),
+        makeEvent('Study Group', at(13, 13), at(13, 14)),
+        makeEvent('Office Hours', at(13, 16), at(13, 17)),
+        makeEvent('Quiz', at(18, 12), at(18, 13)),
+      ]);
+
+      await render(<CalendarScreen />);
+
+      // Look inside the grid cells only; the today card lists the same events.
+      const todayCell = await screen.findByLabelText('Today, Friday, November 13, 4 events');
+      expect(within(todayCell).getByText('Lecture')).toBeOnTheScreen();
+      expect(within(todayCell).getByText('Lab')).toBeOnTheScreen();
+      expect(within(todayCell).queryByText('Study Group')).not.toBeOnTheScreen();
+      expect(within(todayCell).getByText('+2 more')).toBeOnTheScreen();
+
+      const quizDay = screen.getByLabelText('Wednesday, November 18, 1 event');
+      expect(within(quizDay).getByText('Quiz')).toBeOnTheScreen();
+    });
+  });
+
+  describe('today card under the month grid', () => {
+    it("lists today's events with their times", async () => {
+      mockGetCalendarEventsInRange.mockResolvedValue([
+        makeEvent('Biology Lecture', new Date(2026, 10, 13, 9, 0), new Date(2026, 10, 13, 10, 30)),
+        makeEvent('Osmosis Lab Report', new Date(2026, 10, 13, 23, 59), new Date(2026, 10, 13, 23, 59)),
+        makeEvent('Algebra Quiz', new Date(2026, 10, 18, 12, 0), new Date(2026, 10, 18, 13, 0)),
+      ]);
+
+      await render(<CalendarScreen />);
+
+      expect(screen.getByRole('header', { name: 'November 13, Friday' })).toBeOnTheScreen();
+      expect(await screen.findByText('9:00 AM – 10:30 AM')).toBeOnTheScreen();
+      // A deadline has no end time, so only its start is shown.
+      expect(screen.getByText('At 11:59 PM')).toBeOnTheScreen();
+      // Events on other days stay in the grid only.
+      expect(screen.queryByText('12:00 PM – 1:00 PM')).not.toBeOnTheScreen();
+    });
+
+    it('says so when there are no events today', async () => {
+      await render(<CalendarScreen />);
+
+      expect(await screen.findByText('No events today.')).toBeOnTheScreen();
+    });
+
+    it('keeps showing today while browsing other months', async () => {
+      await render(<CalendarScreen />);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Next month' }));
+
+      expect(screen.getByRole('header', { name: 'November 13, Friday' })).toBeOnTheScreen();
+    });
+  });
+
+  describe('loading and errors', () => {
+    it("shows a message with Retry when events can't load, and loads again on Retry", async () => {
+      // The hook logs the error; keep the test output clean.
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      let databaseIsDown = true;
+      mockGetCalendarEventsInRange.mockImplementation(() =>
+        databaseIsDown
+          ? Promise.reject(new Error('permission denied for table calendar_events'))
+          : Promise.resolve([makeEvent('Lecture', new Date(2026, 10, 13, 9), new Date(2026, 10, 13, 10))])
+      );
+
+      await render(<CalendarScreen />);
+
+      expect(await screen.findByText("Couldn't load events.")).toBeOnTheScreen();
+      expect(screen.getByText("Couldn't load today's events.")).toBeOnTheScreen();
+
+      databaseIsDown = false;
+      await fireEvent.press(screen.getByRole('button', { name: 'Retry' }));
+      expect(await screen.findByLabelText('Today, Friday, November 13, 1 event')).toBeOnTheScreen();
+      expect(screen.queryByText("Couldn't load events.")).not.toBeOnTheScreen();
+
+      // The today card retries on its own.
+      await fireEvent.press(screen.getByRole('button', { name: "Retry today's events" }));
+      expect(await screen.findByText('9:00 AM – 10:00 AM')).toBeOnTheScreen();
+      logSpy.mockRestore();
+    });
+
+    it('shows a spinner only when loading takes a while', async () => {
+      // Never finishes loading.
+      mockGetCalendarEventsInRange.mockReturnValue(new Promise(() => {}));
+
+      await render(<CalendarScreen />);
+      expect(screen.queryByLabelText('Loading events')).not.toBeOnTheScreen();
+
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      expect(screen.getByLabelText('Loading events')).toBeOnTheScreen();
+    });
+
+    it('shows nothing extra when there are no events', async () => {
+      await render(<CalendarScreen />);
+
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      expect(screen.queryByLabelText('Loading events')).not.toBeOnTheScreen();
+      expect(screen.queryByText("Couldn't load events.")).not.toBeOnTheScreen();
     });
   });
 

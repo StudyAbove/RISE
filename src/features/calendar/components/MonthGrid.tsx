@@ -1,19 +1,29 @@
 import { Text, View } from 'react-native';
 import { format, isSameMonth, isToday } from 'date-fns';
 
+import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { getMonthGridDays } from '../utils/calendarDates';
+import { getDaySegments } from '../utils/calendarEvents';
+import { EventChip } from './EventChip';
 import { styles } from './MonthGrid.styles';
 
 const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAYS_PER_WEEK = 7;
+// Two mini chips and a "+N more" line are all that fit under the date.
+const MAX_CHIPS_PER_DAY = 2;
 
 interface MonthGridProps {
   /** Any day in the month to show. */
   month: Date;
+  /** Events for the visible weeks; each is listed on the day(s) it falls on. */
+  events: CalendarEvent[];
 }
 
-/** Monthly calendar: weekday letters over a grid of dates, with today circled. */
-export function MonthGrid({ month }: MonthGridProps) {
+/**
+ * Monthly calendar: weekday letters over a grid of dates, with today circled
+ * and up to two events under each date ("+N more" when there are others).
+ */
+export function MonthGrid({ month, events }: MonthGridProps) {
   const days = getMonthGridDays(month);
   const weeks = Array.from({ length: days.length / DAYS_PER_WEEK }, (_, week) =>
     days.slice(week * DAYS_PER_WEEK, (week + 1) * DAYS_PER_WEEK)
@@ -43,17 +53,31 @@ export function MonthGrid({ month }: MonthGridProps) {
             }
 
             const today = isToday(day);
-            const label = format(day, 'EEEE, MMMM d');
+            const dayEvents = getDaySegments(events, day).map((segment) => segment.event);
+            const hiddenCount = dayEvents.length - MAX_CHIPS_PER_DAY;
+
+            // VoiceOver reads the cell as one item, so the label carries the event count.
+            const dateLabel = `${today ? 'Today, ' : ''}${format(day, 'EEEE, MMMM d')}`;
+            const label =
+              dayEvents.length === 0
+                ? dateLabel
+                : `${dateLabel}, ${dayEvents.length} ${dayEvents.length === 1 ? 'event' : 'events'}`;
 
             return (
               <View
                 key={day.toISOString()}
                 accessible
-                accessibilityLabel={today ? `Today, ${label}` : label}
+                accessibilityLabel={label}
                 style={[styles.dayCell, isLastColumn && styles.lastColumn]}
               >
                 <View style={[styles.dayNumberBox, today && styles.todayCircle]}>
                   <Text style={[styles.dayNumber, today && styles.todayNumber]}>{format(day, 'd')}</Text>
+                </View>
+                <View style={styles.eventList}>
+                  {dayEvents.slice(0, MAX_CHIPS_PER_DAY).map((event) => (
+                    <EventChip key={event.id} event={event} size="mini" />
+                  ))}
+                  {hiddenCount > 0 && <Text style={styles.moreEvents}>+{hiddenCount} more</Text>}
                 </View>
               </View>
             );
