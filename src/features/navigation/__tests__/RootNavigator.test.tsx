@@ -1,5 +1,9 @@
 import { NavigationContainer } from '@react-navigation/native';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import {
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
 
 import { RootNavigator } from '../navigators/RootNavigator';
 
@@ -11,9 +15,11 @@ jest.mock('../../../lib/supabase', () => ({
   supabase: {
     auth: {
       getSession: () => mockGetSession(),
+
       onAuthStateChange: (...args: unknown[]) =>
         mockOnAuthStateChange(...args),
     },
+
     from: () => ({
       select: () => ({
         eq: () => ({
@@ -24,17 +30,37 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
+async function renderNavigator() {
+  await render(
+    <NavigationContainer>
+      <RootNavigator />
+    </NavigationContainer>,
+  );
+}
+
 describe('RootNavigator', () => {
+  let authStateCallback:
+    | (() => void)
+    | undefined;
+
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockOnAuthStateChange.mockReturnValue({
-      data: {
-        subscription: {
-          unsubscribe: jest.fn(),
-        },
+    authStateCallback = undefined;
+
+    mockOnAuthStateChange.mockImplementation(
+      (callback: () => void) => {
+        authStateCallback = callback;
+
+        return {
+          data: {
+            subscription: {
+              unsubscribe: jest.fn(),
+            },
+          },
+        };
       },
-    });
+    );
   });
 
   it('shows Welcome when there is no signed-in session', async () => {
@@ -44,11 +70,7 @@ describe('RootNavigator', () => {
       },
     });
 
-    render(
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>,
-    );
+    await renderNavigator();
 
     await waitFor(() => {
       expect(
@@ -83,16 +105,47 @@ describe('RootNavigator', () => {
       error: null,
     });
 
-    render(
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>,
-    );
+    await renderNavigator();
 
     await waitFor(() => {
       expect(
         screen.getByText('Onboarding'),
       ).toBeOnTheScreen();
+    });
+  });
+
+  it('restores an existing session and opens the main app without showing login', async () => {
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: 'test-user-id',
+          },
+        },
+      },
+    });
+
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        onboarding_completed: true,
+      },
+      error: null,
+    });
+
+    await renderNavigator();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('header', {
+          name: 'Home',
+        }),
+      ).toBeOnTheScreen();
+
+      expect(
+        screen.queryByRole('button', {
+          name: 'Log In',
+        }),
+      ).not.toBeOnTheScreen();
     });
   });
 
@@ -114,22 +167,71 @@ describe('RootNavigator', () => {
       error: null,
     });
 
-    render(
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>,
-    );
+    await renderNavigator();
 
     await waitFor(() => {
-      expect(screen.getAllByRole('tab')).toHaveLength(5);
+      expect(
+        screen.getAllByRole('tab'),
+      ).toHaveLength(5);
 
       expect(
-        screen.getByRole('tab', { name: 'Home' }),
+        screen.getByRole('tab', {
+          name: 'Home',
+        }),
       ).toBeSelected();
 
       expect(
-        screen.getByRole('header', { name: 'Home' }),
+        screen.getByRole('header', {
+          name: 'Home',
+        }),
       ).toBeOnTheScreen();
     });
+  });
+
+  it('reloads auth state when Supabase reports an auth state change', async () => {
+    mockGetSession
+      .mockResolvedValueOnce({
+        data: {
+          session: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          session: {
+            user: {
+              id: 'test-user-id',
+            },
+          },
+        },
+      });
+
+    mockMaybeSingle.mockResolvedValue({
+      data: {
+        onboarding_completed: true,
+      },
+      error: null,
+    });
+
+    await renderNavigator();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: 'Log In',
+        }),
+      ).toBeOnTheScreen();
+    });
+
+    authStateCallback?.();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('header', {
+          name: 'Home',
+        }),
+      ).toBeOnTheScreen();
+    });
+
+    expect(mockGetSession).toHaveBeenCalledTimes(2);
   });
 });
