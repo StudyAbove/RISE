@@ -58,9 +58,48 @@ describe('CalendarScreen', () => {
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Day' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Next day' }));
-    await fireEvent.press(screen.getByRole('tab', { name: 'Month' }));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Week' }));
 
     expect(screen.getByText('Saturday, November 14')).toBeOnTheScreen();
+  });
+
+  describe('month view', () => {
+    it("shows every date of the current month and circles today's date", async () => {
+      await render(<CalendarScreen />);
+
+      expect(screen.getByLabelText('Sunday, November 1')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Monday, November 30')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Today, Friday, November 13')).toBeOnTheScreen();
+    });
+
+    it('leaves the cells for neighboring months blank', async () => {
+      await render(<CalendarScreen />);
+
+      // November's last row ends on Saturday, December 5.
+      expect(screen.queryByLabelText('Tuesday, December 1')).not.toBeOnTheScreen();
+      // Only November 5 shows a "5"; December 5 is blank.
+      expect(screen.getAllByText('5')).toHaveLength(1);
+    });
+
+    it('shows the correct dates after moving to another month', async () => {
+      await render(<CalendarScreen />);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Next month' }));
+
+      // December 2026 starts on a Tuesday and has 31 days.
+      expect(screen.getByLabelText('Tuesday, December 1')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Thursday, December 31')).toBeOnTheScreen();
+      expect(screen.queryByLabelText('Monday, November 30')).not.toBeOnTheScreen();
+    });
+
+    it("only circles today's date in the current month", async () => {
+      await render(<CalendarScreen />);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Previous month' }));
+
+      expect(screen.getByLabelText('Tuesday, October 13')).toBeOnTheScreen();
+      expect(screen.queryByLabelText(/^Today/)).not.toBeOnTheScreen();
+    });
   });
 
   it('shows the add, search, and menu actions as not yet available', async () => {

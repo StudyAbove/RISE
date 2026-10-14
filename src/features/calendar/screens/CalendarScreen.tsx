@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { format, startOfDay } from 'date-fns';
 
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
+import { MonthGrid } from '../components/MonthGrid';
 import { shiftAnchorDate, type CalendarViewMode } from '../utils/calendarDates';
 import { styles } from './CalendarScreen.styles';
 
@@ -36,12 +37,19 @@ export function CalendarScreen() {
       />
       <CalendarViewSwitcher selectedView={view} onSelectView={setView} />
 
-      {/* Placeholder until the month and hourly views are built. */}
-      <View style={styles.body}>
-        <Text style={styles.placeholderText}>
-          {format(anchorDate, 'EEEE, MMMM d')}
-        </Text>
-      </View>
+      {view === 'month' ? (
+        // Scrolls so six-week months still fit on smaller iPhones.
+        <ScrollView style={styles.body}>
+          <MonthGrid month={anchorDate} />
+        </ScrollView>
+      ) : (
+        // Placeholder until the hourly views are built.
+        <View style={[styles.body, styles.placeholder]}>
+          <Text style={styles.placeholderText}>
+            {format(anchorDate, 'EEEE, MMMM d')}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

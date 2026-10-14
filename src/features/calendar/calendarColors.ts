@@ -11,6 +11,12 @@ export const calendarColors = {
   switcherBackground: '#E9E7E0',
   // mistGreen family: switcher outline and dividers
   hairline: '#CECECE',
+  // mistGreen family: calendar grid lines
+  gridLine: '#D9D4D4',
   // deepOlive family: month label and unselected switcher text
   labelText: '#353333',
+  // deepOlive family: month grid dates
+  dateText: '#000000',
+  // mutedGrayGreen family: S M T W T F S weekday letters
+  weekdayText: '#676767',
 } as const;

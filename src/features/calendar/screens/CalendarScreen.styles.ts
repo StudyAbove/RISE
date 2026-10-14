@@ -12,6 +12,8 @@ export const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
