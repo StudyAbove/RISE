@@ -7,6 +7,7 @@ import LoginScreen from '../../auth/screens/LoginScreen';
 import WelcomeScreen from '../../auth/screens/WelcomeScreen';
 import OnboardingScreen from '../../onboarding/screens/OnboardingScreen';
 import { SettingsScreen } from '../../settings/screens/SettingsScreen';
+import { DEV_SKIP_AUTH } from '../../../lib/devFlags';
 import { supabase } from '../../../lib/supabase';
 import type { RootStackParamList } from '../types';
 import { MainTabNavigator } from './MainTabNavigator';
@@ -26,6 +27,13 @@ export function RootNavigator({
     useState(false);
 
   async function loadAuthState() {
+    if (DEV_SKIP_AUTH) {
+      setIsSignedIn(true);
+      setHasCompletedOnboarding(true);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
 
     const {

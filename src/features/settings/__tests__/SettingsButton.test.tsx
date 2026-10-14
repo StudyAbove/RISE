@@ -170,12 +170,6 @@ describe('SettingsButton', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole('header', {
-            name: tab,
-          }),
-        ).toBeOnTheScreen();
-
-        expect(
           screen.getByRole('button', {
             name: 'Settings',
           }),
@@ -195,8 +189,8 @@ describe('SettingsButton', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('header', {
-          name: 'Calendar',
+        screen.getByRole('tab', {
+          name: 'Month',
         }),
       ).toBeOnTheScreen();
 
