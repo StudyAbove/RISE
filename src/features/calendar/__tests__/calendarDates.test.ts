@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import {
   getMonthGridDays,
   getTimeGridDays,
+  getVisibleRange,
   shiftAnchorDate,
 } from '../utils/calendarDates';
 
@@ -73,6 +74,22 @@ describe('getTimeGridDays', () => {
 
   it('shows only the selected day for Day', () => {
     expect(toDayStrings(getTimeGridDays('day', friday))).toEqual(['2026-11-13']);
+  });
+});
+
+describe('getVisibleRange', () => {
+  const friday = new Date(2026, 10, 13, 15, 45);
+  const range = (view: Parameters<typeof getVisibleRange>[0]) => {
+    const { start, end } = getVisibleRange(view, friday);
+    return [format(start, 'yyyy-MM-dd HH:mm'), format(end, 'yyyy-MM-dd HH:mm')];
+  };
+
+  it('runs from midnight of the first visible day to midnight after the last', () => {
+    // November 2026's grid is Nov 1 – Dec 5.
+    expect(range('month')).toEqual(['2026-11-01 00:00', '2026-12-06 00:00']);
+    expect(range('week')).toEqual(['2026-11-08 00:00', '2026-11-15 00:00']);
+    expect(range('twoDay')).toEqual(['2026-11-13 00:00', '2026-11-15 00:00']);
+    expect(range('day')).toEqual(['2026-11-13 00:00', '2026-11-14 00:00']);
   });
 });
 

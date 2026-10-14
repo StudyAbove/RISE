@@ -5,6 +5,7 @@ import {
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
+  startOfDay,
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
@@ -46,6 +47,20 @@ export function getTimeGridDays(
     case 'day':
       return [anchorDate];
   }
+}
+
+/**
+ * The span of time a view shows, for loading its events. `end` is the midnight
+ * after the last visible day, so an event counts as visible when it starts
+ * before `end` and ends after `start`.
+ */
+export function getVisibleRange(view: CalendarViewMode, anchorDate: Date): { start: Date; end: Date } {
+  const days = view === 'month' ? getMonthGridDays(anchorDate) : getTimeGridDays(view, anchorDate);
+
+  return {
+    start: startOfDay(days[0]),
+    end: addDays(startOfDay(days[days.length - 1]), 1),
+  };
 }
 
 /**
