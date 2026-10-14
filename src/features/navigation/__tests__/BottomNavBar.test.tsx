@@ -38,7 +38,8 @@ describe('BottomNavBar', () => {
 
     await fireEvent.press(screen.getByRole('tab', { name: 'Calendar' }));
 
-    expect(screen.getByRole('header', { name: 'Calendar' })).toBeOnTheScreen();
+    // The Calendar page has no "Calendar" heading, so look for its view switcher.
+    expect(screen.getByRole('tab', { name: 'Month' })).toBeOnTheScreen();
   });
 
   it('moves the highlight to the tapped tab so only one tab is selected', async () => {

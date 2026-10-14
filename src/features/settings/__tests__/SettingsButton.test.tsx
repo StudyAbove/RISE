@@ -130,8 +130,9 @@ describe('SettingsButton', () => {
     );
 
     await waitFor(() => {
+      // The Calendar page has no "Calendar" heading, so wait for its view switcher.
       expect(
-        screen.getByRole('header', { name: 'Calendar' }),
+        screen.getByRole('tab', { name: 'Month' }),
       ).toBeOnTheScreen();
 
       expect(
