@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { format, startOfDay } from 'date-fns';
 
+import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
+import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import {
   getTimeGridDays,
+  getVisibleRange,
   shiftAnchorDate,
   type CalendarViewMode,
 } from '../utils/calendarDates';
@@ -28,6 +31,9 @@ export function CalendarScreen() {
   // student stays on the same dates.
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()));
 
+  const visibleRange = getVisibleRange(view, anchorDate);
+  const { events, status, retry } = useCalendarEvents(visibleRange.start, visibleRange.end);
+
   const shift = (direction: 1 | -1) =>
     setAnchorDate((date) => shiftAnchorDate(view, date, direction));
 
@@ -42,16 +48,19 @@ export function CalendarScreen() {
       />
       <CalendarViewSwitcher selectedView={view} onSelectView={setView} />
 
-      {view === 'month' ? (
-        // Scrolls so six-week months still fit on smaller iPhones.
-        <ScrollView style={styles.body}>
-          <MonthGrid month={anchorDate} />
-        </ScrollView>
-      ) : (
-        // The key gives each hourly view a fresh grid, so switching views
-        // always opens at 7 AM instead of keeping the last view's scroll position.
-        <TimeGrid key={view} days={getTimeGridDays(view, anchorDate)} view={view} />
-      )}
+      <View style={styles.body}>
+        {view === 'month' ? (
+          // Scrolls so six-week months still fit on smaller iPhones.
+          <ScrollView style={styles.body}>
+            <MonthGrid month={anchorDate} events={events} />
+          </ScrollView>
+        ) : (
+          // The key gives each hourly view a fresh grid, so switching views
+          // always opens at 7 AM instead of keeping the last view's scroll position.
+          <TimeGrid key={view} days={getTimeGridDays(view, anchorDate)} view={view} events={events} />
+        )}
+        <CalendarEventsStatus status={status} onRetry={retry} />
+      </View>
     </View>
   );
 }

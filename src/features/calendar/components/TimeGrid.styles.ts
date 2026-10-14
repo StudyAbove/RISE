@@ -96,4 +96,28 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: calendarColors.gridLine,
   },
+  // Covers the day column so events can be placed by minute over the hour lines.
+  eventLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  // Leaves a 1pt gap below the hour line and between side-by-side events.
+  eventSlot: {
+    position: 'absolute',
+    paddingTop: 1,
+    paddingRight: 1,
+  },
+  // A cascaded Week event gets a thin outline in the page color, so its edge
+  // shows where it overlaps the event underneath.
+  cascadedEventSlot: {
+    paddingLeft: 1,
+    borderRadius: 4,
+    backgroundColor: colors.warmCream,
+  },
+  eventChip: {
+    flex: 1,
+  },
 });

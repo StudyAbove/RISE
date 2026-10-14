@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { getTimeGridDays, getVisibleRange } from '../utils/calendarDates';
-import { getDaySegments } from '../utils/calendarEvents';
+import { getDaySegments, layoutDaySegments } from '../utils/calendarEvents';
 
 // Builds an event from local clock times, stored as UTC ISO strings like Supabase returns.
 function makeEvent(title: string, start: Date, end: Date): CalendarEvent {
@@ -80,5 +80,57 @@ describe('getDaySegments', () => {
     // The month view loads the whole grid, which includes the event.
     const { start, end } = getVisibleRange('month', friday);
     expect(new Date(lab.startAt) >= start && new Date(lab.endAt) <= end).toBe(true);
+  });
+});
+
+describe('layoutDaySegments', () => {
+  // Builds an event on Friday from "HH:mm" clock times.
+  const at = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return new Date(2026, 10, 13, hours, minutes);
+  };
+  const layout = (...events: [string, string, string][]) =>
+    layoutDaySegments(
+      getDaySegments(events.map(([title, start, end]) => makeEvent(title, at(start), at(end))), friday),
+      15
+    ).map(({ event, column, columnCount }) => [event.title, column, columnCount]);
+
+  it('gives events that do not overlap the full width', () => {
+    expect(layout(['A', '09:00', '10:00'], ['B', '10:00', '11:00'])).toEqual([
+      ['A', 0, 1],
+      ['B', 0, 1],
+    ]);
+  });
+
+  it('puts overlapping events side by side', () => {
+    expect(layout(['Lecture', '09:00', '10:30'], ['Coffee', '10:00', '11:00'])).toEqual([
+      ['Lecture', 0, 2],
+      ['Coffee', 1, 2],
+    ]);
+  });
+
+  it('reuses a column once it frees up within the same group', () => {
+    // C overlaps A, but starts after B ends, so it takes B's column.
+    expect(layout(['A', '09:00', '12:00'], ['B', '09:00', '10:00'], ['C', '10:30', '11:00'])).toEqual([
+      ['A', 0, 2],
+      ['B', 1, 2],
+      ['C', 1, 2],
+    ]);
+  });
+
+  it('only splits the events that overlap, not the whole day', () => {
+    expect(layout(['A', '09:00', '10:00'], ['B', '09:30', '10:30'], ['C', '14:00', '15:00'])).toEqual([
+      ['A', 0, 2],
+      ['B', 1, 2],
+      ['C', 0, 1],
+    ]);
+  });
+
+  it('treats very short events as their drawn height', () => {
+    // A 5-minute event is drawn 15 minutes tall, so it would cover B without a second column.
+    expect(layout(['A', '09:00', '09:05'], ['B', '09:10', '10:00'])).toEqual([
+      ['A', 0, 2],
+      ['B', 1, 2],
+    ]);
   });
 });

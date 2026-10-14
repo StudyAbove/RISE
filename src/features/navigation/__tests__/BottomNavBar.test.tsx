@@ -4,6 +4,12 @@ import { fireEvent, render, screen, within } from '@testing-library/react-native
 import { MAIN_TABS } from '../config/mainTabs';
 import { MainTabNavigator } from '../navigators/MainTabNavigator';
 
+// The Calendar tab loads events when it opens; return none so these tests
+// don't need Supabase.
+jest.mock('../../../repositories/calendarEventsRepository', () => ({
+  getCalendarEventsInRange: () => Promise.resolve([]),
+}));
+
 async function renderMainTabs() {
   await render(
     <NavigationContainer>

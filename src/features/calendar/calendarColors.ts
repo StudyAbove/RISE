@@ -1,3 +1,6 @@
+import type { CalendarSource } from '../../models/CalendarEvent';
+import { colors } from '../../theme/colors';
+
 /**
  * Colors from the Calendar Figma frames that differ from the shared palette
  * (src/theme/colors.ts). The team rule: when a Figma color is in the same family
@@ -23,4 +26,18 @@ export const calendarColors = {
   weekdayText: '#676767',
   // mutedGrayGreen family: "7 AM" hour labels
   hourLabel: '#5E5B5B',
+  // paleSun family: background of an event chip
+  eventChip: '#FBEFDE',
 } as const;
+
+/**
+ * The colored tab on the left of each event chip, by where the event came from.
+ * RISE and Canvas use the two tab colors from Figma; Google and Apple, which
+ * Figma doesn't show, use palette colors.
+ */
+export const eventSourceColors: Record<CalendarSource, string> = {
+  rise: '#F4DF8A', // butterYellow family
+  canvas: '#C7BFA0',
+  google: colors.softSage,
+  apple: colors.eucalyptus,
+};

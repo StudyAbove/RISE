@@ -63,4 +63,16 @@ export const styles = StyleSheet.create({
   todayNumber: {
     color: colors.softWhite,
   },
+  eventList: {
+    alignSelf: 'stretch',
+    paddingHorizontal: 2,
+    gap: 1,
+  },
+  moreEvents: {
+    fontFamily: fonts.body.medium,
+    fontSize: 9,
+    lineHeight: 11,
+    paddingLeft: 2,
+    color: calendarColors.hourLabel,
+  },
 });

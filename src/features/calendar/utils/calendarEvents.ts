@@ -44,3 +44,56 @@ export function getDaySegments(events: CalendarEvent[], day: Date): DayEventSegm
     // Earliest first; when two start together, the longer one first.
     .sort((a, b) => a.startMinute - b.startMinute || b.endMinute - a.endMinute);
 }
+
+/** A day segment plus its side-by-side position among the events it overlaps. */
+export interface PositionedSegment extends DayEventSegment {
+  /** 0 for the leftmost column. */
+  column: number;
+  /** How many columns its group of overlapping events is split into. */
+  columnCount: number;
+}
+
+/**
+ * Splits overlapping events into side-by-side columns, the way Google Calendar
+ * does. Each group of events that overlap each other (directly or through a
+ * chain) shares the column width; an event takes the leftmost free column.
+ *
+ * `minDurationMinutes` is the shortest an event is drawn, so a 5-minute event
+ * that is drawn taller than 5 minutes still doesn't get covered by the next one.
+ */
+export function layoutDaySegments(segments: DayEventSegment[], minDurationMinutes: number): PositionedSegment[] {
+  const drawnEnd = (segment: DayEventSegment) =>
+    Math.max(segment.endMinute, segment.startMinute + minDurationMinutes);
+
+  const positioned: PositionedSegment[] = [];
+  let group: PositionedSegment[] = [];
+  // The minute each column in the current group becomes free.
+  let columnEnds: number[] = [];
+
+  const finishGroup = () => {
+    group.forEach((segment) => {
+      segment.columnCount = columnEnds.length;
+    });
+    positioned.push(...group);
+    group = [];
+    columnEnds = [];
+  };
+
+  // getDaySegments already sorts by start time, which this relies on.
+  for (const segment of segments) {
+    // A new group starts once every column is free again.
+    if (group.length > 0 && columnEnds.every((end) => end <= segment.startMinute)) {
+      finishGroup();
+    }
+
+    let column = columnEnds.findIndex((end) => end <= segment.startMinute);
+    if (column === -1) {
+      column = columnEnds.length;
+    }
+    columnEnds[column] = drawnEnd(segment);
+    group.push({ ...segment, column, columnCount: 0 });
+  }
+  finishGroup();
+
+  return positioned;
+}
