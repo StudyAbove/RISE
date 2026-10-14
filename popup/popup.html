@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Canvas Course Collector</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="mark" aria-hidden="true">C</div>
+        <div><h1>Canvas Course Collector</h1><p>Gather course details for your own study tools.</p></div>
+      </header>
+
+      <section class="privacy" aria-label="Privacy information">
+        <strong>On-demand and local</strong>
+        <p>Nothing is collected until you press Scan. Data stays in this popup and is only saved if you export it.</p>
+      </section>
+
+      <button id="scan" type="button">Scan this course</button>
+      <p id="status" role="status" aria-live="polite">Open a Canvas course page, then scan.</p>
+
+      <section id="results" hidden>
+        <h2 id="course-title"></h2>
+        <div class="counts" id="counts"></div>
+        <details>
+          <summary>Review collected information</summary>
+          <div id="preview"></div>
+        </details>
+        <button id="export" class="secondary" type="button">Export JSON</button>
+      </section>
+      <footer>Only scan courses you are authorized to access. This extension does not bypass Canvas permissions.</footer>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

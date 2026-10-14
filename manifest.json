@@ -1,15 +1,11 @@
 {
-  "name": "Hello Extensions",
-  "description": "Base Level Extension",
-  "version": "1.0",
   "manifest_version": 3,
+  "name": "Canvas Course Collector",
+  "version": "1.0.0",
+  "description": "Collect a Canvas course syllabus, assignments, and quizzes for your own review and export.",
+  "permissions": ["activeTab", "scripting"],
   "action": {
-    "default_popup": "hello.html",
-    "icons": {
-        "1": "icon1.png"
-        },
-    "browser_action": {
-        "default_icon": "icon1.png"
-    }
-    }
+    "default_title": "Canvas Course Collector",
+    "default_popup": "popup/popup.html"
+  }
 }
