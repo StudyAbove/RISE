@@ -2,14 +2,21 @@
   "expo": {
     "name": "RISE",
     "slug": "rise",
-    "scheme": "rise",
+    "scheme": [
+      "rise",
+      "com.anonymous.rise"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.rise"
+      "bundleIdentifier": "com.anonymous.rise",
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "Allow RISE to access your calendar so it can plan study sessions around your existing events.",
+        "NSCalendarsFullAccessUsageDescription": "Allow RISE to access your calendar so it can plan study sessions around your existing events."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +34,14 @@
       "expo-sqlite",
       "expo-font",
       "expo-splash-screen",
-      "expo-asset"
+      "expo-asset",
+      "expo-web-browser",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow RISE to access your calendar so it can plan study sessions around your existing events."
+        }
+      ]
     ]
   }
 }
