@@ -30,6 +30,12 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
+// The Home greeting loads the student's name with its own session lookup.
+// Stub it so these tests only count the navigator's auth checks.
+jest.mock('../../../repositories/profileRepository', () => ({
+  fetchCurrentDisplayName: async () => null,
+}));
+
 async function renderNavigator() {
   await render(
     <NavigationContainer>
