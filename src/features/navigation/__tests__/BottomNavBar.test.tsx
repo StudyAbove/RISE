@@ -36,7 +36,7 @@ describe('BottomNavBar', () => {
     await renderMainTabs();
 
     expect(screen.getByRole('tab', { name: 'Home' })).toBeSelected();
-    expect(screen.getByRole('header', { name: 'Home' })).toBeOnTheScreen();
+    expect(screen.getByText('RISE')).toBeOnTheScreen();
   });
 
   it('opens the page for the tab that was tapped', async () => {

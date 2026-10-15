@@ -99,9 +99,7 @@ async function renderApp() {
 
   await waitFor(() => {
     expect(
-      screen.getByRole('header', {
-        name: 'Home',
-      }),
+      screen.getByText('RISE'),
     ).toBeOnTheScreen();
   });
 }
@@ -150,9 +148,7 @@ describe('SettingsButton', () => {
       ).not.toBeOnTheScreen();
 
       expect(
-        screen.getByRole('header', {
-          name: 'Home',
-        }),
+        screen.getByText('RISE'),
       ).toBeOnTheScreen();
     });
   });

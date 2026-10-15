@@ -30,6 +30,12 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
+// The Home greeting loads the student's name with its own session lookup.
+// Stub it so these tests only count the navigator's auth checks.
+jest.mock('../../../repositories/profileRepository', () => ({
+  fetchCurrentDisplayName: async () => null,
+}));
+
 async function renderNavigator() {
   await render(
     <NavigationContainer>
@@ -136,9 +142,7 @@ describe('RootNavigator', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('header', {
-          name: 'Home',
-        }),
+        screen.getByText('RISE'),
       ).toBeOnTheScreen();
 
       expect(
@@ -181,9 +185,7 @@ describe('RootNavigator', () => {
       ).toBeSelected();
 
       expect(
-        screen.getByRole('header', {
-          name: 'Home',
-        }),
+        screen.getByText('RISE'),
       ).toBeOnTheScreen();
     });
   });
@@ -226,9 +228,7 @@ describe('RootNavigator', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('header', {
-          name: 'Home',
-        }),
+        screen.getByText('RISE'),
       ).toBeOnTheScreen();
     });
 
