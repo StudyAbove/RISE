@@ -23,12 +23,12 @@ function getSelectedTabs() {
 }
 
 describe('BottomNavBar', () => {
-  it('shows a tab with a label for every main page', async () => {
+  it('shows an icon-only tab, named for screen readers, for every main page', async () => {
     await renderMainTabs();
 
     for (const tab of MAIN_TABS) {
       const tabButton = screen.getByRole('tab', { name: tab.label });
-      expect(within(tabButton).getByText(tab.label)).toBeOnTheScreen();
+      expect(within(tabButton).queryByText(tab.label)).not.toBeOnTheScreen();
     }
   });
 

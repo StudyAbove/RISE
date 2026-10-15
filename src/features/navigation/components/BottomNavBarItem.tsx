@@ -1,14 +1,10 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { styles } from './BottomNavBarItem.styles';
 
-// Lets labels grow with Dynamic Type while still fitting five tabs across
-// the narrowest supported iPhone.
-const MAX_LABEL_FONT_SCALE = 1.5;
-
 interface BottomNavBarItemProps {
-  label: string;
+  /** Read by screen readers; the tab itself shows only its icon, as in the Figma. */
   accessibilityLabel: string;
   icon: ReactNode;
   isSelected: boolean;
@@ -17,9 +13,8 @@ interface BottomNavBarItemProps {
   testID?: string;
 }
 
-/** A single tab button in the bottom nav bar: icon with a highlight, plus a text label. */
+/** A single tab button in the bottom nav bar: an icon with a highlight when selected. */
 export function BottomNavBarItem({
-  label,
   accessibilityLabel,
   icon,
   isSelected,
@@ -40,14 +35,6 @@ export function BottomNavBarItem({
       <View style={[styles.iconContainer, isSelected && styles.iconContainerSelected]}>
         {icon}
       </View>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        maxFontSizeMultiplier={MAX_LABEL_FONT_SCALE}
-        style={[styles.label, isSelected && styles.labelSelected]}
-      >
-        {label}
-      </Text>
     </Pressable>
   );
 }

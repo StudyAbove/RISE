@@ -8,8 +8,12 @@ import { styles } from './BottomNavBar.styles';
 // Required by `tabBarIcon`, but unused: our icons have fixed sizes from the tab config.
 const ICON_SIZE = 35;
 
-// Keeps a small gap under the labels on devices without a home indicator.
-const MIN_BOTTOM_PADDING = 8;
+// Same gap above and below the tab icons, so they sit centered in the bar.
+const ICON_GAP = 10;
+
+// The iPhone home indicator line sits this far above the bottom of the
+// screen. On those phones the bottom gap is measured to the line instead.
+const HOME_INDICATOR_TOP = 13;
 
 /**
  * The app's bottom navigation bar.
@@ -24,8 +28,14 @@ export function BottomNavBar({ state, descriptors, navigation, insets }: BottomT
       // iOS only announces children as tabs ("Home, tab, 1 of 5") when the
       // parent container has the tabbar role.
       accessibilityRole="tabbar"
-      // Keeps the tabs above the iPhone home indicator.
-      style={[styles.container, { paddingBottom: Math.max(insets.bottom, MIN_BOTTOM_PADDING) }]}
+      // Centers the tabs between the top of the bar and the home indicator.
+      style={[
+        styles.container,
+        {
+          paddingTop: ICON_GAP,
+          paddingBottom: insets.bottom > 0 ? HOME_INDICATOR_TOP + ICON_GAP : ICON_GAP,
+        },
+      ]}
     >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
@@ -56,7 +66,6 @@ export function BottomNavBar({ state, descriptors, navigation, insets }: BottomT
         return (
           <BottomNavBarItem
             key={route.key}
-            label={label}
             accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
             icon={options.tabBarIcon?.({
               focused: isSelected,
