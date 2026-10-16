@@ -1,4 +1,4 @@
-import type { CalendarSource } from '../../models/CalendarEvent';
+import type { CalendarEventType, CalendarSource } from '../../models/CalendarEvent';
 import { colors } from '../../theme/colors';
 
 /**
@@ -31,6 +31,19 @@ export const calendarColors = {
   // warmCream family: band behind the today card under the month grid
   todayCardBand: '#EFEEE9',
 } as const;
+
+/**
+ * The Type buttons on the Add Event form (Figma "Event Type Button"). Each type
+ * has its own pastel; a selected button turns green.
+ */
+export const eventTypeButtonColors: Record<CalendarEventType | 'selected', { background: string; border: string }> = {
+  class: { background: '#F2F2F2', border: '#E2E2E2' },
+  assignment: { background: '#FAF2E6', border: '#EAE4B4' },
+  study: { background: '#E9F0E8', border: colors.softSage },
+  personal: { background: '#F2E5E5', border: '#DAAEAE' },
+  wellness: { background: '#D0DED5', border: '#83A48F' },
+  selected: { background: '#83A48F', border: '#31573E' },
+};
 
 /**
  * The colored tab on the left of each event chip, by where the event came from.
