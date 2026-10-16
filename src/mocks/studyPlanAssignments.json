@@ -1,0 +1,55 @@
+[
+  {
+    "id": "osmosis-lab",
+    "course": "BIO 200",
+    "courseColor": "#6DAF86",
+    "title": "Osmosis Lab Report",
+    "shortDescription": "Write up the results and conclusion",
+    "description": "Write up the experimental results and conclusion in a lab report style.",
+    "priority": "High Priority",
+    "dueDate": "Fri, Nov 13",
+    "estimatedMinutes": 80,
+    "microtasks": [
+      {
+        "id": "osmosis-1",
+        "order": 1,
+        "title": "Organize data and results",
+        "estimatedMinutes": 15,
+        "completed": false
+      },
+      {
+        "id": "osmosis-2",
+        "order": 2,
+        "title": "Create graphs and tables",
+        "estimatedMinutes": 20,
+        "completed": false
+      },
+      {
+        "id": "osmosis-3",
+        "order": 3,
+        "title": "Write the results section",
+        "estimatedMinutes": 25,
+        "completed": false
+      },
+      {
+        "id": "osmosis-4",
+        "order": 4,
+        "title": "Write the conclusion and proofread",
+        "estimatedMinutes": 20,
+        "completed": false
+      }
+    ]
+  },
+  {
+    "id": "history-essay",
+    "course": "HIST 101",
+    "courseColor": "#E8A0B5",
+    "title": "History Essay",
+    "shortDescription": "Write 3-4 pages on a topic of choice",
+    "description": "Choose a historical topic and write a 3-4 page essay using supporting sources.",
+    "priority": "Medium Priority",
+    "dueDate": "Sun, Nov 15",
+    "estimatedMinutes": null,
+    "microtasks": []
+  }
+]
