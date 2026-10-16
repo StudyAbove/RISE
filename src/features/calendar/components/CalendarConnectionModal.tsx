@@ -30,6 +30,7 @@ type CalendarConnectionModalProps = {
   isConnectingApple?: boolean;
   isConnectingGoogle?: boolean;
   onClose: () => void;
+  onDismiss?: () => void;
   onConnectApple: () => void;
   onConnectGoogle: () => void;
   onDisconnectGoogle?: () => void;
@@ -43,30 +44,44 @@ export function CalendarConnectionModal({
   isConnectingApple = false,
   isConnectingGoogle = false,
   onClose,
+  onDismiss,
   onConnectApple,
   onConnectGoogle,
   onDisconnectGoogle,
 }: CalendarConnectionModalProps) {
+  const isInitialAppleSyncRunning =
+    appleConnected &&
+    isConnectingApple;
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={
+        isInitialAppleSyncRunning
+          ? undefined
+          : onClose
+      }
+      onDismiss={onDismiss}
     >
       <View style={styles.overlay}>
         <View style={styles.modalCard}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.closeButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close calendar connection modal"
-          >
-            <Text style={styles.closeText}>×</Text>
-          </Pressable>
+          {!isInitialAppleSyncRunning && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.closeButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close calendar connection modal"
+            >
+              <Text style={styles.closeText}>
+                ×
+              </Text>
+            </Pressable>
+          )}
 
           <View style={styles.calendarIconOuter}>
             <View style={styles.calendarIconInner}>
@@ -83,8 +98,9 @@ export function CalendarConnectionModal({
           </Text>
 
           <Text style={styles.modalMessage}>
-            Connect Apple or Google Calendar to sync your schedule
-            and get smarter study planning.
+            {isInitialAppleSyncRunning
+              ? 'Syncing your Apple Calendar events with RISE. This may take a few seconds.'
+              : 'Connect Apple or Google Calendar to sync your schedule and get smarter study planning.'}
           </Text>
 
           <View style={styles.modalActions}>
@@ -92,12 +108,16 @@ export function CalendarConnectionModal({
               <View style={styles.appleConnectedCard}>
                 <View style={styles.connectedCheckCircle}>
                   <Text style={styles.connectedCheckText}>
-                    ✓
+                    {isInitialAppleSyncRunning
+                      ? '↻'
+                      : '✓'}
                   </Text>
                 </View>
 
                 <Text style={styles.appleConnectedText}>
-                  Apple Calendar connected
+                  {isInitialAppleSyncRunning
+                    ? 'Syncing Apple Calendar...'
+                    : 'Apple Calendar connected'}
                 </Text>
               </View>
             ) : (
@@ -106,7 +126,8 @@ export function CalendarConnectionModal({
                   styles.calendarButton,
                   styles.appleButton,
                   pressed && styles.pressed,
-                  isConnectingApple && styles.disabledButton,
+                  isConnectingApple &&
+                    styles.disabledButton,
                 ]}
                 onPress={onConnectApple}
                 disabled={isConnectingApple}
@@ -128,14 +149,21 @@ export function CalendarConnectionModal({
             )}
 
             {googleConnected ? (
-              <View style={styles.googleConnectedCard}>
+              <View
+                style={[
+                  styles.googleConnectedCard,
+                  isInitialAppleSyncRunning &&
+                    styles.disabledButton,
+                ]}
+              >
                 <View style={styles.googleConnectedContent}>
                   <Text
                     style={styles.googleConnectedEmail}
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    {googleEmail ?? 'yourname@gmail.com'}
+                    {googleEmail ??
+                      'yourname@gmail.com'}
                   </Text>
 
                   <View style={styles.googleConnectedBottomRow}>
@@ -149,7 +177,10 @@ export function CalendarConnectionModal({
 
                 <Pressable
                   onPress={onDisconnectGoogle}
-                  disabled={!onDisconnectGoogle}
+                  disabled={
+                    !onDisconnectGoogle ||
+                    isInitialAppleSyncRunning
+                  }
                   style={({ pressed }) => [
                     styles.trashButton,
                     pressed && styles.pressed,
@@ -169,11 +200,20 @@ export function CalendarConnectionModal({
                 style={({ pressed }) => [
                   styles.calendarButton,
                   styles.googleButton,
-                  pressed && styles.pressed,
-                  isConnectingGoogle && styles.disabledButton,
+                  pressed &&
+                    !isInitialAppleSyncRunning &&
+                    styles.pressed,
+                  (
+                    isConnectingGoogle ||
+                    isInitialAppleSyncRunning
+                  ) &&
+                    styles.disabledButton,
                 ]}
                 onPress={onConnectGoogle}
-                disabled={isConnectingGoogle}
+                disabled={
+                  isConnectingGoogle ||
+                  isInitialAppleSyncRunning
+                }
                 accessibilityRole="button"
                 accessibilityLabel="Connect Google Calendar"
               >
