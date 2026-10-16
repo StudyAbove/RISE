@@ -1,0 +1,2 @@
+alter table public.calendar_event_links
+add column external_updated_at timestamptz;
