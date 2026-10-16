@@ -8,6 +8,8 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 
@@ -18,6 +20,7 @@ import { colors, statusColors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
 import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
 import { getTimeOfDay } from '../../home/utils/greeting';
+import type { MainTabParamList } from '../../navigation/types';
 import { SettingsButton } from '../../settings/components/SettingsButton';
 
 // Information stored for each small task.
@@ -100,9 +103,8 @@ function AssignmentPopup({
   );
 
   const completedCount = tasks.filter((task) => task.completed).length;
-  const progress = tasks.length === 0
-    ? 0
-    : (completedCount / tasks.length) * 100;
+  const progress =
+    tasks.length === 0 ? 0 : (completedCount / tasks.length) * 100;
 
   return (
     <Modal
@@ -120,7 +122,7 @@ function AssignmentPopup({
           },
         ]}
       >
-        {/* This arrow closes the popup and returns to Study Plan. */}
+        {/* Close the popup and return to Study Plan. */}
         <View style={styles.modalHeader}>
           <Pressable
             onPress={onClose}
@@ -149,7 +151,7 @@ function AssignmentPopup({
           </Pressable>
         </View>
 
-        {/* Allow long assignment details and task lists to scroll. */}
+        {/* Allow long details and task lists to scroll. */}
         <ScrollView
           contentContainerStyle={styles.detailsContent}
           accessibilityViewIsModal
@@ -167,9 +169,13 @@ function AssignmentPopup({
           </View>
 
           <View style={styles.detailTitleRow}>
-            <Text accessibilityRole="header" style={styles.detailTitle}>
+            <Text
+              accessibilityRole="header"
+              style={styles.detailTitle}
+            >
               {assignment.title}
             </Text>
+
             <Text style={styles.priorityBadge}>
               {assignment.priority}
             </Text>
@@ -194,7 +200,7 @@ function AssignmentPopup({
             {assignment.description}
           </Text>
 
-          {/* Show progress only when a task breakdown exists. */}
+          {/* Show progress when a task breakdown exists. */}
           {tasks.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>Progress</Text>
@@ -218,6 +224,7 @@ function AssignmentPopup({
                     ]}
                   />
                 </View>
+
                 <Text style={styles.progressLabel}>
                   {completedCount} / {tasks.length} tasks
                 </Text>
@@ -225,11 +232,14 @@ function AssignmentPopup({
             </>
           )}
 
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
+          <Text
+            accessibilityRole="header"
+            style={styles.sectionTitle}
+          >
             Tasks
           </Text>
 
-          {/* An empty array displays the message required by AC 4. */}
+          {/* An empty task list shows the message required by AC 4. */}
           {tasks.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>
@@ -267,15 +277,20 @@ function AssignmentPopup({
 
 // Main Study Plan page with sample assignments for this sprint.
 export function StudyScreen() {
+  // Use the existing bottom tab routes to open the List page.
+  const navigation =
+    useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+
   const titleRef = useRef<Text>(null);
   const date = useCurrentDate();
 
-  // Null means the popup is closed.
+  // Null means the assignment popup is closed.
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
 
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
 
+  // Measure the header so the hills line up behind it.
   const handleHeaderLayout = ({
     nativeEvent: { layout },
   }: LayoutChangeEvent) => {
@@ -288,7 +303,7 @@ export function StudyScreen() {
         focusTargetRef={titleRef}
         contentContainerStyle={styles.container}
       >
-        {/* Reuse the team's sky artwork without changing its files. */}
+        {/* Reuse the team's artwork without changing its files. */}
         {headerBottom !== null && (
           <HomeSkyBackdrop
             timeOfDay={getTimeOfDay(date)}
@@ -310,11 +325,23 @@ export function StudyScreen() {
           </Text>
         </View>
 
-        {/* Display only for now. We will connect View All later. */}
+        {/* Open the full assignment list when View All is tapped. */}
         <View style={styles.viewAllRow}>
-          <Text style={styles.viewAllText}>View All</Text>
+          <Pressable
+            onPress={() => navigation.navigate('List')}
+            accessibilityRole="button"
+            accessibilityLabel="View all assignments"
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.viewAllButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.viewAllText}>View All</Text>
+          </Pressable>
         </View>
 
+        {/* Create a card for each assignment in the JSON. */}
         <View style={styles.assignmentList}>
           {assignments.map((assignment) => (
             <Pressable
@@ -338,6 +365,7 @@ export function StudyScreen() {
                 <Text style={styles.cardTitle}>
                   {assignment.title}
                 </Text>
+
                 <Text style={styles.cardDescription}>
                   {assignment.shortDescription}
                 </Text>
@@ -352,7 +380,10 @@ export function StudyScreen() {
 
               <View style={styles.playCircle} accessible={false}>
                 <Svg width={14} height={14} viewBox="0 0 14 14">
-                  <Path d="M4 2v10l8-5z" fill={colors.deepOlive} />
+                  <Path
+                    d="M4 2v10l8-5z"
+                    fill={colors.deepOlive}
+                  />
                 </Svg>
               </View>
             </Pressable>
@@ -360,7 +391,7 @@ export function StudyScreen() {
         </View>
       </TabScreenScrollView>
 
-      {/* Pass only the selected assignment into the shared popup. */}
+      {/* Give the popup the selected assignment's data. */}
       {selectedAssignment !== null && (
         <AssignmentPopup
           assignment={selectedAssignment}
@@ -390,6 +421,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginTop: 20,
     marginBottom: 12,
+  },
+  viewAllButton: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
   viewAllText: {
     ...textStyles.link,
@@ -452,7 +487,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  // Full-screen popup with its own safe areas and scrolling.
+  // Full-screen popup with safe-area spacing.
   modalPage: {
     flex: 1,
     backgroundColor: colors.warmCream,
