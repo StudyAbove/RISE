@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { format, startOfDay } from 'date-fns';
 
+import { CalendarConflictPreview } from '../components/CalendarConflictPreview';
 import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
@@ -48,6 +49,8 @@ export function CalendarScreen() {
         onNext={() => shift(1)}
       />
       <CalendarViewSwitcher selectedView={view} onSelectView={setView} />
+      {/* Temporary development controls for testing the conflict popup. */}
+      {__DEV__ && <CalendarConflictPreview />}
 
       <View style={styles.body}>
         {view === 'month' ? (
