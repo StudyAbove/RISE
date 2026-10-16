@@ -1,6 +1,6 @@
 import { addDays, addMinutes, startOfDay } from 'date-fns';
 
-import type { CalendarEvent, CalendarSource } from '../models/CalendarEvent';
+import type { CalendarEvent, CalendarSource, NewCalendarEvent } from '../models/CalendarEvent';
 
 interface SampleEvent {
   title: string;
@@ -27,11 +27,32 @@ const SAMPLE_EVENTS: SampleEvent[] = [
   { title: 'Algebra Quiz', source: 'rise', dayOffset: 5, startTime: '12:00', durationMinutes: 90 },
 ];
 
-/** Sample events used instead of Supabase while the dev login skip is on. */
+// Events added with the Add Event form while the login skip is on. They only
+// live in memory, so they disappear when the app reloads.
+let addedEvents: CalendarEvent[] = [];
+
+/** Saves an event in memory, standing in for Supabase while the login skip is on. */
+export function addMockCalendarEvent(input: NewCalendarEvent): CalendarEvent {
+  const event: CalendarEvent = {
+    ...input,
+    id: `mock-added-event-${addedEvents.length + 1}`,
+    userId: 'dev-user',
+    source: 'rise',
+  };
+  addedEvents = [...addedEvents, event];
+  return event;
+}
+
+/** Clears the in-memory events. For tests only. */
+export function clearAddedMockCalendarEvents() {
+  addedEvents = [];
+}
+
+/** Sample events, plus any added in memory, used instead of Supabase while the dev login skip is on. */
 export function getMockCalendarEvents(rangeStart: Date, rangeEnd: Date): CalendarEvent[] {
   const today = startOfDay(new Date());
 
-  return SAMPLE_EVENTS.map((sample, index) => {
+  const samples: CalendarEvent[] = SAMPLE_EVENTS.map((sample, index) => {
     const [hours, minutes] = sample.startTime.split(':').map(Number);
     const start = addMinutes(addDays(today, sample.dayOffset), hours * 60 + minutes);
     const end = addMinutes(start, sample.durationMinutes);
@@ -44,7 +65,9 @@ export function getMockCalendarEvents(rangeStart: Date, rangeEnd: Date): Calenda
       endAt: end.toISOString(),
       source: sample.source,
     };
-  }).filter(
+  });
+
+  return [...samples, ...addedEvents].filter(
     // Same overlap rule as the Supabase query. UTC ISO strings sort in time order.
     (event) => event.startAt < rangeEnd.toISOString() && event.endAt > rangeStart.toISOString()
   );
