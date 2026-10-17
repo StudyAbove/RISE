@@ -3,9 +3,9 @@ import { Alert, Text, View } from 'react-native';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 
 import ArrowRightIcon from '../../../../assets/icons/onboarding/arrow-right.svg';
-import CalendarIcon from '../../../../assets/icons/onboarding/calendar.svg';
-import GraduationCapIcon from '../../../../assets/icons/onboarding/graduation-cap.svg';
-import LeafIcon from '../../../../assets/icons/onboarding/leaf.svg';
+import CalendarCheckIcon from '../../../../assets/icons/onboarding/calendar-check.svg';
+import ClipboardCheckIcon from '../../../../assets/icons/onboarding/clipboard-check.svg';
+import GraduationHatIcon from '../../../../assets/icons/onboarding/graduation-hat.svg';
 import { markOnboardingCompleted } from '../../../repositories/profileRepository';
 import type { RootStackParamList } from '../../navigation/types';
 import { OnboardingButton } from '../components/OnboardingButton';
@@ -62,18 +62,22 @@ export function OnboardingCompleteScreen({
         {/* Canvas classes only sync from the computer extension, so this stays
             unchecked until RISE can see that sync (#22). */}
         <SetupStatusRow
-          icon={<GraduationCapIcon />}
+          icon={<GraduationHatIcon />}
           label="Classes synced"
           done={false}
         />
 
         <SetupStatusRow
-          icon={<CalendarIcon />}
+          icon={<CalendarCheckIcon />}
           label="Calendar connected"
           done={calendarConnected}
         />
 
-        <SetupStatusRow icon={<LeafIcon />} label="Study plan ready" done />
+        <SetupStatusRow
+          icon={<ClipboardCheckIcon />}
+          label="Study plan ready"
+          done
+        />
       </View>
 
       <OnboardingButton
