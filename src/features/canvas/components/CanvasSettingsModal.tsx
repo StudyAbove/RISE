@@ -8,6 +8,7 @@ import {
   type ExtensionPairingCode,
 } from '../../../repositories/canvasRepository';
 import { formatLastSynced, formatTimeLeft } from '../utils/formatLastSynced';
+import { CourseColorList } from './CourseColorList';
 import { styles } from './CanvasSettingsModal.styles';
 
 const canvasLogo = require('../../../../assets/icons/canvas/canvas-logo.png');
@@ -145,6 +146,8 @@ export function CanvasSettingsModal({ visible, onClose }: CanvasSettingsModalPro
               </View>
             </View>
           </View>
+
+          {isConnected ? <CourseColorList /> : null}
 
           {codeError ? <Text style={styles.error}>{codeError}</Text> : null}
 

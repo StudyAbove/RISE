@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import type { CourseColorKey } from '../theme/courseColors';
 
 export type ExtensionPairingCode = {
   code: string;
@@ -54,4 +55,54 @@ export async function fetchCanvasConnection(): Promise<CanvasConnection | null> 
     lastSyncedAt: data.last_synced_at ? new Date(data.last_synced_at) : null,
     lastSyncStatus: data.last_sync_status,
   };
+}
+
+export type CanvasCourse = {
+  id: string;
+  name: string;
+  code: string | null;
+  color: CourseColorKey;
+  syncEnabled: boolean;
+};
+
+/** The student's synced Canvas classes, with their colors and sync choices. */
+export async function fetchCanvasCourses(): Promise<CanvasCourse[]> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('id, name, code, color, sync_enabled')
+    .not('canvas_course_id', 'is', null)
+    .order('name');
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((course) => ({
+    id: course.id,
+    name: course.name,
+    code: course.code,
+    color: (course.color ?? 'sage') as CourseColorKey,
+    syncEnabled: course.sync_enabled,
+  }));
+}
+
+/**
+ * Changes a class's color or whether it syncs. Turning sync off hides the
+ * class's assignments at the next Canvas sync.
+ */
+export async function updateCanvasCourse(
+  courseId: string,
+  changes: { color?: CourseColorKey; syncEnabled?: boolean },
+) {
+  const { error } = await supabase
+    .from('courses')
+    .update({
+      ...(changes.color !== undefined ? { color: changes.color } : {}),
+      ...(changes.syncEnabled !== undefined ? { sync_enabled: changes.syncEnabled } : {}),
+    })
+    .eq('id', courseId);
+
+  if (error) {
+    throw error;
+  }
 }

@@ -8,6 +8,8 @@ const mockFetchCanvasConnection = jest.fn();
 jest.mock('../../../repositories/canvasRepository', () => ({
   createExtensionPairingCode: () => mockCreateExtensionPairingCode(),
   fetchCanvasConnection: () => mockFetchCanvasConnection(),
+  fetchCanvasCourses: async () => [],
+  updateCanvasCourse: jest.fn(),
 }));
 
 const NOW = new Date(2026, 10, 13, 12, 0, 0);
