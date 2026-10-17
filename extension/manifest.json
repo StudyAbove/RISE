@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "RISE Course Collector",
+  "version": "1.0.0",
+  "description": "Collect a Canvas course syllabus, assignments, and quizzes for your own review and export.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_title": "Canvas Course Collector",
+    "default_popup": "popup/popup.html"
+  }
+}
