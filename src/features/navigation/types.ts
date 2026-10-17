@@ -13,8 +13,11 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Welcome: undefined;
   CreateAccount: undefined;
+  CheckInbox: { email: string };
   Login: undefined;
-  Onboarding: undefined;
+  ConnectClasses: undefined;
+  ConnectCalendar: undefined;
+  OnboardingComplete: { calendarConnected: boolean };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
 };
