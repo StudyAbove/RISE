@@ -73,30 +73,33 @@ export function OnboardingLayout({
         ]}
       />
 
+      {/* Outside the scroll view so the wordmark and Skip stay put while the
+          card scrolls beneath them. */}
+      <View
+        style={[
+          styles.header,
+          {
+            height: insets.top + headerHeight,
+            paddingTop: insets.top,
+          },
+        ]}
+      >
+        <Text style={styles.wordmark} accessibilityRole="header">
+          RISE
+        </Text>
+
+        {headerAction}
+      </View>
+
       <ScrollView
         ref={scrollViewRef}
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <View
-          style={[
-            styles.header,
-            {
-              height: insets.top + headerHeight,
-              paddingTop: insets.top,
-            },
-          ]}
-        >
-          <Text style={styles.wordmark} accessibilityRole="header">
-            RISE
-          </Text>
-
-          {headerAction}
-        </View>
-
         <View
           style={[
             styles.card,

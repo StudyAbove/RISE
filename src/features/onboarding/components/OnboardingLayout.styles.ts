@@ -15,6 +15,10 @@ export const styles = StyleSheet.create({
     opacity: 0.75,
   },
 
+  scrollView: {
+    flex: 1,
+  },
+
   scrollContent: {
     flexGrow: 1,
   },
