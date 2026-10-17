@@ -1,5 +1,5 @@
 // Toolbar popup: shows whether the extension is connected and lets the
-// student sync now or disconnect.
+// student sync now, change their classes and colors, or disconnect.
 
 const CANVAS_TABS = { url: 'https://*.instructure.com/*' };
 
@@ -8,8 +8,8 @@ const connectedSection = document.getElementById('connected');
 const syncStatus = document.getElementById('sync-status');
 const syncNowButton = document.getElementById('sync-now');
 
-function plural(count, word) {
-  return `${count} ${word}${count === 1 ? '' : 's'}`;
+function plural(count, word, pluralWord = `${word}s`) {
+  return `${count} ${count === 1 ? word : pluralWord}`;
 }
 
 function formatLastSynced(isoDate) {
@@ -43,9 +43,9 @@ async function render() {
   if (lastSyncError) {
     syncStatus.textContent = `Last sync failed: ${lastSyncError}`;
   } else if (lastSync) {
-    syncStatus.textContent = `✅ Synced ${formatLastSynced(lastSync.at)} · ${plural(lastSync.courses, 'course')} · ${plural(lastSync.assignments, 'assignment')}`;
+    syncStatus.textContent = `✅ Synced ${formatLastSynced(lastSync.at)} · ${plural(lastSync.courses, 'class', 'classes')} · ${plural(lastSync.assignments, 'assignment')}`;
   } else {
-    syncStatus.textContent = '📚 Open Canvas to run your first sync.';
+    syncStatus.textContent = '📚 Rise syncs Canvas every 30 minutes and whenever you open it.';
   }
 }
 
@@ -66,10 +66,31 @@ document.getElementById('connect').addEventListener('click', async () => {
   window.close();
 });
 
+// The background syncs on its own; this just runs it right away.
 syncNowButton.addEventListener('click', async () => {
   syncNowButton.disabled = true;
   syncNowButton.textContent = 'Syncing…';
-  await sendToCanvasTab('syncNow', 'sync');
+
+  const { canvasOrigin } = await chrome.storage.local.get('canvasOrigin');
+  const response = await chrome.runtime.sendMessage({
+    type: 'syncNow',
+    origin: canvasOrigin || self.RISE_CONFIG.canvasUrl,
+    force: true,
+  });
+
+  // Canvas needs signing in again; opening it lets the page sync instead.
+  if (response?.code === 'canvas_signed_out') {
+    await sendToCanvasTab('syncNow', 'sync');
+  }
+
+  syncNowButton.disabled = false;
+  syncNowButton.textContent = 'Sync now';
+  render();
+});
+
+document.getElementById('classes').addEventListener('click', async () => {
+  await sendToCanvasTab('openClasses', 'classes');
+  window.close();
 });
 
 document.getElementById('disconnect').addEventListener('click', async () => {
@@ -77,11 +98,7 @@ document.getElementById('disconnect').addEventListener('click', async () => {
   render();
 });
 
-// Updates while open, e.g. when a sync started from here finishes.
-chrome.storage.onChanged.addListener(() => {
-  syncNowButton.disabled = false;
-  syncNowButton.textContent = 'Sync now';
-  render();
-});
+// Updates while open, e.g. when a background sync finishes.
+chrome.storage.onChanged.addListener(render);
 
 render();

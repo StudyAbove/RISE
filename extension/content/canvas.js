@@ -1,33 +1,40 @@
 // Runs on Canvas pages. Before the extension is connected it shows the Rise
-// pop-ups; after that it syncs Canvas into Rise in the background.
+// pop-ups. After that, syncing happens in the background service worker on a
+// timer; opening Canvas just nudges it to sync if it hasn't recently.
 
 /* global RiseCanvasApi, RiseModal, sendToRise */
 (() => {
-  // How often visiting Canvas triggers a background sync.
-  const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+  function plural(count, word, pluralWord = `${word}s`) {
+    return `${count} ${count === 1 ? word : pluralWord}`;
+  }
 
-  let isSyncing = false;
+  /** Asks the background to sync, or reads Canvas here if it can't. */
+  async function requestSync({ force }) {
+    try {
+      return await sendToRise({ type: 'syncNow', origin: location.origin, force });
+    } catch (error) {
+      if (error.code !== 'canvas_signed_out') {
+        throw error;
+      }
 
-  function plural(count, word) {
-    return `${count} ${word}${count === 1 ? '' : 's'}`;
+      // The page has the Canvas session even when the background doesn't.
+      return sendToRise({ type: 'sync', payload: await RiseCanvasApi.collect(location.origin) });
+    }
   }
 
   /**
-   * Reads Canvas and sends it to Rise. `announce` shows the result in the
-   * corner; the "You're connected" screen shows it there instead.
+   * `announce` shows the result in the corner; right after connecting, the
+   * "You're connected" screen shows it instead.
    */
-  async function syncNow({ announce }) {
-    if (isSyncing) {
-      return;
-    }
-
-    isSyncing = true;
-
+  async function syncNow({ announce, force = false }) {
     try {
-      const payload = await RiseCanvasApi.collect();
-      const result = await sendToRise({ type: 'sync', payload });
-      const message = `Synced ${plural(result.courses, 'course')} and ${plural(result.assignments, 'assignment')} to Rise.`;
+      const result = await requestSync({ force });
 
+      if (result.skipped) {
+        return;
+      }
+
+      const message = `Synced ${plural(result.courses, 'class', 'classes')} and ${plural(result.assignments, 'assignment')} to Rise.`;
       RiseModal.showSyncResult({ message: `✅ ${message}` });
 
       if (announce) {
@@ -39,15 +46,13 @@
       if (announce) {
         RiseModal.showToast(`Rise couldn't sync: ${error.message}`);
       }
-    } finally {
-      isSyncing = false;
     }
   }
 
   function openConnectFlow({ includeNote }) {
     const options = {
       onSeen: () => chrome.storage.local.set({ noteSeen: true }),
-      onConnected: () => syncNow({ announce: false }),
+      onConnected: () => syncNow({ announce: false, force: true }),
     };
 
     if (includeNote) {
@@ -57,10 +62,20 @@
     }
   }
 
+  /** Changing classes or colors later; syncs right away so the changes show. */
+  function openClassPicker() {
+    RiseModal.showClassPicker({
+      onSaved: () => {
+        RiseModal.showToast('Saved your classes. Syncing…');
+        syncNow({ announce: true, force: true });
+      },
+    });
+  }
+
   async function start() {
-    // Links from the welcome page and popup add ?rise=open or ?rise=sync.
+    // Links from the welcome page and popup add ?rise=open, ?rise=sync or ?rise=classes.
     const requested = new URLSearchParams(location.search).get('rise');
-    const { token, noteSeen, lastSync } = await chrome.storage.local.get(['token', 'noteSeen', 'lastSync']);
+    const { token, noteSeen } = await chrome.storage.local.get(['token', 'noteSeen']);
 
     if (!token) {
       // Show the pop-ups automatically once; after that only when asked.
@@ -70,22 +85,26 @@
       return;
     }
 
-    const isDue = !lastSync || Date.now() - Date.parse(lastSync.at) > AUTO_SYNC_INTERVAL_MS;
-
-    if (requested === 'sync' || isDue) {
-      syncNow({ announce: true });
+    if (requested === 'classes') {
+      openClassPicker();
+    } else {
+      syncNow({ announce: requested === 'sync', force: requested === 'sync' });
     }
   }
 
   // Requests from the toolbar popup.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'syncNow') {
-      syncNow({ announce: true });
-      sendResponse({ ok: true });
+      syncNow({ announce: true, force: true });
+    } else if (message?.type === 'openClasses') {
+      openClassPicker();
     } else if (message?.type === 'openConnect') {
       chrome.storage.local.get('noteSeen').then(({ noteSeen }) => openConnectFlow({ includeNote: !noteSeen }));
-      sendResponse({ ok: true });
+    } else {
+      return;
     }
+
+    sendResponse({ ok: true });
   });
 
   start();

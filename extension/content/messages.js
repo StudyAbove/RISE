@@ -1,5 +1,5 @@
 // Sends a message to the background service worker and resolves with its
-// result, or rejects with its error message.
+// result, or rejects with its error message (and code, when it has one).
 
 /* exported sendToRise */
 function sendToRise(message) {
@@ -10,7 +10,7 @@ function sendToRise(message) {
       } else if (response.ok) {
         resolve(response.result);
       } else {
-        reject(new Error(response.error));
+        reject(Object.assign(new Error(response.error), { code: response.code }));
       }
     });
   });

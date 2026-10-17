@@ -1,5 +1,5 @@
 // The Rise pop-ups shown on Canvas, from the Figma extension frames:
-// note → "Plan your best semester" → sign in → connected.
+// note → "Plan your best semester" → sign in → choose classes → connected.
 //
 // Figma's sign-in screen sends a magic link. Rise instead asks for the email
 // plus the 6-digit code from the app (Settings → Canvas), so the email is only
@@ -7,7 +7,7 @@
 // classmate's account by typing their email.
 
 /* exported RiseModal */
-/* global sendToRise */
+/* global COURSE_COLORS, sendToRise */
 const RiseModal = (() => {
   // Placeholder numbers from the Figma design. Update before publishing.
   const STUDENT_COUNT = '45,000+';
@@ -107,6 +107,27 @@ const RiseModal = (() => {
         <button class="button button--gold" type="submit">Connect →</button>
       </form>`,
 
+    classes: ({ isSetup }) => `
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rise-title">
+        ${isSetup ? '' : `<button class="close-button" type="button" data-action="close" aria-label="Close">
+          <img src="${asset('images/close.svg')}" alt="">
+        </button>`}
+
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <h2 class="title title--start" id="rise-title">Choose your classes</h2>
+        <p class="subtitle subtitle--start">Pick the classes Rise should sync and a color for each. Their assignments show in that color everywhere in Rise.</p>
+
+        <div class="class-list" data-slot="classes">
+          <p class="class-list-message">Finding your classes…</p>
+        </div>
+
+        <p class="error" role="alert" hidden></p>
+
+        <button class="button button--gold" type="button" data-action="save" disabled>
+          ${isSetup ? 'Start syncing →' : 'Save'}
+        </button>
+      </div>`,
+
     connected: () => `
       <div class="dialog dialog--centered" role="dialog" aria-modal="true" aria-labelledby="rise-title">
         <div class="tile"><img src="${asset('images/rise-logo.svg')}" alt=""></div>
@@ -170,13 +191,13 @@ const RiseModal = (() => {
     }
   }
 
-  function render(name) {
+  function render(name, options = {}) {
     ensureHost();
     close();
 
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
-    overlay.innerHTML = screens[name]();
+    overlay.innerHTML = screens[name](options);
     shadow.append(overlay);
 
     document.addEventListener('keydown', handleKeydown, true);
@@ -250,13 +271,140 @@ const RiseModal = (() => {
       submitButton.textContent = 'Connecting…';
 
       try {
-        await sendToRise({ type: 'pair', email, code });
-        showConnected(email);
-        onConnected();
+        await sendToRise({ type: 'pair', email, code, origin: location.origin });
+        showClassPicker({
+          isSetup: true,
+          onSaved: () => {
+            showConnected(email);
+            onConnected();
+          },
+        });
       } catch (error) {
         showError(error.message);
         submitButton.disabled = false;
         submitButton.textContent = 'Connect →';
+      }
+    });
+  }
+
+  /** One class in the "Choose your classes" list, with its color palette. */
+  function renderClassRow(course) {
+    const row = document.createElement('div');
+    row.className = 'class-row';
+    row.innerHTML = `
+      <label class="class-check">
+        <input type="checkbox">
+        <span class="checkmark" aria-hidden="true"></span>
+        <span class="class-info">
+          <span class="class-name"></span>
+          <span class="class-meta"></span>
+        </span>
+      </label>
+      <button class="color-button" type="button" aria-expanded="false"></button>
+      <div class="palette" role="radiogroup" hidden></div>`;
+
+    const checkbox = row.querySelector('input');
+    const colorButton = row.querySelector('.color-button');
+    const palette = row.querySelector('.palette');
+
+    row.querySelector('.class-name').textContent = course.name;
+    row.querySelector('.class-meta').textContent = [course.code, course.term].filter(Boolean).join(' · ');
+    palette.setAttribute('aria-label', `Color for ${course.name}`);
+
+    function showColor() {
+      const { name, color } = COURSE_COLORS[course.color] ?? COURSE_COLORS.sage;
+      row.style.setProperty('--class-color', color);
+      colorButton.setAttribute('aria-label', `${name}. Change the color for ${course.name}`);
+
+      palette.querySelectorAll('.swatch').forEach((swatch) => {
+        swatch.setAttribute('aria-checked', String(swatch.dataset.color === course.color));
+      });
+    }
+
+    for (const [key, { name, color }] of Object.entries(COURSE_COLORS)) {
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.className = 'swatch';
+      swatch.dataset.color = key;
+      swatch.setAttribute('role', 'radio');
+      swatch.setAttribute('aria-label', name);
+      swatch.title = name;
+      swatch.style.setProperty('--swatch', color);
+      swatch.addEventListener('click', () => {
+        course.color = key;
+        showColor();
+      });
+      palette.append(swatch);
+    }
+
+    checkbox.checked = course.syncEnabled;
+    row.classList.toggle('is-off', !course.syncEnabled);
+    checkbox.addEventListener('change', () => {
+      course.syncEnabled = checkbox.checked;
+      row.classList.toggle('is-off', !checkbox.checked);
+    });
+
+    colorButton.addEventListener('click', () => {
+      palette.hidden = !palette.hidden;
+      colorButton.setAttribute('aria-expanded', String(!palette.hidden));
+    });
+
+    showColor();
+    return row;
+  }
+
+  /**
+   * "Choose your classes": which Canvas classes to sync and a color for each.
+   * Shown right after connecting, and again from the toolbar popup.
+   */
+  async function showClassPicker({ isSetup = false, onSaved = close } = {}) {
+    const overlay = render('classes', { isSetup });
+    const list = overlay.querySelector('[data-slot="classes"]');
+    const errorText = overlay.querySelector('.error');
+    const saveButton = overlay.querySelector('[data-action="save"]');
+    const saveLabel = saveButton.textContent.trim();
+
+    overlay.querySelector('[data-action="close"]')?.addEventListener('click', close);
+
+    function showError(message) {
+      errorText.textContent = message;
+      errorText.hidden = false;
+    }
+
+    let courses;
+
+    try {
+      courses = await sendToRise({ type: 'listCourses', origin: location.origin });
+    } catch (error) {
+      list.innerHTML = '';
+      showError(error.message);
+      return;
+    }
+
+    list.innerHTML = '';
+
+    if (courses.length === 0) {
+      list.innerHTML = '<p class="class-list-message">No current classes found in Canvas.</p>';
+    }
+
+    courses.forEach((course) => list.append(renderClassRow(course)));
+    saveButton.disabled = false;
+
+    saveButton.addEventListener('click', async () => {
+      errorText.hidden = true;
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving…';
+
+      try {
+        await sendToRise({
+          type: 'saveCourseChoices',
+          choices: courses.map(({ canvasCourseId, color, syncEnabled }) => ({ canvasCourseId, color, syncEnabled })),
+        });
+        onSaved();
+      } catch (error) {
+        showError(error.message);
+        saveButton.disabled = false;
+        saveButton.textContent = saveLabel;
       }
     });
   }
@@ -293,5 +441,5 @@ const RiseModal = (() => {
     setTimeout(() => toast.remove(), 4000);
   }
 
-  return { showNote, showWelcome, showSyncResult, showToast, isOpen: () => Boolean(shadow?.querySelector('.overlay')) };
+  return { showNote, showWelcome, showClassPicker, showSyncResult, showToast };
 })();

@@ -1,6 +1,9 @@
 // Reads the student's courses and assignments from the Canvas API using the
 // Canvas session they're already signed in with. Based on Mo's original
 // "Scan this course" code.
+//
+// Runs on Canvas pages and in the background service worker, so it avoids
+// page-only APIs like DOMParser and location.
 
 /* exported RiseCanvasApi */
 const RiseCanvasApi = (() => {
@@ -8,8 +11,15 @@ const RiseCanvasApi = (() => {
   const MAX_PAGES = 50;
   const MAX_DESCRIPTION_LENGTH = 5000;
 
-  async function getPaged(path) {
-    const origin = location.origin;
+  /** Thrown when Canvas has no signed-in session to read with. */
+  class CanvasSignedOutError extends Error {
+    constructor() {
+      super('Sign in to Canvas, then try again.');
+      this.code = 'canvas_signed_out';
+    }
+  }
+
+  async function getPaged(origin, path) {
     const items = [];
     let url = new URL(path, origin).href;
 
@@ -24,17 +34,18 @@ const RiseCanvasApi = (() => {
       });
 
       if (response.status === 401) {
-        throw new Error('Sign in to Canvas first.');
+        throw new CanvasSignedOutError();
       }
 
       if (!response.ok) {
         throw new Error(`Canvas request failed (${response.status}).`);
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
+      // A signed-out session can get the HTML login page instead of JSON.
       if (!Array.isArray(data)) {
-        throw new Error('Canvas returned an unexpected response.');
+        throw new CanvasSignedOutError();
       }
 
       items.push(...data);
@@ -46,31 +57,50 @@ const RiseCanvasApi = (() => {
     return items;
   }
 
+  const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
   /** Assignment descriptions are HTML; Rise only needs the text. */
   function htmlToText(html) {
     if (!html) {
       return '';
     }
 
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    doc.querySelectorAll('script, style').forEach((node) => node.remove());
-
-    return doc.body.textContent.replace(/\s+/g, ' ').trim().slice(0, MAX_DESCRIPTION_LENGTH);
+    return html
+      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&(#\d+|[a-z]+);/gi, (entity, name) =>
+        name.startsWith('#') ? String.fromCharCode(Number(name.slice(1))) : (ENTITIES[name.toLowerCase()] ?? entity),
+      )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_DESCRIPTION_LENGTH);
   }
 
   function isSubmitted(submission) {
     return Boolean(submission && (submission.submitted_at || submission.workflow_state === 'graded'));
   }
 
+  /** The student's current classes. */
+  async function collectCourses(origin) {
+    const courses = await getPaged(origin, '/api/v1/courses?enrollment_state=active&include[]=term&per_page=100');
+
+    return courses
+      .filter((course) => course.name && !course.access_restricted_by_date)
+      .map((course) => ({
+        id: course.id,
+        name: course.name,
+        code: course.course_code || null,
+        term: course.term?.name || null,
+      }));
+  }
+
   /** Everything Rise syncs, in the shape the canvas-extension function expects. */
-  async function collect() {
-    const courses = (
-      await getPaged('/api/v1/courses?enrollment_state=active&include[]=term&per_page=100')
-    ).filter((course) => course.name && !course.access_restricted_by_date);
+  async function collect(origin) {
+    const courses = await collectCourses(origin);
 
     const assignmentLists = await Promise.all(
       courses.map((course) =>
-        getPaged(`/api/v1/courses/${course.id}/assignments?include[]=submission&per_page=100`)
+        getPaged(origin, `/api/v1/courses/${course.id}/assignments?include[]=submission&per_page=100`)
           // A course can hide its assignments; sync the others anyway.
           .catch(() => [])
           .then((assignments) => assignments.map((assignment) => ({ assignment, course }))),
@@ -78,13 +108,8 @@ const RiseCanvasApi = (() => {
     );
 
     return {
-      canvasDomain: location.hostname,
-      courses: courses.map((course) => ({
-        id: course.id,
-        name: course.name,
-        code: course.course_code || null,
-        term: course.term?.name || null,
-      })),
+      canvasDomain: new URL(origin).hostname,
+      courses,
       assignments: assignmentLists.flat().map(({ assignment, course }) => ({
         id: assignment.id,
         courseId: course.id,
@@ -98,5 +123,5 @@ const RiseCanvasApi = (() => {
     };
   }
 
-  return { collect };
+  return { collect, collectCourses };
 })();

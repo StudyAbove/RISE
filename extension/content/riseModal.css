@@ -504,6 +504,157 @@
   color: var(--error);
 }
 
+/* ---------- "Choose your classes" ---------- */
+
+.class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  margin: 20px -6px 20px 0;
+  padding-right: 6px;
+  overflow-y: auto;
+}
+
+.class-list-message {
+  padding: 18px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.class-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--class-color);
+  border-radius: 10px;
+  background: #ffffff;
+  transition: opacity 0.15s ease;
+}
+
+.class-row.is-off {
+  opacity: 0.55;
+}
+
+.class-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.class-check input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkmark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.class-check input:checked + .checkmark {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.class-check input:checked + .checkmark::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.class-check input:focus-visible + .checkmark {
+  outline: 3px solid rgba(232, 200, 90, 0.6);
+  outline-offset: 2px;
+}
+
+.class-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.class-name {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-meta {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.color-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 3px solid #ffffff;
+  border-radius: 14px;
+  background: var(--class-color);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+
+.color-button:focus-visible,
+.swatch:focus-visible {
+  outline: 3px solid rgba(232, 200, 90, 0.6);
+  outline-offset: 2px;
+}
+
+.palette {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, 1fr);
+  justify-items: center;
+  gap: 10px;
+  padding: 8px 0 2px;
+}
+
+.palette[hidden] {
+  display: none;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 15px;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.08);
+}
+
+.swatch[aria-checked='true'] {
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px var(--ink);
+}
+
 /* ---------- Sync toast ---------- */
 
 .toast {
@@ -539,6 +690,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .button,
+  .swatch,
+  .class-row,
   .toast {
     transition: none;
     animation: none;

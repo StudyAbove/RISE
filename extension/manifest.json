@@ -20,12 +20,12 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "alarms"],
   "host_permissions": ["https://*.instructure.com/*", "https://*.supabase.co/*"],
   "content_scripts": [
     {
       "matches": ["https://*.instructure.com/*"],
-      "js": ["config.js", "content/messages.js", "content/canvasApi.js", "content/riseModal.js", "content/canvas.js"],
+      "js": ["config.js", "content/messages.js", "content/canvasApi.js", "content/courseColors.js", "content/riseModal.js", "content/canvas.js"],
       "run_at": "document_idle"
     }
   ],
