@@ -122,12 +122,18 @@ The switch only works in development builds and is off unless your `.env` turns 
 
 The Chrome extension in `extension/` brings Canvas courses and assignments into RISE. It is plain JavaScript loaded straight into Chrome, so it has no build step and Expo never bundles it.
 
-1. Open `chrome://extensions` in Chrome.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `extension/` folder.
-4. Open a Canvas course page and click the RISE icon in the toolbar.
+1. Copy `extension/config.example.js` to `extension/config.js` and set `supabaseUrl` to the same value as `EXPO_PUBLIC_SUPABASE_URL` in your `.env`. `config.js` is gitignored.
+2. Open `chrome://extensions` in Chrome.
+3. Turn on **Developer mode** (top right).
+4. Click **Load unpacked** and select the `extension/` folder. A "Rise Canvas Sync is ready" tab opens.
+5. Click **Canvas** on that tab, or open Canvas yourself. Rise pop-ups walk you through connecting.
+6. When asked, enter your school email and the 6-digit code from **Settings → Canvas** in the app.
 
-After changing extension files, click the reload icon on the extension's card in `chrome://extensions`.
+After that, the extension syncs your courses and assignments each time you open Canvas (at most every 30 minutes), or right away with **Sync now** in the toolbar popup.
+
+After changing extension files, click the reload icon on the extension's card in `chrome://extensions`, then reload the Canvas tab.
+
+The extension talks to the `canvas-extension` Supabase Edge Function. After changing it, deploy it with `npx supabase functions deploy canvas-extension`.
 
 
 ## Available Scripts

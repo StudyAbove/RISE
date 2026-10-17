@@ -16,6 +16,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+# The Canvas extension's copy of the Supabase URL (see extension/config.example.js)
+extension/config.js
 
 # =========================
 # Logs and Temporary Files
