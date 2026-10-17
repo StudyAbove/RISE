@@ -26,6 +26,7 @@ import WarningIcon from '../../../../assets/icons/warning.svg';
 import {
   BackButton,
 } from '../../../components/BackButton';
+import { CanvasSettingsRow } from '../../canvas/components/CanvasSettingsRow';
 
 import {
   CalendarConnectionModal,
@@ -1037,6 +1038,8 @@ export function SettingsScreen() {
             />
           </Pressable>
         </View>
+
+        <CanvasSettingsRow />
 
         <Pressable
           style={({
