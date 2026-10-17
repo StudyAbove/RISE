@@ -1,8 +1,10 @@
 // Backend for the RISE Canvas browser extension (#22).
 //
-// POST { action: 'pair', email, code }       → { token }
-// POST { action: 'sync', ...canvas data }    → { courses, assignments, removed, syncedAt }
-// POST { action: 'disconnect' }              → { disconnected: true }
+// POST { action: 'pair', email, code }             → { token }
+// POST { action: 'courses', canvasDomain, courses } → { courses } with colors and sync choices
+// POST { action: 'saveCourseChoices', choices }     → { saved }
+// POST { action: 'sync', ...canvas data }           → { courses, assignments, removed, syncedAt }
+// POST { action: 'disconnect' }                     → { disconnected: true }
 //
 // After pairing, the extension sends its token in the x-rise-extension-token
 // header. JWT verification is off for this function (see config.toml) because
@@ -14,7 +16,10 @@ import {
   findRemovedAssignmentIds,
   InvalidPayloadError,
   isPairingCode,
+  parseCourseChoices,
   parseSyncPayload,
+  pickColorsForNewCourses,
+  type SyncedCourse,
 } from './canvasSync.ts';
 
 // A code stops working after this many wrong guesses.
@@ -193,15 +198,26 @@ async function findTokenUser(supabase: SupabaseClient, token: string | null) {
   return { tokenId: data.id as string, userId: data.user_id as string };
 }
 
-async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknown) {
-  const { data: connection, error: connectionError } = await supabase
+type SavedCourse = {
+  id: string;
+  canvas_course_id: string;
+  name: string;
+  code: string | null;
+  term: string | null;
+  color: string | null;
+  sync_enabled: boolean;
+};
+
+/** Returns a 403 response when the student turned Canvas sync off in the app. */
+async function checkSyncEnabled(supabase: SupabaseClient, userId: string) {
+  const { data: connection, error } = await supabase
     .from('canvas_connections')
     .select('enabled')
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (connectionError) {
-    throw connectionError;
+  if (error) {
+    throw error;
   }
 
   if (connection && !connection.enabled) {
@@ -211,33 +227,133 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
     );
   }
 
+  return null;
+}
+
+/**
+ * Saves the student's Canvas classes, keeping the colors and sync choices
+ * they already made, and gives new classes a color of their own.
+ */
+async function saveCourses(supabase: SupabaseClient, userId: string, courses: SyncedCourse[]) {
+  const { data, error } = await supabase
+    .from('courses')
+    .upsert(
+      courses.map((course) => ({
+        user_id: userId,
+        canvas_course_id: course.canvasCourseId,
+        name: course.name,
+        code: course.code,
+        term: course.term,
+      })),
+      { onConflict: 'user_id,canvas_course_id' },
+    )
+    .select('id, canvas_course_id, name, code, term, color, sync_enabled');
+
+  if (error) {
+    throw error;
+  }
+
+  const savedCourses = (data ?? []) as SavedCourse[];
+  const uncolored = savedCourses.filter((course) => !course.color);
+
+  if (uncolored.length > 0) {
+    const { data: colored, error: colorsError } = await supabase
+      .from('courses')
+      .select('color')
+      .eq('user_id', userId)
+      .not('color', 'is', null);
+
+    if (colorsError) {
+      throw colorsError;
+    }
+
+    const newColors = pickColorsForNewCourses(
+      (colored ?? []).map((course) => course.color),
+      uncolored.length,
+    );
+
+    for (const [index, course] of uncolored.entries()) {
+      const { error: updateError } = await supabase
+        .from('courses')
+        .update({ color: newColors[index] })
+        .eq('id', course.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      course.color = newColors[index];
+    }
+  }
+
+  return savedCourses;
+}
+
+/** The class list for the extension's "Choose your classes" screen. */
+async function listCourses(supabase: SupabaseClient, userId: string, body: unknown) {
+  const disabledResponse = await checkSyncEnabled(supabase, userId);
+
+  if (disabledResponse) {
+    return disabledResponse;
+  }
+
+  const payload = parseSyncPayload({ ...(body as Record<string, unknown>), assignments: [] });
+  const savedCourses = await saveCourses(supabase, userId, payload.courses);
+
+  return jsonResponse({
+    courses: savedCourses.map((course) => ({
+      canvasCourseId: course.canvas_course_id,
+      name: course.name,
+      code: course.code,
+      term: course.term,
+      color: course.color,
+      syncEnabled: course.sync_enabled,
+    })),
+  });
+}
+
+async function saveCourseChoices(supabase: SupabaseClient, userId: string, body: unknown) {
+  const choices = parseCourseChoices(body);
+
+  for (const choice of choices) {
+    const { error } = await supabase
+      .from('courses')
+      .update({ color: choice.color, sync_enabled: choice.syncEnabled })
+      .eq('user_id', userId)
+      .eq('canvas_course_id', choice.canvasCourseId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  return jsonResponse({ saved: choices.length });
+}
+
+async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknown) {
+  const disabledResponse = await checkSyncEnabled(supabase, userId);
+
+  if (disabledResponse) {
+    return disabledResponse;
+  }
+
   const payload = parseSyncPayload(body);
   const syncedAt = new Date().toISOString();
 
   try {
-    const { data: savedCourses, error: courseError } = await supabase
-      .from('courses')
-      .upsert(
-        payload.courses.map((course) => ({
-          user_id: userId,
-          canvas_course_id: course.canvasCourseId,
-          name: course.name,
-          code: course.code,
-          term: course.term,
-        })),
-        { onConflict: 'user_id,canvas_course_id' },
-      )
-      .select('id, canvas_course_id');
+    const savedCourses = await saveCourses(supabase, userId, payload.courses);
 
-    if (courseError) {
-      throw courseError;
-    }
-
-    const courseIdByCanvasId = new Map(
-      (savedCourses ?? []).map((course) => [course.canvas_course_id, course.id]),
+    const courseIdByCanvasId = new Map(savedCourses.map((course) => [course.canvas_course_id, course.id]));
+    const enabledCanvasIds = new Set(
+      savedCourses.filter((course) => course.sync_enabled).map((course) => course.canvas_course_id),
     );
 
-    const assignmentRows = payload.assignments.map((assignment) => ({
+    // Only the classes the student chose to sync.
+    const assignments = payload.assignments.filter((assignment) =>
+      enabledCanvasIds.has(assignment.canvasCourseId),
+    );
+
+    const assignmentRows = assignments.map((assignment) => ({
       user_id: userId,
       course_id: courseIdByCanvasId.get(assignment.canvasCourseId) ?? null,
       canvas_assignment_id: assignment.canvasAssignmentId,
@@ -269,9 +385,10 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
       }
     }
 
-    // Anything RISE saved for these courses that Canvas no longer lists.
+    // Hide assignments that left Canvas, and ones from classes the student
+    // stopped syncing. They come back if the class is turned on again.
+    const syncedCourseIds = savedCourses.map((course) => course.id);
     let removedIds: string[] = [];
-    const syncedCourseIds = [...courseIdByCanvasId.values()];
 
     if (syncedCourseIds.length > 0) {
       const { data: savedAssignments, error: savedError } = await supabase
@@ -288,7 +405,7 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
 
       removedIds = findRemovedAssignmentIds(
         savedAssignments ?? [],
-        new Set(payload.assignments.map((assignment) => assignment.canvasAssignmentId)),
+        new Set(assignments.map((assignment) => assignment.canvasAssignmentId)),
       );
 
       for (const batch of chunk(removedIds, UPSERT_BATCH_SIZE)) {
@@ -313,8 +430,8 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
     });
 
     return jsonResponse({
-      courses: payload.courses.length,
-      assignments: payload.assignments.length,
+      courses: enabledCanvasIds.size,
+      assignments: assignments.length,
       removed: removedIds.length,
       syncedAt,
     });
@@ -358,6 +475,14 @@ Deno.serve(async (req) => {
 
     if (body?.action === 'sync') {
       return await syncCanvas(supabase, tokenUser.userId, body);
+    }
+
+    if (body?.action === 'courses') {
+      return await listCourses(supabase, tokenUser.userId, body);
+    }
+
+    if (body?.action === 'saveCourseChoices') {
+      return await saveCourseChoices(supabase, tokenUser.userId, body);
     }
 
     if (body?.action === 'disconnect') {

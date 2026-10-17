@@ -173,3 +173,62 @@ export function findRemovedAssignmentIds(
 export function isPairingCode(value: unknown): value is string {
   return typeof value === 'string' && /^\d{6}$/.test(value);
 }
+
+// Color keys students can pick for a class. Same list as
+// src/theme/courseColors.ts and the check on courses.color.
+export const COURSE_COLOR_KEYS = [
+  'sunbeam',
+  'apricot',
+  'coral',
+  'blush',
+  'lilac',
+  'periwinkle',
+  'sky',
+  'aqua',
+  'mint',
+  'sage',
+  'pistachio',
+  'sand',
+] as const;
+
+export type CourseColorKey = (typeof COURSE_COLOR_KEYS)[number];
+
+export type CourseChoice = {
+  canvasCourseId: string;
+  color: CourseColorKey;
+  syncEnabled: boolean;
+};
+
+function isCourseColor(value: unknown): value is CourseColorKey {
+  return typeof value === 'string' && (COURSE_COLOR_KEYS as readonly string[]).includes(value);
+}
+
+/** The classes the student chose to sync, and their colors. */
+export function parseCourseChoices(body: unknown): CourseChoice[] {
+  if (!isRecord(body) || !Array.isArray(body.choices) || body.choices.length > MAX_COURSES) {
+    throw new InvalidPayloadError('Expected a list of class choices.');
+  }
+
+  return body.choices.map((choice): CourseChoice => {
+    if (!isRecord(choice) || !isCourseColor(choice.color) || typeof choice.syncEnabled !== 'boolean') {
+      throw new InvalidPayloadError('Each class needs a color and whether to sync it.');
+    }
+
+    return {
+      canvasCourseId: readId(choice.canvasCourseId, 'choice.canvasCourseId'),
+      color: choice.color,
+      syncEnabled: choice.syncEnabled,
+    };
+  });
+}
+
+/**
+ * Colors for classes that don't have one yet: the palette's unused colors in
+ * order, then repeating once all twelve are taken.
+ */
+export function pickColorsForNewCourses(usedColors: (string | null)[], count: number): CourseColorKey[] {
+  const unused = COURSE_COLOR_KEYS.filter((key) => !usedColors.includes(key));
+  const order = [...unused, ...COURSE_COLOR_KEYS];
+
+  return Array.from({ length: count }, (_, index) => order[index % order.length]);
+}

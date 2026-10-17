@@ -1,9 +1,13 @@
 import {
+  COURSE_COLOR_KEYS,
   findRemovedAssignmentIds,
   InvalidPayloadError,
   isPairingCode,
+  parseCourseChoices,
   parseSyncPayload,
+  pickColorsForNewCourses,
 } from '../canvasSync';
+import { COURSE_COLOR_KEYS as APP_COURSE_COLOR_KEYS } from '../../../../src/theme/courseColors';
 
 function validPayload() {
   return {
@@ -102,5 +106,33 @@ describe('isPairingCode', () => {
     [123456, false],
   ])('%p → %p', (value, expected) => {
     expect(isPairingCode(value)).toBe(expected);
+  });
+});
+
+describe('parseCourseChoices', () => {
+  it('reads which classes to sync and their colors', () => {
+    expect(
+      parseCourseChoices({ choices: [{ canvasCourseId: 101, color: 'coral', syncEnabled: false }] }),
+    ).toEqual([{ canvasCourseId: '101', color: 'coral', syncEnabled: false }]);
+  });
+
+  it('rejects colors that are not in the palette', () => {
+    expect(() =>
+      parseCourseChoices({ choices: [{ canvasCourseId: 101, color: 'red', syncEnabled: true }] }),
+    ).toThrow(InvalidPayloadError);
+  });
+});
+
+describe('pickColorsForNewCourses', () => {
+  it('uses colors the student has not used yet, in palette order', () => {
+    expect(pickColorsForNewCourses(['sunbeam', 'coral'], 3)).toEqual(['apricot', 'blush', 'lilac']);
+  });
+
+  it('starts repeating once every color is taken', () => {
+    expect(pickColorsForNewCourses([...COURSE_COLOR_KEYS], 2)).toEqual(['sunbeam', 'apricot']);
+  });
+
+  it('offers the same colors as the app', () => {
+    expect([...COURSE_COLOR_KEYS]).toEqual(APP_COURSE_COLOR_KEYS);
   });
 });
