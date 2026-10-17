@@ -1,5 +1,6 @@
 import { Alert } from 'react-native';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -21,8 +22,21 @@ jest.mock('../../../repositories/profileRepository', () => ({
     mockMarkOnboardingCompleted(...args),
 }));
 
+// Longer than the whole "Congratulations!" animation.
+const CELEBRATION_DURATION = 2000;
+
+/** Renders the screen and lets the celebration play out. */
+async function renderPastCelebration(onComplete = jest.fn()) {
+  await render(<OnboardingCompleteScreen onComplete={onComplete} />);
+
+  await act(async () => {
+    jest.advanceTimersByTime(CELEBRATION_DURATION);
+  });
+}
+
 describe('OnboardingCompleteScreen', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -30,11 +44,27 @@ describe('OnboardingCompleteScreen', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
-  it('shows which setup steps are done', async () => {
+  it('celebrates before showing the summary', async () => {
     await render(<OnboardingCompleteScreen onComplete={jest.fn()} />);
+
+    expect(
+      screen.getByRole('header', { name: 'Congratulations!' }),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText('You’re all set')).not.toBeOnTheScreen();
+
+    await act(async () => {
+      jest.advanceTimersByTime(CELEBRATION_DURATION);
+    });
+
+    expect(screen.getByText('You’re all set')).toBeOnTheScreen();
+  });
+
+  it('shows which setup steps are done', async () => {
+    await renderPastCelebration();
 
     expect(
       screen.getByLabelText('Calendar connected, done'),
@@ -48,7 +78,7 @@ describe('OnboardingCompleteScreen', () => {
   it('leaves the calendar unchecked when the student skipped it', async () => {
     mockRouteParams = { calendarConnected: false };
 
-    await render(<OnboardingCompleteScreen onComplete={jest.fn()} />);
+    await renderPastCelebration();
 
     expect(
       screen.getByLabelText('Calendar connected, not set up yet'),
@@ -59,7 +89,7 @@ describe('OnboardingCompleteScreen', () => {
     const onComplete = jest.fn();
     mockMarkOnboardingCompleted.mockResolvedValueOnce(undefined);
 
-    await render(<OnboardingCompleteScreen onComplete={onComplete} />);
+    await renderPastCelebration(onComplete);
 
     await fireEvent.press(screen.getByRole('button', { name: 'Show me my week' }));
 
@@ -73,7 +103,7 @@ describe('OnboardingCompleteScreen', () => {
     const onComplete = jest.fn();
     mockMarkOnboardingCompleted.mockRejectedValueOnce(new Error('offline'));
 
-    await render(<OnboardingCompleteScreen onComplete={onComplete} />);
+    await renderPastCelebration(onComplete);
 
     await fireEvent.press(screen.getByRole('button', { name: 'Show me my week' }));
 
