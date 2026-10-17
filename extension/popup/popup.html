@@ -3,35 +3,35 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Canvas Course Collector</title>
+    <title>Rise Canvas Sync</title>
+    <link rel="stylesheet" href="../styles/fonts.css">
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
     <main>
-      <header>
-        <div class="mark" aria-hidden="true">C</div>
-        <div><h1>RISE Course Collector</h1><p>Gather course details for your own study tools.</p></div>
-      </header>
+      <div class="brand"><img src="../images/rise-logo.svg" alt="">Rise</div>
 
-      <section class="privacy" aria-label="Privacy information">
-        <strong>On-demand and local</strong>
-        <p>Nothing is collected until you press Scan. Data stays in this popup and is only saved if you export it.</p>
+      <!-- Shown until the extension is connected to a Rise account. -->
+      <section id="disconnected" hidden>
+        <h1>Connect Rise to Canvas</h1>
+        <p class="subtitle">
+          Open Canvas and sign in with the same email as your Rise app, plus the code from Settings → Canvas.
+        </p>
+        <button class="button button--gold" id="connect" type="button">Open Canvas →</button>
       </section>
 
-      <button id="scan" type="button">Scan this course</button>
-      <p id="status" role="status" aria-live="polite">Open a Canvas course page, then scan.</p>
+      <section id="connected" hidden>
+        <h1>Canvas is syncing</h1>
+        <p class="subtitle">Connected as <strong id="email"></strong></p>
 
-      <section id="results" hidden>
-        <h2 id="course-title"></h2>
-        <div class="counts" id="counts"></div>
-        <details>
-          <summary>Review collected information</summary>
-          <div id="preview"></div>
-        </details>
-        <button id="export" class="secondary" type="button">Export JSON</button>
+        <p class="info-box" id="sync-status" role="status" aria-live="polite"></p>
+
+        <button class="button button--dark" id="sync-now" type="button">Sync now</button>
+        <button class="link-button" id="disconnect" type="button">Disconnect</button>
       </section>
-      <footer>Only scan courses you are authorized to access. This extension does not bypass Canvas permissions.</footer>
     </main>
+
+    <script src="../config.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

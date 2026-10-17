@@ -1,11 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "RISE Course Collector",
+  "name": "Rise Canvas Sync",
   "version": "1.0.0",
-  "description": "Collect a Canvas course syllabus, assignments, and quizzes for your own review and export.",
-  "permissions": ["activeTab", "scripting"],
+  "description": "Sync your Canvas courses and assignments into the Rise planner.",
+  "icons": {
+    "16": "images/icon-16.png",
+    "32": "images/icon-32.png",
+    "48": "images/icon-48.png",
+    "128": "images/icon-128.png"
+  },
   "action": {
-    "default_title": "Canvas Course Collector",
-    "default_popup": "popup/popup.html"
-  }
+    "default_title": "Rise Canvas Sync",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "images/icon-16.png",
+      "32": "images/icon-32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["https://*.instructure.com/*", "https://*.supabase.co/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.instructure.com/*"],
+      "js": ["config.js", "content/messages.js", "content/canvasApi.js", "content/riseModal.js", "content/canvas.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/riseModal.css", "images/*", "fonts/*"],
+      "matches": ["https://*.instructure.com/*"]
+    }
+  ]
 }
