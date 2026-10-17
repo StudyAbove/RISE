@@ -118,6 +118,17 @@ Then restart Expo with a cleared cache (`npx expo start -c`). The app opens on t
 
 The switch only works in development builds and is off unless your `.env` turns it on. It lives in `src/lib/devFlags.ts`. Set it back to `false` (or remove the line) to test the real login flow.
 
+### Running the Canvas Extension
+
+The Chrome extension in `extension/` brings Canvas courses and assignments into RISE. It is plain JavaScript loaded straight into Chrome, so it has no build step and Expo never bundles it.
+
+1. Open `chrome://extensions` in Chrome.
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and select the `extension/` folder.
+4. Open a Canvas course page and click the RISE icon in the toolbar.
+
+After changing extension files, click the reload icon on the extension's card in `chrome://extensions`.
+
 
 ## Available Scripts
 
@@ -140,6 +151,7 @@ Future -
 ```text
 RISE/
 ├── assets/                     # Images, icons, and other static assets
+├── extension/                  # Chrome extension that syncs Canvas into RISE
 ├── jest/                       # Test setup and mocks
 ├── src/
 │   ├── components/             # Shared reusable UI components
