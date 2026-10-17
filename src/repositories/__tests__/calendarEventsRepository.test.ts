@@ -1,4 +1,6 @@
+import { clearAddedMockCalendarEvents } from '../../mocks/calendarEvents';
 import {
+  createCalendarEvent,
   getCalendarEventsInRange,
   updateCalendarEvent,
 } from '../calendarEventsRepository';
@@ -22,12 +24,18 @@ const mockQuery = {
   update: jest.fn(),
   eq: jest.fn(),
   maybeSingle: jest.fn(),
+  insert: jest.fn(),
+  single: jest.fn(),
 };
+const mockGetUser = jest.fn();
 
 jest.mock('../../lib/supabase', () => ({
   supabase: {
     from: (table: string) =>
       mockQuery.from(table),
+    auth: {
+      getUser: () => mockGetUser(),
+    },
   },
 }));
 
@@ -72,6 +80,8 @@ beforeEach(() => {
   mockQuery.gt.mockReturnValue(mockQuery);
   mockQuery.update.mockReturnValue(mockQuery);
   mockQuery.eq.mockReturnValue(mockQuery);
+  mockQuery.insert.mockReturnValue(mockQuery);
+  clearAddedMockCalendarEvents();
 });
 
 describe('getCalendarEventsInRange', () => {
@@ -91,6 +101,11 @@ describe('getCalendarEventsInRange', () => {
     ).toHaveBeenCalledWith(
       'calendar_events',
     );
+
+    // All columns, so the calendar keeps working before the #31 migration is applied.
+    expect(
+      mockQuery.select,
+    ).toHaveBeenCalledWith('*');
 
     expect(
       mockQuery.lt,
@@ -413,5 +428,120 @@ describe('updateCalendarEvent', () => {
     ).rejects.toThrow(
       'Calendar event could not be found or updated.',
     );
+  });
+});
+
+// For inserts: from → insert → select → single.
+function mockInsertResult(result: { data: unknown; error: unknown }) {
+  mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+  mockQuery.from.mockReturnValue(mockQuery);
+  mockQuery.insert.mockReturnValue(mockQuery);
+  mockQuery.select.mockReturnValue(mockQuery);
+  mockQuery.single.mockResolvedValue(result);
+}
+
+describe('createCalendarEvent', () => {
+  const lab = {
+    title: 'Chem Lab',
+    startAt: '2026-11-13T17:00:00.000Z',
+    endAt: '2026-11-13T18:00:00.000Z',
+    location: 'Room 204',
+    eventType: 'class' as const,
+    reminderMinutes: 1440,
+  };
+
+  it('saves the event as a RISE event owned by the signed-in student', async () => {
+    mockInsertResult({
+      data: {
+        id: 'event-9',
+        user_id: 'user-1',
+        title: 'Chem Lab',
+        start_at: '2026-11-13T17:00:00+00:00',
+        end_at: '2026-11-13T18:00:00+00:00',
+        source: 'rise',
+        location: 'Room 204',
+        description: null,
+        event_type: 'class',
+        reminder_minutes: 1440,
+      },
+      error: null,
+    });
+
+    const saved = await createCalendarEvent(lab);
+
+    expect(mockQuery.insert).toHaveBeenCalledWith({
+      user_id: 'user-1',
+      title: 'Chem Lab',
+      start_at: '2026-11-13T17:00:00.000Z',
+      end_at: '2026-11-13T18:00:00.000Z',
+      source: 'rise',
+      location: 'Room 204',
+      description: null,
+      event_type: 'class',
+      reminder_minutes: 1440,
+    });
+    expect(saved).toEqual({
+      id: 'event-9',
+      userId: 'user-1',
+      title: 'Chem Lab',
+      startAt: '2026-11-13T17:00:00+00:00',
+      endAt: '2026-11-13T18:00:00+00:00',
+      source: 'rise',
+      location: 'Room 204',
+      description: undefined,
+      eventType: 'class',
+      reminderMinutes: 1440,
+    });
+  });
+
+  it('saves empty optional details as null', async () => {
+    mockInsertResult({
+      data: {
+        id: 'event-10',
+        user_id: 'user-1',
+        title: 'Gym',
+        start_at: lab.startAt,
+        end_at: lab.endAt,
+        source: 'rise',
+        location: null,
+        description: null,
+      },
+      error: null,
+    });
+
+    await createCalendarEvent({ title: 'Gym', startAt: lab.startAt, endAt: lab.endAt });
+
+    expect(mockQuery.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ location: null, event_type: null, reminder_minutes: null })
+    );
+  });
+
+  it('throws the Supabase error so the form can show it', async () => {
+    const permissionError = { message: 'permission denied for table calendar_events' };
+    mockInsertResult({ data: null, error: permissionError });
+
+    await expect(createCalendarEvent(lab)).rejects.toBe(permissionError);
+  });
+
+  it('throws when no one is signed in', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    await expect(createCalendarEvent(lab)).rejects.toThrow('No signed-in user was found.');
+    expect(mockQuery.insert).not.toHaveBeenCalled();
+  });
+
+  it('keeps the event in memory while the login skip is on, and shows it with the samples', async () => {
+    mockDevFlags.skipAuth = true;
+
+    const saved = await createCalendarEvent(lab);
+    const events = await getCalendarEventsInRange(
+      new Date('2026-11-13T00:00:00.000Z'),
+      new Date('2026-11-14T00:00:00.000Z')
+    );
+
+    expect(mockGetUser).not.toHaveBeenCalled();
+    expect(mockQuery.from).not.toHaveBeenCalled();
+    expect(saved).toMatchObject({ title: 'Chem Lab', source: 'rise', eventType: 'class', reminderMinutes: 1440 });
+    expect(events).toContainEqual(saved);
   });
 });

@@ -19,6 +19,7 @@ import {
 
 import {
   format,
+  parseISO,
   startOfDay,
 } from 'date-fns';
 
@@ -30,6 +31,7 @@ import {
   getLatestCalendarEventLinkSyncTime,
 } from '../../../repositories/calendarEventLinksRepository';
 
+import { AddEventSheet } from '../components/addEvent/AddEventSheet';
 import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
@@ -130,6 +132,12 @@ export function CalendarScreen() {
   const [
     editModalVisible,
     setEditModalVisible,
+  ] =
+    useState(false);
+
+  const [
+    isAddingEvent,
+    setIsAddingEvent,
   ] =
     useState(false);
 
@@ -250,6 +258,22 @@ export function CalendarScreen() {
     }, [
       retry,
     ]);
+
+  /*
+   * After adding an event (#31), show it: jump to its date, like
+   * Google Calendar, and refresh every view and the today card (AC3).
+   */
+  function handleEventAdded(
+    event: CalendarEvent,
+  ) {
+    setIsAddingEvent(false);
+    setAnchorDate(
+      startOfDay(
+        parseISO(event.startAt),
+      ),
+    );
+    refreshCalendar();
+  }
 
   /*
    * Watch the one shared provider-sync job used by both
@@ -1172,6 +1196,9 @@ export function CalendarScreen() {
         onNext={() =>
           shift(1)
         }
+        onAddEvent={() =>
+          setIsAddingEvent(true)
+        }
       />
 
       <CalendarViewSwitcher
@@ -1320,6 +1347,18 @@ export function CalendarScreen() {
         }
         onSaved={
           handleEventSaved
+        }
+      />
+
+      <AddEventSheet
+        visible={
+          isAddingEvent
+        }
+        onClose={() =>
+          setIsAddingEvent(false)
+        }
+        onSaved={
+          handleEventAdded
         }
       />
     </View>

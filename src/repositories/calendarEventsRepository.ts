@@ -1,10 +1,15 @@
 import { DEV_SKIP_AUTH } from '../lib/devFlags';
 import { supabase } from '../lib/supabase';
-import { getMockCalendarEvents } from '../mocks/calendarEvents';
+import {
+  addMockCalendarEvent,
+  getMockCalendarEvents,
+} from '../mocks/calendarEvents';
 
 import type {
   CalendarEvent,
+  CalendarEventType,
   CalendarSource,
+  NewCalendarEvent,
 } from '../models/CalendarEvent';
 
 // A row of the calendar_events table, as Supabase returns it.
@@ -17,6 +22,9 @@ interface CalendarEventRow {
   source: CalendarSource;
   location: string | null;
   description: string | null;
+  // Added by the #31 migration; missing until it's applied.
+  event_type?: CalendarEventType | null;
+  reminder_minutes?: number | null;
 }
 
 interface CalendarEventSyncRow
@@ -65,6 +73,10 @@ const toCalendarEvent = (
     row.location ?? undefined,
   description:
     row.description ?? undefined,
+  eventType:
+    row.event_type ?? undefined,
+  reminderMinutes:
+    row.reminder_minutes ?? undefined,
 });
 
 const toCalendarEventSyncRecord = (
@@ -174,7 +186,9 @@ export async function getCalendarEventsInRange(
     await supabase
       .from('calendar_events')
       .select(
-        CALENDAR_EVENT_COLUMNS,
+        // All columns, so the new event_type and reminder_minutes come back
+        // once the #31 migration is applied, and this still works before it is.
+        '*',
       )
       .lt(
         'start_at',
@@ -300,6 +314,69 @@ export async function updateCalendarEvent(
     throw new Error(
       'Calendar event could not be found or updated.',
     );
+  }
+
+  return toCalendarEvent(
+    data as CalendarEventRow,
+  );
+}
+
+/**
+ * Saves an event the student made with the Add Event form (#31), owned by
+ * the signed-in student, and returns it as stored. Throws if no one is signed
+ * in or Supabase returns an error.
+ *
+ * Imported Apple/Google events use createImportedCalendarEvent instead.
+ */
+export async function createCalendarEvent(
+  input: NewCalendarEvent,
+): Promise<CalendarEvent> {
+  if (DEV_SKIP_AUTH) {
+    // No one is signed in, so Supabase would reject the insert.
+    return addMockCalendarEvent(input);
+  }
+
+  const {
+    data: {
+      user,
+    },
+    error: userError,
+  } =
+    await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error(
+      'No signed-in user was found.',
+    );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('calendar_events')
+      .insert({
+        // Row Level Security only accepts rows owned by the signed-in student.
+        user_id: user.id,
+        title: input.title,
+        start_at: input.startAt,
+        end_at: input.endAt,
+        source: 'rise',
+        location: input.location ?? null,
+        description: input.description ?? null,
+        event_type: input.eventType ?? null,
+        reminder_minutes: input.reminderMinutes ?? null,
+      })
+      .select()
+      .single();
+
+  if (error) {
+    throw error;
   }
 
   return toCalendarEvent(

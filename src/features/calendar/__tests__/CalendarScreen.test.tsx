@@ -20,6 +20,9 @@ import {
 const mockGetCalendarEventsInRange =
   jest.fn();
 
+const mockCreateCalendarEvent =
+  jest.fn();
+
 const mockGetLatestCalendarEventLinkSyncTime =
   jest.fn();
 
@@ -91,8 +94,17 @@ jest.mock(
         mockGetCalendarEventsInRange(
           ...args,
         ),
+    createCalendarEvent:
+      (...args: unknown[]) =>
+        mockCreateCalendarEvent(
+          ...args,
+        ),
   }),
 );
+
+beforeEach(() => {
+  mockCreateCalendarEvent.mockReset();
+});
 
 jest.mock(
   '../../../repositories/calendarEventLinksRepository',
@@ -1951,7 +1963,7 @@ describe(
     );
 
     it(
-      'shows the add, search, and menu actions as not yet available',
+      'shows the search and menu actions as not yet available',
       async () => {
         await render(
           <CalendarScreen />,
@@ -1959,7 +1971,6 @@ describe(
 
         for (
           const name of [
-            'Add event',
             'Search',
             'More options',
           ]
@@ -1977,3 +1988,99 @@ describe(
     );
   },
 );
+
+describe('CalendarScreen: adding an event (#31)', () => {
+  // Pretends to be the database: events saved through the form are returned
+  // by later loads, the way Supabase would.
+  function useFakeEventStore() {
+    const stored: CalendarEvent[] = [];
+    mockCreateCalendarEvent.mockImplementation(async (input) => {
+      const event: CalendarEvent = { ...input, id: `new-${stored.length + 1}`, userId: 'user-1', source: 'rise' };
+      stored.push(event);
+      return event;
+    });
+    mockGetCalendarEventsInRange.mockImplementation(async () => [...stored]);
+  }
+
+  // Fills in the form: a title on the given November day at 9:00 AM.
+  async function addEvent(title: string, dayLabel: string) {
+    await fireEvent.press(screen.getByRole('button', { name: 'Add event' }));
+    await fireEvent.changeText(screen.getByLabelText('Title'), title);
+    await fireEvent.press(screen.getByRole('button', { name: /^Date,/ }));
+    await fireEvent.press(screen.getByRole('button', { name: dayLabel }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Start time,/ }));
+    await fireEvent.press(screen.getByRole('button', { name: '9:00 AM' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add Event' }));
+  }
+
+  it('opens the event form from the + button (AC1)', async () => {
+    await render(<CalendarScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Add event' }));
+
+    expect(screen.getByRole('header', { name: 'Add to Calendar' })).toBeOnTheScreen();
+  });
+
+  it('shows the saved event on its date in the month view (AC3)', async () => {
+    useFakeEventStore();
+    await render(<CalendarScreen />);
+
+    await addEvent('Chem Lab', 'Wednesday, November 18');
+
+    expect(screen.queryByRole('header', { name: 'Add to Calendar' })).not.toBeOnTheScreen();
+    const day = await screen.findByLabelText('Wednesday, November 18, 1 event');
+    expect(within(day).getByText('Chem Lab')).toBeOnTheScreen();
+  });
+
+  it('shows the saved event at its time in the hourly views (AC3)', async () => {
+    useFakeEventStore();
+    await render(<CalendarScreen />);
+    await addEvent('Chem Lab', 'Wednesday, November 18');
+
+    for (const view of ['Week', '2 Day', 'Day']) {
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+      expect(await screen.findByLabelText('Chem Lab, 9:00 AM to 10:00 AM')).toBeOnTheScreen();
+    }
+  });
+
+  it('jumps to the new event when it is in another month', async () => {
+    useFakeEventStore();
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Add event' }));
+    await fireEvent.changeText(screen.getByLabelText('Title'), 'Finals Review');
+    await fireEvent.press(screen.getByRole('button', { name: /^Date,/ }));
+    // Both the calendar and the date picker have a "Next month" arrow; the
+    // date picker's is the later one on screen.
+    const nextMonthArrows = screen.getAllByRole('button', { name: 'Next month' });
+    await fireEvent.press(nextMonthArrows[nextMonthArrows.length - 1]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Thursday, December 3' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Start time,/ }));
+    await fireEvent.press(screen.getByRole('button', { name: '9:00 AM' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add Event' }));
+
+    expect(await screen.findByRole('header', { name: 'December 2026' })).toBeOnTheScreen();
+    expect(await screen.findByLabelText('Thursday, December 3, 1 event')).toBeOnTheScreen();
+  });
+
+  it("updates today's card when the event is today", async () => {
+    useFakeEventStore();
+    await render(<CalendarScreen />);
+    expect(await screen.findByText('No events today.')).toBeOnTheScreen();
+
+    await addEvent('Office Hours', 'Today, Friday, November 13');
+
+    expect(await screen.findByText('9:00 AM – 10:00 AM')).toBeOnTheScreen();
+    expect(screen.queryByText('No events today.')).not.toBeOnTheScreen();
+  });
+
+  it('saves nothing when the form is closed', async () => {
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Add event' }));
+    await fireEvent.changeText(screen.getByLabelText('Title'), 'Never mind');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByRole('header', { name: 'Add to Calendar' })).not.toBeOnTheScreen();
+    expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
+  });
+});

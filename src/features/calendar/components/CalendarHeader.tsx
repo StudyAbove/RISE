@@ -22,6 +22,8 @@ interface CalendarHeaderProps {
   nextLabel: string;
   onPrevious: () => void;
   onNext: () => void;
+  /** Opens the Add Event form. */
+  onAddEvent: () => void;
 }
 
 /** Top of the Calendar page: sun-and-hills banner, action icons, and the period label with ‹ › arrows. */
@@ -31,6 +33,7 @@ export function CalendarHeader({
   nextLabel,
   onPrevious,
   onNext,
+  onAddEvent,
 }: CalendarHeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -48,8 +51,8 @@ export function CalendarHeader({
         accessibilityIgnoresInvertColors
       />
 
-      {/* The ••• menu, add, and search actions are built in later stories, so they
-          are disabled for now (VoiceOver reads them as "dimmed"). */}
+      {/* The ••• menu and search are built in later stories, so they're disabled
+          for now (VoiceOver reads them as "dimmed"). */}
       <View style={styles.actionRow}>
         <Pressable accessibilityRole="button" accessibilityLabel="More options" hitSlop={HIT_SLOP} disabled>
           <View style={styles.iconBox}>
@@ -57,7 +60,7 @@ export function CalendarHeader({
           </View>
         </Pressable>
         <View style={styles.trailingActions}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Add event" hitSlop={HIT_SLOP} disabled>
+          <Pressable accessibilityRole="button" accessibilityLabel="Add event" hitSlop={HIT_SLOP} onPress={onAddEvent}>
             <AddIcon width={24} height={24} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Search" hitSlop={HIT_SLOP} disabled>
