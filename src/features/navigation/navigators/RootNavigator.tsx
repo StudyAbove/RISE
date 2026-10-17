@@ -14,10 +14,13 @@ import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
 
+import CheckInboxScreen from '../../auth/screens/CheckInboxScreen';
 import CreateAccountScreen from '../../auth/screens/CreateAccountScreen';
 import LoginScreen from '../../auth/screens/LoginScreen';
 import WelcomeScreen from '../../auth/screens/WelcomeScreen';
-import OnboardingScreen from '../../onboarding/screens/OnboardingScreen';
+import { ConnectCalendarScreen } from '../../onboarding/screens/ConnectCalendarScreen';
+import { ConnectClassesScreen } from '../../onboarding/screens/ConnectClassesScreen';
+import { OnboardingCompleteScreen } from '../../onboarding/screens/OnboardingCompleteScreen';
 
 import {
   CalendarSyncSuccessModal,
@@ -533,6 +536,13 @@ export function RootNavigator({
             </Stack.Screen>
 
             <Stack.Screen
+              name="CheckInbox"
+              component={
+                CheckInboxScreen
+              }
+            />
+
+            <Stack.Screen
               name="Login"
             >
               {() => (
@@ -545,19 +555,35 @@ export function RootNavigator({
             </Stack.Screen>
           </>
         ) : !hasCompletedOnboarding ? (
-          <Stack.Screen
-            name="Onboarding"
-          >
-            {() => (
-              <OnboardingScreen
-                onComplete={() => {
-                  setHasCompletedOnboarding(
-                    true,
-                  );
-                }}
-              />
-            )}
-          </Stack.Screen>
+          <>
+            <Stack.Screen
+              name="ConnectClasses"
+              component={
+                ConnectClassesScreen
+              }
+            />
+
+            <Stack.Screen
+              name="ConnectCalendar"
+              component={
+                ConnectCalendarScreen
+              }
+            />
+
+            <Stack.Screen
+              name="OnboardingComplete"
+            >
+              {() => (
+                <OnboardingCompleteScreen
+                  onComplete={() => {
+                    setHasCompletedOnboarding(
+                      true,
+                    );
+                  }}
+                />
+              )}
+            </Stack.Screen>
+          </>
         ) : (
           <>
             <Stack.Screen

@@ -411,7 +411,7 @@ describe(
         await waitFor(() => {
           expect(
             screen.getByText(
-              'Onboarding',
+              'Connect your classes',
             ),
           ).toBeOnTheScreen();
         });
