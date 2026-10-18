@@ -7,6 +7,7 @@ import {
 
 import {
   AppState,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -36,6 +37,7 @@ import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
 import { EditCalendarEventModal } from '../components/EditCalendarEventModal';
+import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
 import { TodayEventsCard } from '../components/TodayEventsCard';
@@ -134,6 +136,17 @@ export function CalendarScreen() {
     setEditModalVisible,
   ] =
     useState(false);
+
+  // Tapping an event shows its details first (#34); Edit opens the edit modal from there.
+  const [
+    detailsVisible,
+    setDetailsVisible,
+  ] =
+    useState(false);
+
+  // Set when Edit is pressed, so the edit modal opens once the details sheet has closed.
+  const openEditAfterDetailsRef =
+    useRef(false);
 
   const [
     isAddingEvent,
@@ -1005,13 +1018,66 @@ export function CalendarScreen() {
   function handleEventPress(
     event: CalendarEvent,
   ) {
+    openEditAfterDetailsRef.current =
+      false;
+
     setSelectedEvent(
       event,
     );
 
-    setEditModalVisible(
+    setDetailsVisible(
       true,
     );
+  }
+
+  /*
+   * Keeps selectedEvent until the sheet finishes sliding away, so its
+   * details don't disappear mid-animation.
+   */
+  function handleCloseDetails() {
+    setDetailsVisible(
+      false,
+    );
+  }
+
+  /*
+   * iOS can't show a new modal while another is still closing, so the
+   * edit modal opens only after the details sheet is gone.
+   */
+  function handleDetailsDismissed() {
+    if (
+      openEditAfterDetailsRef.current
+    ) {
+      openEditAfterDetailsRef.current =
+        false;
+
+      setEditModalVisible(
+        true,
+      );
+
+      return;
+    }
+
+    setSelectedEvent(
+      null,
+    );
+  }
+
+  function handleEditFromDetails() {
+    openEditAfterDetailsRef.current =
+      true;
+
+    setDetailsVisible(
+      false,
+    );
+
+    // onDismiss only fires on iOS, so open the edit modal right away elsewhere.
+    if (
+      Platform.OS !==
+      'ios'
+    ) {
+      handleDetailsDismissed();
+    }
   }
 
   function handleCloseEditModal() {
@@ -1334,6 +1400,24 @@ export function CalendarScreen() {
           }
         />
       </View>
+
+      <EventDetailsSheet
+        visible={
+          detailsVisible
+        }
+        event={
+          selectedEvent
+        }
+        onClose={
+          handleCloseDetails
+        }
+        onEdit={
+          handleEditFromDetails
+        }
+        onDismiss={
+          handleDetailsDismissed
+        }
+      />
 
       <EditCalendarEventModal
         visible={
