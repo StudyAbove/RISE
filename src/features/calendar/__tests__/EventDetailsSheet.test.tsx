@@ -9,6 +9,12 @@ import { CalendarEventDeleteError } from '../services/calendarEventSyncService';
 import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, formatReminder } from '../utils/eventLabels';
 
+// Which calendars the event has copies in; none unless a test says otherwise.
+const mockGetCalendarEventLinks = jest.fn();
+jest.mock('../../../repositories/calendarEventLinksRepository', () => ({
+  getCalendarEventLinks: (...args: unknown[]) => mockGetCalendarEventLinks(...args),
+}));
+
 const basicEvent: CalendarEvent = {
   id: 'event-1',
   userId: 'user-1',
@@ -39,6 +45,7 @@ const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
 beforeEach(() => {
   alertSpy.mockClear();
+  mockGetCalendarEventLinks.mockReset().mockResolvedValue([]);
 });
 
 // Presses a button in the most recent alert, the way a student would.
@@ -131,6 +138,34 @@ describe('EventDetailsSheet', () => {
       expect(onDelete).not.toHaveBeenCalled();
     });
 
+    // A RISE event that was also added to Google and Apple (#123) is deleted
+    // from all three, so the warning has to name both, whatever its source.
+    it('names every calendar the event will also be deleted from', async () => {
+      mockGetCalendarEventLinks.mockResolvedValue([
+        { id: 'link-1', calendarEventId: 'event-1', userId: 'user-1', provider: 'apple', externalEventId: 'apple-1' },
+        { id: 'link-2', calendarEventId: 'event-1', userId: 'user-1', provider: 'google', externalEventId: 'google-1', externalCalendarId: 'primary' },
+      ]);
+      await renderSheet(basicEvent);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+
+      expect(mockGetCalendarEventLinks).toHaveBeenCalledWith('event-1');
+      expect(alertSpy.mock.calls.at(-1)?.[1]).toBe(
+        "This can't be undone. It will also be removed from Google Calendar and Apple Calendar.",
+      );
+    });
+
+    it('still warns about synced copies when the calendars cannot be checked', async () => {
+      mockGetCalendarEventLinks.mockRejectedValue(new Error('Network request failed'));
+      await renderSheet(basicEvent);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+
+      expect(alertSpy.mock.calls.at(-1)?.[1]).toBe(
+        "This can't be undone. It will also be removed from any calendar it's synced with.",
+      );
+    });
+
     it('keeps the event when the student cancels (AC4)', async () => {
       const { onDelete } = await renderSheet(basicEvent);
 
@@ -200,12 +235,12 @@ describe('formatReminder', () => {
 });
 
 describe('delete messages', () => {
-  it('says an imported event also leaves the calendar it came from', () => {
-    expect(getDeleteConfirmMessage({ ...basicEvent, source: 'google' })).toBe(
-      "This can't be undone. It will also be removed from Google Calendar.",
-    );
-    expect(getDeleteConfirmMessage({ ...basicEvent, source: 'apple' })).toBe(
-      "This can't be undone. It will also be removed from Apple Calendar.",
+  it('names each linked calendar in the confirmation', () => {
+    expect(getDeleteConfirmMessage([])).toBe("This can't be undone.");
+    expect(getDeleteConfirmMessage(['google'])).toBe("This can't be undone. It will also be removed from Google Calendar.");
+    expect(getDeleteConfirmMessage(['apple'])).toBe("This can't be undone. It will also be removed from Apple Calendar.");
+    expect(getDeleteConfirmMessage(['google', 'apple'])).toBe(
+      "This can't be undone. It will also be removed from Google Calendar and Apple Calendar.",
     );
   });
 

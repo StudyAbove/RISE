@@ -3,7 +3,11 @@ import type { CalendarEventLink } from '../../../models/CalendarEventLink';
 import { getCalendarEventLinks } from '../../../repositories/calendarEventLinksRepository';
 import { deleteCalendarEvent } from '../../../repositories/calendarEventsRepository';
 import { deleteAppleCalendarEvent } from '../services/calendarService';
-import { CalendarEventDeleteError, deleteCalendarEventWithSync } from '../services/calendarEventSyncService';
+import {
+  CalendarEventDeleteError,
+  deleteCalendarEventWithSync,
+  getLinkedCalendarProviders,
+} from '../services/calendarEventSyncService';
 import { deleteGoogleCalendarEvent } from '../services/googleCalendarService';
 
 // Lets each test turn the dev login skip on or off.
@@ -137,5 +141,25 @@ describe('deleteCalendarEventWithSync', () => {
 
     expect(mockGetLinks).not.toHaveBeenCalled();
     expect(mockDeleteRiseEvent).toHaveBeenCalledWith('event-1');
+  });
+});
+
+describe('getLinkedCalendarProviders', () => {
+  it('lists the calendars the event has copies in, Google first', async () => {
+    mockGetLinks.mockResolvedValue([appleLink, googleLink]);
+
+    await expect(getLinkedCalendarProviders('event-1')).resolves.toEqual(['google', 'apple']);
+    expect(mockGetLinks).toHaveBeenCalledWith('event-1');
+  });
+
+  it('is empty for an event with no copies', async () => {
+    await expect(getLinkedCalendarProviders('event-1')).resolves.toEqual([]);
+  });
+
+  it('skips the link lookup while the login skip is on', async () => {
+    mockDevFlags.skipAuth = true;
+
+    await expect(getLinkedCalendarProviders('event-1')).resolves.toEqual([]);
+    expect(mockGetLinks).not.toHaveBeenCalled();
   });
 });

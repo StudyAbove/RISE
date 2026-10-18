@@ -549,6 +549,33 @@ export async function retryCalendarEventSync(
 }
 
 /**
+ * The calendars an event has copies in, from its links: the same ones
+ * deleteCalendarEventWithSync deletes from. Google first, then Apple.
+ */
+export async function getLinkedCalendarProviders(
+  eventId: string,
+): Promise<ExternalCalendarProvider[]> {
+  // While the login skip is on there are no saved links to look up.
+  if (DEV_SKIP_AUTH) {
+    return [];
+  }
+
+  const links =
+    await getCalendarEventLinks(
+      eventId,
+    );
+
+  return (['google', 'apple'] as const).filter(
+    (provider) =>
+      links.some(
+        (link) =>
+          link.provider ===
+          provider,
+      ),
+  );
+}
+
+/**
  * Thrown when an event can't be deleted. provider is set when the
  * Apple or Google copy is what failed, so the screen can say which
  * calendar to check.

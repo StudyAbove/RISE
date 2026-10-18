@@ -15,6 +15,7 @@ import WellnessIcon from '../../../../assets/icons/calendar/event-types/wellness
 import type { CalendarEvent, CalendarEventType, CalendarSource } from '../../../models/CalendarEvent';
 import { colors } from '../../../theme/colors';
 import { eventTypeCircleColors } from '../calendarColors';
+import { getLinkedCalendarProviders } from '../services/calendarEventSyncService';
 import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS, formatReminder } from '../utils/eventLabels';
 import { styles } from './EventDetailsSheet.styles';
@@ -61,17 +62,31 @@ interface EventDetailsSheetProps {
  */
 export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, onDismiss }: EventDetailsSheetProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  // True while checking which calendars the event is in, before the confirmation.
+  const [isCheckingLinks, setIsCheckingLinks] = useState(false);
 
   // Each time the sheet opens, it starts ready to delete again.
   useEffect(() => {
     if (visible) {
       setIsDeleting(false);
+      setIsCheckingLinks(false);
     }
   }, [visible]);
 
-  // Asks first (AC2); Cancel leaves everything as it was (AC4).
-  function confirmDelete(eventToDelete: CalendarEvent) {
-    Alert.alert(`Delete "${eventToDelete.title}"?`, getDeleteConfirmMessage(eventToDelete), [
+  // Asks first (AC2), naming each calendar the event will also be deleted from;
+  // Cancel leaves everything as it was (AC4).
+  async function confirmDelete(eventToDelete: CalendarEvent) {
+    setIsCheckingLinks(true);
+    let linkedProviders: Awaited<ReturnType<typeof getLinkedCalendarProviders>> | null;
+    try {
+      linkedProviders = await getLinkedCalendarProviders(eventToDelete.id);
+    } catch {
+      linkedProviders = null;
+    } finally {
+      setIsCheckingLinks(false);
+    }
+
+    Alert.alert(`Delete "${eventToDelete.title}"?`, getDeleteConfirmMessage(linkedProviders), [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void deleteEvent(eventToDelete) },
     ]);
@@ -174,9 +189,9 @@ export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, o
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={isDeleting ? 'Deleting' : 'Delete'}
-                accessibilityState={{ disabled: isDeleting, busy: isDeleting }}
-                disabled={isDeleting}
-                onPress={() => confirmDelete(event)}
+                accessibilityState={{ disabled: isDeleting || isCheckingLinks, busy: isDeleting }}
+                disabled={isDeleting || isCheckingLinks}
+                onPress={() => void confirmDelete(event)}
                 style={[styles.button, styles.deleteButton, isDeleting && styles.disabledButton]}
               >
                 {isDeleting ? (

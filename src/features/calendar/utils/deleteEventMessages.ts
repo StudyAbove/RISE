@@ -1,4 +1,4 @@
-import type { CalendarEvent } from '../../../models/CalendarEvent';
+import type { ExternalCalendarProvider } from '../../../models/CalendarEventLink';
 import { CalendarEventDeleteError } from '../services/calendarEventSyncService';
 
 const PROVIDER_NAMES = {
@@ -6,13 +6,23 @@ const PROVIDER_NAMES = {
   apple: 'Apple Calendar',
 } as const;
 
-/** The confirmation's message (AC2). Imported events also leave the calendar they came from. */
-export function getDeleteConfirmMessage(event: CalendarEvent): string {
-  if (event.source === 'google' || event.source === 'apple') {
-    return `This can't be undone. It will also be removed from ${PROVIDER_NAMES[event.source]}.`;
+/**
+ * The confirmation's message (AC2), naming every calendar the event will also
+ * be deleted from. linkedProviders is null when the links couldn't be checked,
+ * so the message stays general instead of leaving any calendar out.
+ */
+export function getDeleteConfirmMessage(linkedProviders: ExternalCalendarProvider[] | null): string {
+  const base = "This can't be undone.";
+
+  if (linkedProviders === null) {
+    return `${base} It will also be removed from any calendar it's synced with.`;
   }
 
-  return "This can't be undone.";
+  if (linkedProviders.length === 0) {
+    return base;
+  }
+
+  return `${base} It will also be removed from ${linkedProviders.map((provider) => PROVIDER_NAMES[provider]).join(' and ')}.`;
 }
 
 /** Why a delete failed, in plain words, and what to do about it (AC8). */
