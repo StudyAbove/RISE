@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert, type AlertButton } from 'react-native';
 
 import {
   act,
@@ -23,6 +24,12 @@ const mockGetCalendarEventsInRange =
   jest.fn();
 
 const mockCreateCalendarEvent =
+  jest.fn();
+
+const mockDeleteCalendarEvent =
+  jest.fn();
+
+const mockGetCalendarEventLinks =
   jest.fn();
 
 const mockGetLatestCalendarEventLinkSyncTime =
@@ -101,6 +108,11 @@ jest.mock(
         mockCreateCalendarEvent(
           ...args,
         ),
+    deleteCalendarEvent:
+      (...args: unknown[]) =>
+        mockDeleteCalendarEvent(
+          ...args,
+        ),
   }),
 );
 
@@ -114,6 +126,11 @@ jest.mock(
     getLatestCalendarEventLinkSyncTime:
       (...args: unknown[]) =>
         mockGetLatestCalendarEventLinkSyncTime(
+          ...args,
+        ),
+    getCalendarEventLinks:
+      (...args: unknown[]) =>
+        mockGetCalendarEventLinks(
           ...args,
         ),
   }),
@@ -2181,5 +2198,75 @@ describe('CalendarScreen: opening an event (#34)', () => {
 
     expect(screen.getByLabelText('Close edit event')).toBeOnTheScreen();
     expect(screen.getByLabelText('Event title')).toHaveDisplayValue('Bio Lab');
+  });
+});
+
+describe('CalendarScreen: deleting an event (#80)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const officeHours: CalendarEvent = {
+    id: 'event-1',
+    userId: 'user-1',
+    title: 'Office Hours',
+    startAt: new Date(2026, 10, 13, 9).toISOString(),
+    endAt: new Date(2026, 10, 13, 10).toISOString(),
+    source: 'rise',
+  };
+
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+  beforeEach(() => {
+    alertSpy.mockClear();
+    mockDeleteCalendarEvent.mockReset();
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+  });
+
+  afterAll(() => {
+    alertSpy.mockRestore();
+  });
+
+  // Pretends to be the database, so a deleted event stays gone on reload.
+  function useFakeEventStore() {
+    let stored = [officeHours];
+    mockGetCalendarEventsInRange.mockImplementation(async () => [...stored]);
+    mockDeleteCalendarEvent.mockImplementation(async (id: string) => {
+      stored = stored.filter((event) => event.id !== id);
+    });
+  }
+
+  async function confirmDelete() {
+    const [eventButton] = await screen.findAllByRole('button', { name: /^Office Hours,/ });
+    await fireEvent.press(eventButton);
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+    const buttons: AlertButton[] = alertSpy.mock.calls.at(-1)?.[2] ?? [];
+    await act(async () => {
+      buttons.find((button) => button.text === 'Delete')?.onPress?.();
+    });
+  }
+
+  it('removes the event from the calendar once confirmed (AC1, AC3, AC5)', async () => {
+    useFakeEventStore();
+    await render(<CalendarScreen />);
+
+    await confirmDelete();
+
+    expect(mockDeleteCalendarEvent).toHaveBeenCalledWith('event-1');
+    // The details sheet closes back to the calendar.
+    expect(screen.queryByRole('header', { name: 'Office Hours' })).not.toBeOnTheScreen();
+    expect(await screen.findByText('No events today.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Office Hours,/ })).not.toBeOnTheScreen();
+  });
+
+  it('keeps the event and explains when it cannot be deleted (AC8)', async () => {
+    mockGetCalendarEventsInRange.mockResolvedValue([officeHours]);
+    mockDeleteCalendarEvent.mockRejectedValue(new Error('Network request failed'));
+    await render(<CalendarScreen />);
+
+    await confirmDelete();
+
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      "Couldn't delete event",
+      'The event is still on your calendar. Check your connection and try again.',
+    );
+    expect(screen.getByRole('header', { name: 'Office Hours' })).toBeOnTheScreen();
   });
 });

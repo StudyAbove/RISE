@@ -1,6 +1,7 @@
 import { clearAddedMockCalendarEvents } from '../../mocks/calendarEvents';
 import {
   createCalendarEvent,
+  deleteCalendarEvent,
   getCalendarEventsInRange,
   updateCalendarEvent,
 } from '../calendarEventsRepository';
@@ -26,6 +27,7 @@ const mockQuery = {
   maybeSingle: jest.fn(),
   insert: jest.fn(),
   single: jest.fn(),
+  delete: jest.fn(),
 };
 const mockGetUser = jest.fn();
 
@@ -81,6 +83,7 @@ beforeEach(() => {
   mockQuery.update.mockReturnValue(mockQuery);
   mockQuery.eq.mockReturnValue(mockQuery);
   mockQuery.insert.mockReturnValue(mockQuery);
+  mockQuery.delete.mockReturnValue(mockQuery);
   clearAddedMockCalendarEvents();
 });
 
@@ -543,5 +546,54 @@ describe('createCalendarEvent', () => {
     expect(mockQuery.from).not.toHaveBeenCalled();
     expect(saved).toMatchObject({ title: 'Chem Lab', source: 'rise', eventType: 'class', reminderMinutes: 1440 });
     expect(events).toContainEqual(saved);
+  });
+});
+
+describe('deleteCalendarEvent', () => {
+  // delete().eq().select() resolves with the rows that were deleted.
+  function mockDeleteResult(result: { data: unknown; error: unknown }) {
+    mockQuery.select.mockResolvedValue(result);
+  }
+
+  it('deletes the event by its ID and asks which rows were deleted', async () => {
+    mockDeleteResult({ data: [{ id: 'event-1' }], error: null });
+
+    await deleteCalendarEvent('event-1');
+
+    expect(mockQuery.from).toHaveBeenCalledWith('calendar_events');
+    expect(mockQuery.delete).toHaveBeenCalled();
+    expect(mockQuery.eq).toHaveBeenCalledWith('id', 'event-1');
+    expect(mockQuery.select).toHaveBeenCalledWith('id');
+  });
+
+  it('throws the Supabase error', async () => {
+    const error = new Error('Network request failed');
+    mockDeleteResult({ data: null, error });
+
+    await expect(deleteCalendarEvent('event-1')).rejects.toBe(error);
+  });
+
+  // Row Level Security hides other students' events, so deleting one deletes nothing (AC7).
+  it('throws when nothing was deleted, such as another student\'s event', async () => {
+    mockDeleteResult({ data: [], error: null });
+
+    await expect(deleteCalendarEvent('someone-elses-event')).rejects.toThrow(
+      'Calendar event could not be found or deleted.',
+    );
+  });
+
+  it('removes the event from memory while the login skip is on', async () => {
+    mockDevFlags.skipAuth = true;
+    const range = [new Date('2026-11-13T00:00:00.000Z'), new Date('2026-11-14T00:00:00.000Z')] as const;
+    const saved = await createCalendarEvent({
+      title: 'Chem Lab',
+      startAt: '2026-11-13T17:00:00.000Z',
+      endAt: '2026-11-13T18:00:00.000Z',
+    });
+
+    await deleteCalendarEvent(saved.id);
+
+    expect(mockQuery.from).not.toHaveBeenCalled();
+    expect(await getCalendarEventsInRange(...range)).not.toContainEqual(saved);
   });
 });
