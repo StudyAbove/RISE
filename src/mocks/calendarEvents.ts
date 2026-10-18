@@ -30,6 +30,8 @@ const SAMPLE_EVENTS: SampleEvent[] = [
 // Events added with the Add Event form while the login skip is on. They only
 // live in memory, so they disappear when the app reloads.
 let addedEvents: CalendarEvent[] = [];
+// IDs of events deleted while the login skip is on, so samples stay hidden too.
+let deletedIds = new Set<string>();
 
 /** Saves an event in memory, standing in for Supabase while the login skip is on. */
 export function addMockCalendarEvent(input: NewCalendarEvent): CalendarEvent {
@@ -43,9 +45,16 @@ export function addMockCalendarEvent(input: NewCalendarEvent): CalendarEvent {
   return event;
 }
 
-/** Clears the in-memory events. For tests only. */
+/** Deletes an event in memory, standing in for Supabase while the login skip is on. */
+export function deleteMockCalendarEvent(eventId: string) {
+  addedEvents = addedEvents.filter((event) => event.id !== eventId);
+  deletedIds = new Set(deletedIds).add(eventId);
+}
+
+/** Clears the in-memory events and deletions. For tests only. */
 export function clearAddedMockCalendarEvents() {
   addedEvents = [];
+  deletedIds = new Set();
 }
 
 /** Sample events, plus any added in memory, used instead of Supabase while the dev login skip is on. */
@@ -69,6 +78,9 @@ export function getMockCalendarEvents(rangeStart: Date, rangeEnd: Date): Calenda
 
   return [...samples, ...addedEvents].filter(
     // Same overlap rule as the Supabase query. UTC ISO strings sort in time order.
-    (event) => event.startAt < rangeEnd.toISOString() && event.endAt > rangeStart.toISOString()
+    (event) =>
+      !deletedIds.has(event.id) &&
+      event.startAt < rangeEnd.toISOString() &&
+      event.endAt > rangeStart.toISOString()
   );
 }

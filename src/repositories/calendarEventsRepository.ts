@@ -2,6 +2,7 @@ import { DEV_SKIP_AUTH } from '../lib/devFlags';
 import { supabase } from '../lib/supabase';
 import {
   addMockCalendarEvent,
+  deleteMockCalendarEvent,
   getMockCalendarEvents,
 } from '../mocks/calendarEvents';
 
@@ -382,4 +383,48 @@ export async function createCalendarEvent(
   return toCalendarEvent(
     data as CalendarEventRow,
   );
+}
+
+/**
+ * Permanently deletes one of the student's events (#80). Its
+ * calendar_event_links rows are deleted with it by the database.
+ *
+ * Row-level security only lets students delete their own events, so
+ * a row that isn't theirs (or doesn't exist) deletes nothing; that
+ * counts as a failure instead of passing silently.
+ *
+ * Copies in Apple or Google Calendar are handled separately, before
+ * this runs.
+ */
+export async function deleteCalendarEvent(
+  eventId: string,
+): Promise<void> {
+  if (DEV_SKIP_AUTH) {
+    // No one is signed in, so Supabase would reject the delete.
+    deleteMockCalendarEvent(eventId);
+    return;
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('calendar_events')
+      .delete()
+      .eq(
+        'id',
+        eventId,
+      )
+      .select('id');
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Calendar event could not be found or deleted.',
+    );
+  }
 }
