@@ -1,5 +1,8 @@
+import { DEV_SKIP_AUTH } from '../../../lib/devFlags';
+
 import type {
   CalendarEvent,
+  NewCalendarEvent,
 } from '../../../models/CalendarEvent';
 
 import type {
@@ -9,18 +12,26 @@ import type {
 import {
   getCalendarEventLinks,
   markCalendarEventLinkSynced,
+  saveCalendarEventLink,
 } from '../../../repositories/calendarEventLinksRepository';
 
 import {
+  createCalendarEvent,
   updateCalendarEvent,
   type UpdateCalendarEventInput,
 } from '../../../repositories/calendarEventsRepository';
 
 import {
+  createAppleCalendarEvent,
+  deleteAppleCalendarEvent,
   updateAppleCalendarEvent,
 } from './calendarService';
 
+import { checkCalendarProviders } from './connectedCalendars';
+
 import {
+  createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
   updateGoogleCalendarEvent,
 } from './googleCalendarService';
 
@@ -368,6 +379,127 @@ export async function updateCalendarEventWithSync(
 
     providerResults,
   };
+}
+
+/**
+ * Deletes a copy RISE just added to Google or Apple Calendar but couldn't
+ * link. Without a link, the next import would bring it back into RISE as a
+ * duplicate. If deleting fails too, the duplicate can't be prevented here,
+ * so it's only logged.
+ */
+async function removeUnlinkedCopy(
+  provider: ExternalCalendarProvider,
+  created: { externalEventId: string; externalCalendarId: string },
+  startAt: string,
+) {
+  try {
+    if (provider === 'google') {
+      await deleteGoogleCalendarEvent(created.externalEventId, created.externalCalendarId);
+    } else {
+      await deleteAppleCalendarEvent(created.externalEventId, startAt);
+    }
+  } catch (error) {
+    console.log(
+      `Could not remove the unlinked ${provider} Calendar event; it may be imported as a duplicate:`,
+      getSyncErrorMessage(error),
+    );
+  }
+}
+
+/**
+ * Saves an event the student made in RISE, then adds it to each connected
+ * Google or Apple calendar (#123).
+ *
+ * Like editing, RISE comes first: if saving in RISE fails, this throws and
+ * nothing is sent anywhere. After that, each calendar is tried on its own, and
+ * a calendar that fails never undoes the RISE save or stops the other one.
+ *
+ * Each new external copy gets a link back to the RISE event. The link is what
+ * lets later edits reach that copy, and what stops the next import from
+ * bringing it back into RISE as a duplicate. So if the link can't be saved,
+ * the copy is deleted again and that calendar counts as failed.
+ *
+ * Status: 'saved-only' when no calendar is connected, 'synced' / 'partial' /
+ * 'failed' otherwise. A calendar whose connection couldn't be checked counts
+ * as failed.
+ */
+export async function createCalendarEventWithSync(
+  input: NewCalendarEvent,
+): Promise<CalendarEventSyncResult> {
+  const event = await createCalendarEvent(input);
+
+  // With the dev login skip on, no one is signed in, so nothing is connected.
+  if (DEV_SKIP_AUTH) {
+    return { event, status: 'saved-only', providerResults: [] };
+  }
+
+  const providerResults: ProviderSyncResult[] = [];
+  const providers: ExternalCalendarProvider[] = [];
+
+  // Each calendar is checked on its own, so a problem checking one doesn't
+  // stop the event from reaching the other.
+  for (const check of await checkCalendarProviders()) {
+    if (check.status === 'connected') {
+      providers.push(check.provider);
+    } else if (check.status === 'check-failed') {
+      const message = getSyncErrorMessage(check.error);
+      console.log(`Could not check whether ${check.provider} Calendar is connected:`, message);
+      providerResults.push({ provider: check.provider, status: 'failed', error: message });
+    }
+  }
+
+  if (providers.length === 0 && providerResults.length === 0) {
+    return { event, status: 'saved-only', providerResults: [] };
+  }
+
+  const details = {
+    title: event.title,
+    startAt: event.startAt,
+    endAt: event.endAt,
+    location: event.location,
+    description: event.description,
+    reminderMinutes: event.reminderMinutes,
+  };
+
+  for (const provider of providers) {
+    let created: { externalEventId: string; externalCalendarId: string; updatedAt?: string };
+
+    try {
+      created =
+        provider === 'google'
+          ? await createGoogleCalendarEvent(details)
+          : await createAppleCalendarEvent(details);
+    } catch (error) {
+      const message = getSyncErrorMessage(error);
+      console.log(`Could not add the event to ${provider} Calendar:`, message);
+      providerResults.push({ provider, status: 'failed', error: message });
+      continue;
+    }
+
+    try {
+      await saveCalendarEventLink({
+        calendarEventId: event.id,
+        userId: event.userId,
+        provider,
+        externalEventId: created.externalEventId,
+        externalCalendarId: created.externalCalendarId,
+        externalUpdatedAt: created.updatedAt,
+      });
+
+      providerResults.push({ provider, status: 'synced' });
+    } catch (error) {
+      const message = getSyncErrorMessage(error);
+      console.log(`Could not link the new ${provider} Calendar event:`, message);
+      await removeUnlinkedCopy(provider, created, event.startAt);
+      providerResults.push({ provider, status: 'failed', error: message });
+    }
+  }
+
+  const successfulCount = providerResults.filter((result) => result.status === 'synced').length;
+  const status =
+    successfulCount === providerResults.length ? 'synced' : successfulCount === 0 ? 'failed' : 'partial';
+
+  return { event, status, providerResults };
 }
 
 /**

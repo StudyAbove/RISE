@@ -13,9 +13,11 @@ import {
 import { format } from 'date-fns';
 
 import CloseIcon from '../../../../../assets/icons/calendar/close.svg';
-import type { CalendarEvent } from '../../../../models/CalendarEvent';
-import { createCalendarEvent } from '../../../../repositories/calendarEventsRepository';
 import { colors } from '../../../../theme/colors';
+import {
+  createCalendarEventWithSync,
+  type CalendarEventSyncResult,
+} from '../../services/calendarEventSyncService';
 import {
   buildNewCalendarEvent,
   EMPTY_ADD_EVENT_FORM,
@@ -57,8 +59,12 @@ const START_OPTIONS = START_TIME_OPTIONS.map((minute) => ({ value: minute, label
 interface AddEventSheetProps {
   visible: boolean;
   onClose: () => void;
-  /** Called with the event as saved; the calendar then closes the sheet and refreshes. */
-  onSaved: (event: CalendarEvent) => void;
+  /**
+   * Called with the saved event and how adding it to connected Google or Apple
+   * calendars went; the calendar then closes the sheet, refreshes, and says
+   * if a calendar didn't get it.
+   */
+  onSaved: (result: CalendarEventSyncResult) => void;
 }
 
 /**
@@ -149,9 +155,11 @@ export function AddEventSheet({ visible, onClose, onSaved }: AddEventSheetProps)
 
     setSaveStatus('saving');
     try {
-      const saved = await createCalendarEvent(buildNewCalendarEvent(values));
+      // Saves in RISE, then adds the event to any connected Google or Apple
+      // calendar. Only a failed RISE save lands in the catch below.
+      const result = await createCalendarEventWithSync(buildNewCalendarEvent(values));
       setSaveStatus('idle');
-      onSaved(saved);
+      onSaved(result);
     } catch (error) {
       console.log('Could not add event:', (error as Error).message);
       // The form keeps everything the student entered so they can try again.

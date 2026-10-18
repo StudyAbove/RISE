@@ -25,6 +25,16 @@ export interface CalendarEventConflictVersion {
   location?: string;
   description?: string;
   updatedAt?: string;
+
+  /**
+   * True when this provider version represents the event having
+   * been deleted from that connected calendar.
+   *
+   * The remaining fields preserve the last known event snapshot,
+   * but conflict UI/resolution treats deletion as the provider's
+   * actual choice when this flag is true.
+   */
+  deleted?: boolean;
 }
 
 export interface CalendarEventConflict {

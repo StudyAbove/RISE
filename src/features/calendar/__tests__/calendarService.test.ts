@@ -4,6 +4,7 @@ import {
 } from 'expo-calendar';
 
 import {
+  deleteAppleCalendarEvent,
   getAppleCalendarAccess,
   updateAppleCalendarEvent,
 } from '../services/calendarService';
@@ -492,3 +493,54 @@ describe(
     );
   },
 );
+
+describe('deleteAppleCalendarEvent', () => {
+  const startAt = '2026-11-13T17:00:00.000Z';
+
+  beforeEach(() => {
+    // Drop the update fakes queued above for the update tests.
+    mockGetAppleEvent.mockReset();
+    mockGetCalendarPermissions.mockResolvedValue({ status: 'granted', accessPrivileges: 'full' });
+  });
+
+  it('deletes a one-time event', async () => {
+    const appleEvent = { delete: jest.fn() };
+    mockGetAppleEvent.mockResolvedValue(appleEvent);
+
+    await deleteAppleCalendarEvent('apple-event-1', startAt);
+
+    expect(mockGetAppleEvent).toHaveBeenCalledWith('apple-event-1');
+    expect(appleEvent.delete).toHaveBeenCalled();
+  });
+
+  it('deletes only the occurrence on that date of a repeating event', async () => {
+    const occurrence = { delete: jest.fn() };
+    const series = { recurrenceRule: { frequency: 'weekly' }, delete: jest.fn(), getOccurrenceSync: jest.fn(() => occurrence) };
+    mockGetAppleEvent.mockResolvedValue(series);
+
+    await deleteAppleCalendarEvent('apple-event-1', startAt);
+
+    expect(series.getOccurrenceSync).toHaveBeenCalledWith({ instanceStartDate: startAt });
+    expect(occurrence.delete).toHaveBeenCalled();
+    expect(series.delete).not.toHaveBeenCalled();
+  });
+
+  it('counts an event that is already gone as deleted', async () => {
+    mockGetAppleEvent.mockRejectedValue(new Error('Event not found'));
+
+    await expect(deleteAppleCalendarEvent('apple-event-1', startAt)).resolves.toBeUndefined();
+  });
+
+  it('needs Full Calendar Access', async () => {
+    mockGetCalendarPermissions.mockResolvedValue({ status: 'denied' });
+
+    await expect(deleteAppleCalendarEvent('apple-event-1', startAt)).rejects.toThrow('APPLE_CALENDAR_NOT_CONNECTED');
+    expect(mockGetAppleEvent).not.toHaveBeenCalled();
+  });
+
+  it('throws when Apple Calendar cannot delete the event', async () => {
+    mockGetAppleEvent.mockResolvedValue({ delete: jest.fn().mockRejectedValue(new Error('read-only calendar')) });
+
+    await expect(deleteAppleCalendarEvent('apple-event-1', startAt)).rejects.toThrow('read-only calendar');
+  });
+});

@@ -1548,18 +1548,42 @@ export function EditCalendarEventModal({
           {label}
         </Text>
 
-        <View
-          style={
-            localStyles.versionField
-          }
-        >
-          <Text
+        {version.deleted ? (
+          <View
             style={
-              localStyles.versionLabel
+              localStyles.versionField
             }
           >
-            Title
-          </Text>
+            <Text
+              style={
+                localStyles.versionLabel
+              }
+            >
+              Status
+            </Text>
+
+            <Text
+              style={
+                localStyles.versionValue
+              }
+            >
+              Deleted
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View
+              style={
+                localStyles.versionField
+              }
+            >
+              <Text
+                style={
+                  localStyles.versionLabel
+                }
+              >
+                Title
+              </Text>
 
           <Text
             style={
@@ -1630,15 +1654,17 @@ export function EditCalendarEventModal({
             Description
           </Text>
 
-          <Text
-            style={
-              localStyles.versionValue
-            }
-          >
-            {version.description?.trim() ||
-              'No description'}
-          </Text>
-        </View>
+              <Text
+                style={
+                  localStyles.versionValue
+                }
+              >
+                {version.description?.trim() ||
+                  'No description'}
+              </Text>
+            </View>
+          </>
+        )}
       </View>
     );
   }
@@ -1676,7 +1702,7 @@ export function EditCalendarEventModal({
             localStyles.conflictIntro
           }
         >
-          This event was changed in more than one place. Compare each version and choose the one you want RISE and your connected calendars to keep.
+          This event was changed or deleted in more than one place. Compare each version and choose the result you want RISE and your connected calendars to keep.
         </Text>
 
         {renderConflictVersion(
@@ -1800,7 +1826,11 @@ export function EditCalendarEventModal({
           {appleConflict && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Keep Apple Calendar version"
+              accessibilityLabel={
+                appleConflict.providerVersion.deleted
+                  ? 'Keep Apple Calendar deletion'
+                  : 'Keep Apple Calendar version'
+              }
               disabled={
                 resolving
               }
@@ -1830,7 +1860,9 @@ export function EditCalendarEventModal({
                     localStyles.secondaryResolutionButtonText
                   }
                 >
-                  Keep Apple
+                  {appleConflict.providerVersion.deleted
+                    ? 'Keep Apple Deletion'
+                    : 'Keep Apple'}
                 </Text>
               )}
             </Pressable>
@@ -1839,7 +1871,11 @@ export function EditCalendarEventModal({
           {googleConflict && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Keep Google Calendar version"
+              accessibilityLabel={
+                googleConflict.providerVersion.deleted
+                  ? 'Keep Google Calendar deletion'
+                  : 'Keep Google Calendar version'
+              }
               disabled={
                 resolving
               }
@@ -1869,44 +1905,15 @@ export function EditCalendarEventModal({
                     localStyles.secondaryResolutionButtonText
                   }
                 >
-                  Keep Google
+                  {googleConflict.providerVersion.deleted
+                    ? 'Keep Google Deletion'
+                    : 'Keep Google'}
                 </Text>
               )}
             </Pressable>
           )}
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to edit event"
-          disabled={
-            resolving
-          }
-          onPress={() => {
-            setResolutionError(
-              null,
-            );
-
-            setFailedWinner(
-              null,
-            );
-
-            setReviewingConflict(
-              false,
-            );
-          }}
-          style={
-            localStyles.backButton
-          }
-        >
-          <Text
-            style={
-              localStyles.backButtonText
-            }
-          >
-            Back to Edit Event
-          </Text>
-        </Pressable>
       </ScrollView>
     );
   }
@@ -2435,8 +2442,7 @@ export function EditCalendarEventModal({
             </Pressable>
           </View>
 
-          {reviewingConflict &&
-          hasConflict
+          {hasConflict
             ? renderConflictReview()
             : renderEditForm()}
         </KeyboardAvoidingView>

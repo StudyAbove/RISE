@@ -8,6 +8,7 @@ import {
 import {
   Alert,
   AppState,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -46,6 +47,7 @@ import {
 } from '../../../repositories/calendarEventLinksRepository';
 
 import { AddEventSheet } from '../components/addEvent/AddEventSheet';
+import { AddEventSyncNotice } from '../components/AddEventSyncNotice';
 import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
@@ -54,6 +56,7 @@ import {
   type CalendarConflictPickerItem,
 } from '../components/CalendarConflictPickerModal';
 import { EditCalendarEventModal } from '../components/EditCalendarEventModal';
+import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
 import { TodayEventsCard } from '../components/TodayEventsCard';
@@ -73,16 +76,12 @@ import {
 } from '../services/calendarBackgroundSyncService';
 
 import {
-  getCalendarConnection,
-} from '../services/calendarConnectionService';
+  getConnectedCalendarProviders,
+} from '../services/connectedCalendars';
 
 import type {
   CalendarEventSyncResult,
 } from '../services/calendarEventSyncService';
-
-import {
-  getAppleCalendarAccess,
-} from '../services/calendarService';
 
 import {
   getTimeGridDays,
@@ -90,6 +89,8 @@ import {
   shiftAnchorDate,
   type CalendarViewMode,
 } from '../utils/calendarDates';
+
+import { getAddEventSyncMessage } from '../utils/addEventSyncMessage';
 
 import { styles } from './CalendarScreen.styles';
 
@@ -154,11 +155,36 @@ export function CalendarScreen() {
   ] =
     useState(false);
 
+  // Tapping an event shows its details first (#34); Edit opens the edit modal from there.
+  const [
+    detailsVisible,
+    setDetailsVisible,
+  ] =
+    useState(false);
+
+  // Set when Edit is pressed, so the edit modal opens once the details sheet has closed.
+  const openEditAfterDetailsRef =
+    useRef(false);
+
   const [
     selectedEventReadOnly,
     setSelectedEventReadOnly,
   ] =
     useState(false);
+
+  /*
+   * Imported Apple/Google events can represent the same external event
+   * after cross-provider deduplication, such as a holiday that exists in
+   * both calendars.
+   *
+   * RISE-created events still display "From RISE" even when #123 created
+   * provider copies for them.
+   */
+  const [
+    selectedEventProviders,
+    setSelectedEventProviders,
+  ] =
+    useState<Array<'apple' | 'google'>>([]);
 
   const [
     startEditModalInConflictReview,
@@ -171,6 +197,18 @@ export function CalendarScreen() {
     setIsAddingEvent,
   ] =
     useState(false);
+
+  // Says when a new event didn't reach a connected Google or Apple calendar (#123).
+  const [
+    addEventNotice,
+    setAddEventNotice,
+  ] =
+    useState<string | null>(null);
+
+  const dismissAddEventNotice =
+    useCallback(() => {
+      setAddEventNotice(null);
+    }, []);
 
   const [
     todayCardRefreshKey,
@@ -346,15 +384,18 @@ export function CalendarScreen() {
    * Google Calendar, and refresh every view and the today card (AC3).
    */
   function handleEventAdded(
-    event: CalendarEvent,
+    result: CalendarEventSyncResult,
   ) {
     setIsAddingEvent(false);
     setAnchorDate(
       startOfDay(
-        parseISO(event.startAt),
+        parseISO(result.event.startAt),
       ),
     );
     refreshCalendar();
+    setAddEventNotice(
+      getAddEventSyncMessage(result),
+    );
   }
 
   /*
@@ -434,52 +475,6 @@ export function CalendarScreen() {
   }, [
     refreshCalendar,
   ]);
-
-  const getConnectedCalendarProviders =
-    useCallback(
-      async (): Promise<
-        ConnectedCalendarProvider[]
-      > => {
-        const [
-          appleConnection,
-          googleConnection,
-          appleAccess,
-        ] =
-          await Promise.all([
-            getCalendarConnection(
-              'apple',
-            ),
-            getCalendarConnection(
-              'google',
-            ),
-            getAppleCalendarAccess(),
-          ]);
-
-        const providers:
-          ConnectedCalendarProvider[] =
-          [];
-
-        if (
-          appleConnection?.connected &&
-          appleAccess === 'full'
-        ) {
-          providers.push(
-            'apple',
-          );
-        }
-
-        if (
-          googleConnection?.connected
-        ) {
-          providers.push(
-            'google',
-          );
-        }
-
-        return providers;
-      },
-      [],
-    );
 
   const loadLatestSuccessfulSync =
     useCallback(
@@ -1158,17 +1153,18 @@ export function CalendarScreen() {
         ),
     );
 
-  async function openEditEvent(
+  /*
+   * Load provider-link information before showing Event Details.
+   *
+   * This prevents Edit/Delete from briefly appearing for a read-only event
+   * while permissions are still being checked.
+   */
+  async function openEventDetails(
     event: CalendarEvent,
-    startInConflictReview: boolean,
   ) {
-    /*
-     * Writability belongs to the provider link, not the RISE event.
-     * A single RISE event may be linked to both Apple and Google, and
-     * either provider can independently be read-only.
-     */
-    let readOnly =
-      false;
+    let readOnly = false;
+    let providers: Array<'apple' | 'google'> =
+      [];
 
     try {
       const links =
@@ -1182,53 +1178,115 @@ export function CalendarScreen() {
             link.isWritable ===
             false,
         );
+
+      /*
+       * Only imported provider events use their links to determine the
+       * displayed source. A RISE event can have Apple/Google links simply
+       * because RISE synchronized copies outward, so it must remain
+       * "From RISE".
+       */
+      if (
+        event.source === 'apple' ||
+        event.source === 'google'
+      ) {
+        const linkedProviders =
+          new Set(
+            links.map(
+              (link) =>
+                link.provider,
+            ),
+          );
+
+        // Keep the combined holiday label deterministic.
+        providers = (
+          [
+            'apple',
+            'google',
+          ] as const
+        ).filter(
+          (provider) =>
+            linkedProviders.has(
+              provider,
+            ),
+        );
+
+        /*
+         * Older/imported data may temporarily have no stored link.
+         * Fall back to CalendarEvent.source instead of losing its source.
+         */
+        if (
+          providers.length ===
+          0
+        ) {
+          providers = [
+            event.source,
+          ];
+        }
+      }
     } catch (error) {
       /*
-       * Fail closed. If RISE cannot verify provider permissions,
-       * do not risk exposing editable controls for an externally
-       * controlled event.
+       * Fail closed for editing if link permissions cannot be verified.
+       * The event can still be viewed in Details.
        */
       console.log(
-        'Could not load calendar event writability:',
+        'Could not load calendar event links:',
         error,
       );
 
-      readOnly =
-        true;
+      readOnly = true;
+
+      if (
+        event.source === 'apple' ||
+        event.source === 'google'
+      ) {
+        providers = [
+          event.source,
+        ];
+      }
     }
+
+    openEditAfterDetailsRef.current =
+      false;
 
     setSelectedEventReadOnly(
       readOnly,
     );
 
+    setSelectedEventProviders(
+      providers,
+    );
+
     setStartEditModalInConflictReview(
-      startInConflictReview,
+      false,
     );
 
     setSelectedEvent(
       event,
     );
 
-    setEditModalVisible(
+    setDetailsVisible(
       true,
     );
   }
 
+  /*
+   * Tapping any event opens Event Details first (#34).
+   */
   function handleEventPress(
     event: CalendarEvent,
   ) {
-    void openEditEvent(
+    void openEventDetails(
       event,
-      false,
     );
   }
 
-  function handleConflictEventPress(
-    event: CalendarEvent,
-  ) {
-    void openEditEvent(
-      event,
-      true,
+  /*
+   * Keeps selectedEvent until the sheet finishes sliding away so its
+   * details do not disappear during the closing animation.
+   */
+  function handleCloseDetails() {
+    setDetailsVisible(
+      false,
     );
   }
 
@@ -1243,7 +1301,7 @@ export function CalendarScreen() {
       );
 
     if (visibleEvent) {
-      handleConflictEventPress(
+      handleEventPress(
         visibleEvent,
       );
 
@@ -1269,7 +1327,7 @@ export function CalendarScreen() {
         return;
       }
 
-      handleConflictEventPress(
+      handleEventPress(
         event,
       );
     } catch (error) {
@@ -1311,7 +1369,7 @@ export function CalendarScreen() {
       uniqueEvents.length ===
       1
     ) {
-      handleConflictEventPress(
+      handleEventPress(
         uniqueEvents[0],
       );
 
@@ -1421,6 +1479,108 @@ export function CalendarScreen() {
     );
   }
 
+  /*
+   * iOS cannot show a new modal while the details sheet is still closing.
+   * When Edit or Review Conflict requests the edit modal, wait for the
+   * details sheet to finish dismissing first.
+   */
+  function handleDetailsDismissed() {
+    if (
+      openEditAfterDetailsRef.current
+    ) {
+      openEditAfterDetailsRef.current =
+        false;
+
+      setEditModalVisible(
+        true,
+      );
+
+      return;
+    }
+
+    setSelectedEvent(
+      null,
+    );
+
+    setSelectedEventReadOnly(
+      false,
+    );
+
+    setSelectedEventProviders(
+      [],
+    );
+
+    setStartEditModalInConflictReview(
+      false,
+    );
+  }
+
+  async function handleEditFromDetails() {
+    if (!selectedEvent) {
+      return;
+    }
+
+    /*
+     * A conflicted event must be resolved before normal editing.
+     * The Details UI will hide Edit too, but keep this guard here so
+     * the rule is enforced even if the UI changes later.
+     */
+    if (
+      selectedEventConflicts.length >
+      0
+    ) {
+      return;
+    }
+
+    setStartEditModalInConflictReview(
+      false,
+    );
+
+    openEditAfterDetailsRef.current =
+      true;
+
+    setDetailsVisible(
+      false,
+    );
+
+    // onDismiss only fires on iOS.
+    if (
+      Platform.OS !==
+      'ios'
+    ) {
+      handleDetailsDismissed();
+    }
+  }
+
+  async function handleReviewConflictFromDetails() {
+    if (
+      !selectedEvent ||
+      selectedEventConflicts.length ===
+        0
+    ) {
+      return;
+    }
+
+    setStartEditModalInConflictReview(
+      true,
+    );
+
+    openEditAfterDetailsRef.current =
+      true;
+
+    setDetailsVisible(
+      false,
+    );
+
+    // onDismiss only fires on iOS.
+    if (
+      Platform.OS !==
+      'ios'
+    ) {
+      handleDetailsDismissed();
+    }
+  }
+
   function handleCloseEditModal() {
     setEditModalVisible(
       false,
@@ -1432,6 +1592,10 @@ export function CalendarScreen() {
 
     setSelectedEventReadOnly(
       false,
+    );
+
+    setSelectedEventProviders(
+      [],
     );
 
     setStartEditModalInConflictReview(
@@ -1822,6 +1986,17 @@ export function CalendarScreen() {
             retry
           }
         />
+
+        {addEventNotice && (
+          <AddEventSyncNotice
+            message={
+              addEventNotice
+            }
+            onDismiss={
+              dismissAddEventNotice
+            }
+          />
+        )}
       </View>
 
       <CalendarConflictPickerModal
@@ -1836,6 +2011,37 @@ export function CalendarScreen() {
         }
         onClose={
           handleCloseConflictPicker
+        }
+      />
+
+      <EventDetailsSheet
+        visible={
+          detailsVisible
+        }
+        event={
+          selectedEvent
+        }
+        hasUnresolvedConflict={
+          selectedEventConflicts.length >
+          0
+        }
+        readOnly={
+          selectedEventReadOnly
+        }
+        providerSources={
+          selectedEventProviders
+        }
+        onClose={
+          handleCloseDetails
+        }
+        onEdit={
+          handleEditFromDetails
+        }
+        onReviewConflict={
+          handleReviewConflictFromDetails
+        }
+        onDismiss={
+          handleDetailsDismissed
         }
       />
 

@@ -6,8 +6,15 @@ import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { AddEventSheet } from '../components/addEvent/AddEventSheet';
 
 const mockCreateCalendarEvent = jest.fn();
-jest.mock('../../../repositories/calendarEventsRepository', () => ({
-  createCalendarEvent: (...args: unknown[]) => mockCreateCalendarEvent(...args),
+// The form's job ends at handing the event to the sync service, so that's
+// faked here; mockCreateCalendarEvent stands in for the RISE save, and no
+// external calendar is connected.
+jest.mock('../services/calendarEventSyncService', () => ({
+  createCalendarEventWithSync: async (input: unknown) => ({
+    event: await mockCreateCalendarEvent(input),
+    status: 'saved-only',
+    providerResults: [],
+  }),
 }));
 
 // Shows a saved time in the phone's time zone, e.g. "2026-11-18 09:00".
@@ -112,7 +119,7 @@ describe('AddEventSheet', () => {
       expect(saved.title).toBe('Chem Lab');
       expect(localTime(saved.startAt)).toBe('2026-11-18 09:00');
       expect(localTime(saved.endAt)).toBe('2026-11-18 10:00');
-      expect(onSaved).toHaveBeenCalledWith(savedEvent);
+      expect(onSaved).toHaveBeenCalledWith({ event: savedEvent, status: 'saved-only', providerResults: [] });
     });
 
     it('saves a chosen end time, type, location, and reminder', async () => {
@@ -200,7 +207,7 @@ describe('AddEventSheet', () => {
 
       await act(async () => finishSaving(savedEvent));
       await tap;
-      expect(onSaved).toHaveBeenCalledWith(savedEvent);
+      expect(onSaved).toHaveBeenCalledWith({ event: savedEvent, status: 'saved-only', providerResults: [] });
     });
 
     it('keeps what was entered and explains when saving fails', async () => {

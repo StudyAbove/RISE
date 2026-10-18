@@ -412,3 +412,40 @@ export async function createCalendarEvent(
     data as CalendarEventRow,
   );
 }
+
+/**
+ * Deletes one RISE calendar event.
+ *
+ * Database foreign keys cascade the deletion to its calendar links and
+ * conflict records. Provider copies must be handled by the sync/resolution
+ * service before this function is called when those copies still exist.
+ */
+export async function deleteCalendarEvent(
+  eventId: string,
+): Promise<void> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('calendar_events')
+      .delete()
+      .eq(
+        'id',
+        eventId,
+      )
+      .select(
+        'id',
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error(
+      'Calendar event could not be found or deleted.',
+    );
+  }
+}

@@ -10,6 +10,7 @@ import type {
 
 import {
   createImportedCalendarEvent,
+  deleteCalendarEvent,
   getCalendarEventsByIdsForSync,
   updateCalendarEvent,
   type CalendarEventSyncRecord,
@@ -34,6 +35,7 @@ import {
 } from '../utils/academicTermRange';
 
 import {
+  appleCalendarEventExists,
   getAppleCalendarAccess,
   updateAppleCalendarEvent,
 } from './calendarService';
@@ -461,6 +463,73 @@ async function saveAppleConflict(
 }
 
 /**
+ * Stores an Apple-side deletion as an unresolved conflict.
+ *
+ * The provider snapshot keeps the last known RISE-shaped values only
+ * because the current conflict schema requires those columns. deleted:
+ * true is the meaningful Apple state and the conflict UI/resolver must
+ * treat Apple as deleted instead of displaying these placeholder fields.
+ */
+async function saveAppleDeletionConflict(
+  riseEvent: CalendarEventSyncRecord,
+  link: CalendarEventLink,
+) {
+  await saveCalendarEventConflict({
+    calendarEventId:
+      riseEvent.id,
+
+    calendarEventLinkId:
+      link.id,
+
+    userId:
+      link.userId,
+
+    provider:
+      'apple',
+
+    riseVersion: {
+      title:
+        riseEvent.title,
+
+      startAt:
+        riseEvent.startAt,
+
+      endAt:
+        riseEvent.endAt,
+
+      location:
+        riseEvent.location,
+
+      description:
+        riseEvent.description,
+
+      updatedAt:
+        riseEvent.updatedAt,
+    },
+
+    providerVersion: {
+      title:
+        riseEvent.title,
+
+      startAt:
+        riseEvent.startAt,
+
+      endAt:
+        riseEvent.endAt,
+
+      location:
+        riseEvent.location,
+
+      description:
+        riseEvent.description,
+
+      deleted:
+        true,
+    },
+  });
+}
+
+/**
  * Reads existing events from calendars available through
  * Apple Calendar / iOS EventKit.
  *
@@ -755,6 +824,24 @@ export async function syncAppleCalendarEvents(
       'google',
     );
 
+  /*
+   * A RISE-created event can have both an Apple and Google copy.
+   * Load every Google link, not only all-day links, so Apple cannot
+   * overwrite the RISE hub before Google has been considered.
+   */
+  const otherProviderLinks =
+    await getCalendarEventLinksByProvider(
+      'google',
+    );
+
+  const otherProviderEventIds =
+    new Set(
+      otherProviderLinks.map(
+        (link) =>
+          link.calendarEventId,
+      ),
+    );
+
   const linksByExternalId =
     new Map(
       existingLinks.map(
@@ -797,6 +884,141 @@ export async function syncAppleCalendarEvents(
   let skipped = 0;
   let failed = 0;
   let conflicts = 0;
+
+  /*
+   * Detect Apple events that existed during the previous sync but are
+   * no longer returned by EventKit.
+   *
+   * Only inspect linked RISE events that overlap the same academic-term
+   * range queried from Apple. A linked event outside that window is not
+   * evidence of deletion merely because EventKit did not return it.
+   */
+  const returnedAppleEventIds =
+    new Set(
+      candidates.map(
+        (candidate) =>
+          candidate.externalEventId,
+      ),
+    );
+
+  for (
+    const link
+    of existingLinks
+  ) {
+    if (
+      returnedAppleEventIds.has(
+        link.externalEventId,
+      )
+    ) {
+      continue;
+    }
+
+    const riseEvent =
+      riseEventsById.get(
+        link.calendarEventId,
+      );
+
+    if (!riseEvent) {
+      continue;
+    }
+
+    const overlapsSyncRange =
+      new Date(
+        riseEvent.startAt,
+      ).getTime() <
+        end.getTime() &&
+      new Date(
+        riseEvent.endAt,
+      ).getTime() >
+        start.getTime();
+
+    if (!overlapsSyncRange) {
+      continue;
+    }
+
+    /*
+     * Not appearing in the academic-term query does not necessarily mean
+     * the Apple event was deleted. It may simply have been moved outside
+     * the term. Check the linked EventKit ID directly before treating the
+     * missing candidate as a deletion.
+     */
+    try {
+      const appleEventStillExists =
+        await appleCalendarEventExists(
+          link.externalEventId,
+        );
+
+      if (appleEventStillExists) {
+        skipped += 1;
+        continue;
+      }
+    } catch (error) {
+      failed += 1;
+
+      console.log(
+        'Apple Calendar missing-event verification failed:',
+        link.externalEventId,
+        error,
+      );
+
+      continue;
+    }
+
+    /*
+     * A RISE-created event still exists centrally, but its Apple copy
+     * was deliberately removed. Preserve RISE and store deletion as
+     * Apple's competing version so the student chooses what wins.
+     */
+    if (
+      riseEvent.source ===
+      'rise'
+    ) {
+      try {
+        await saveAppleDeletionConflict(
+          riseEvent,
+          link,
+        );
+
+        conflicts += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Apple Calendar deletion conflict could not be stored:',
+          link.externalEventId,
+          error,
+        );
+      }
+
+      continue;
+    }
+
+    /*
+     * Apple owns an Apple-imported event. If that original Apple event
+     * disappears, synchronize the deletion into RISE just like an Apple
+     * edit would normally synchronize into RISE.
+     */
+    if (
+      riseEvent.source ===
+      'apple'
+    ) {
+      try {
+        await deleteCalendarEvent(
+          riseEvent.id,
+        );
+
+        skipped += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Apple Calendar deleted event could not be removed from RISE:',
+          link.externalEventId,
+          error,
+        );
+      }
+    }
+  }
 
   for (
     const candidate
@@ -972,6 +1194,72 @@ export async function syncAppleCalendarEvents(
           error,
         );
       }
+
+      continue;
+    }
+
+    /*
+     * A RISE-created event can have provider copies in both Apple
+     * and Google. Do not allow the first provider synchronized to
+     * replace the RISE version before the other provider is checked.
+     *
+     * This is the important three-copy case:
+     *
+     *   RISE
+     *   Apple
+     *   Google
+     *
+     * If Apple changed while the RISE copy did not, preserve both
+     * versions now. Google synchronization can then store its own
+     * conflict against the same untouched RISE version.
+     */
+    const riseChangedForProviderGroup =
+      riseChangedSinceLastSync(
+        riseEvent,
+        existingLink,
+      );
+
+    const appleChangedForProviderGroup =
+      appleChangedSinceLastSync(
+        candidate,
+        existingLink,
+      );
+
+    const isRiseMultiProviderHub =
+      riseEvent.source ===
+        'rise' &&
+      otherProviderEventIds.has(
+        riseEvent.id,
+      );
+
+    if (
+      isRiseMultiProviderHub &&
+      !riseChangedForProviderGroup &&
+      appleChangedForProviderGroup !==
+        false
+    ) {
+      try {
+        await saveAppleConflict(
+          riseEvent,
+          existingLink,
+          candidate,
+        );
+
+        conflicts += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Apple Calendar multi-provider conflict could not be stored:',
+          candidate.externalEventId,
+          error,
+        );
+      }
+
+      console.log(
+        'Apple Calendar multi-provider change preserved for conflict resolution:',
+        candidate.externalEventId,
+      );
 
       continue;
     }

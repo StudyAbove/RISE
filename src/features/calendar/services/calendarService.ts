@@ -1,6 +1,7 @@
 import {
   ExpoCalendarEvent,
   getCalendarPermissions,
+  getDefaultCalendarSync,
   requestCalendarPermissions,
 } from 'expo-calendar';
 
@@ -209,4 +210,189 @@ export async function updateAppleCalendarEvent(
         refreshedEvent.lastModifiedDate,
       ),
   };
+}
+
+export interface AppleCalendarEventCreate {
+  title: string;
+  startAt: string;
+  endAt: string;
+  location?: string;
+  description?: string;
+  /** Minutes before the start to alert the student, e.g. 1440 for 1 day. */
+  reminderMinutes?: number;
+}
+
+export interface AppleCalendarEventCreateResult {
+  externalEventId: string;
+  externalCalendarId: string;
+  updatedAt?: string;
+}
+
+/**
+ * Adds an event the student made in RISE to the phone's default calendar
+ * (#123). Needs Full Access, like updates, since that's what counts as a
+ * connected Apple Calendar.
+ */
+export async function createAppleCalendarEvent(
+  event: AppleCalendarEventCreate,
+): Promise<AppleCalendarEventCreateResult> {
+  const access =
+    await getAppleCalendarAccess();
+
+  if (
+    access !==
+    'full'
+  ) {
+    throw new Error(
+      'APPLE_CALENDAR_NOT_CONNECTED',
+    );
+  }
+
+  let calendar;
+
+  try {
+    calendar =
+      getDefaultCalendarSync();
+  } catch {
+    // For example, the phone has no calendar that new events can go into.
+    throw new Error(
+      'APPLE_DEFAULT_CALENDAR_MISSING',
+    );
+  }
+
+  const created =
+    await calendar.createEvent({
+      title:
+        event.title,
+      startDate:
+        new Date(event.startAt),
+      endDate:
+        new Date(event.endAt),
+      location:
+        event.location?.trim() ||
+        undefined,
+      notes:
+        event.description?.trim() ||
+        undefined,
+      // A negative offset is that many minutes before the start.
+      alarms:
+        event.reminderMinutes
+          ? [
+              {
+                relativeOffset:
+                  -event.reminderMinutes,
+              },
+            ]
+          : undefined,
+    });
+
+  return {
+    externalEventId:
+      created.id,
+    externalCalendarId:
+      created.calendarId ??
+      calendar.id,
+    updatedAt:
+      normalizeAppleModifiedDate(
+        created.lastModifiedDate,
+      ),
+  };
+}
+
+/**
+ * Deletes an event from Apple Calendar, so the next sync doesn't
+ * import it into RISE again. Used to remove a new copy RISE couldn't
+ * link (#123).
+ *
+ * Only the one occurrence on startAt is removed, never a whole
+ * repeating series. An event that is already gone counts as deleted.
+ */
+/**
+ * Checks whether a linked Apple Calendar event still exists.
+ *
+ * This lookup is by EventKit ID instead of by the academic-term date range.
+ * That matters during deletion detection because an event moved outside the
+ * term should not be mistaken for a deleted event.
+ */
+export async function appleCalendarEventExists(
+  externalEventId: string,
+): Promise<boolean> {
+  const access =
+    await getAppleCalendarAccess();
+
+  if (
+    access !==
+    'full'
+  ) {
+    throw new Error(
+      'APPLE_CALENDAR_NOT_CONNECTED',
+    );
+  }
+
+  if (
+    !externalEventId
+  ) {
+    throw new Error(
+      'APPLE_EVENT_ID_MISSING',
+    );
+  }
+
+  try {
+    await ExpoCalendarEvent.get(
+      externalEventId,
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+export async function deleteAppleCalendarEvent(
+  externalEventId: string,
+  startAt: string,
+): Promise<void> {
+  const access =
+    await getAppleCalendarAccess();
+
+  if (
+    access !==
+    'full'
+  ) {
+    throw new Error(
+      'APPLE_CALENDAR_NOT_CONNECTED',
+    );
+  }
+
+  if (
+    !externalEventId
+  ) {
+    throw new Error(
+      'APPLE_EVENT_ID_MISSING',
+    );
+  }
+
+  let appleEvent:
+    ExpoCalendarEvent;
+
+  try {
+    // Throws when no event has this ID anymore.
+    appleEvent =
+      await ExpoCalendarEvent.get(
+        externalEventId,
+      );
+  } catch {
+    return;
+  }
+
+  const occurrence =
+    appleEvent.recurrenceRule
+      ? appleEvent.getOccurrenceSync({
+          instanceStartDate:
+            startAt,
+        })
+      : appleEvent;
+
+  await occurrence.delete();
 }

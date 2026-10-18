@@ -30,6 +30,8 @@ export const calendarColors = {
   eventChip: '#FBEFDE',
   // warmCream family: band behind the today card under the month grid
   todayCardBand: '#EFEEE9',
+  // warmCream family: background of the event details sheet (#34)
+  detailsBackground: '#F4F3F0',
 } as const;
 
 /**
@@ -55,4 +57,18 @@ export const eventSourceColors: Record<CalendarSource, string> = {
   canvas: '#C7BFA0',
   google: colors.softSage,
   apple: colors.eucalyptus,
+};
+
+/**
+ * The circle behind the big icon at the top of the event details sheet (#34).
+ * Figma shows Assignment (paleSun); the other types use their Type button
+ * pastel, and events without a type use mistGreen.
+ */
+export const eventTypeCircleColors: Record<CalendarEventType | 'none', string> = {
+  assignment: colors.paleSun,
+  class: eventTypeButtonColors.class.background,
+  study: eventTypeButtonColors.study.background,
+  personal: eventTypeButtonColors.personal.background,
+  wellness: eventTypeButtonColors.wellness.background,
+  none: colors.mistGreen,
 };

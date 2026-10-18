@@ -430,43 +430,11 @@ describe(
     );
 
     it(
-      'shows an Apple conflict warning and opens the RISE versus Apple comparison',
+      'opens directly to the RISE versus Apple comparison for an Apple conflict',
       async () => {
         await renderModal([
           APPLE_CONFLICT,
         ]);
-
-        expect(
-          screen.getByText(
-            'Calendar conflict',
-          ),
-        ).toBeOnTheScreen();
-
-        expect(
-          screen.getByText(
-            'This event was changed in both RISE and Apple Calendar.',
-          ),
-        ).toBeOnTheScreen();
-
-        expect(
-          screen.getByRole(
-            'button',
-            {
-              name:
-                'Resolve calendar conflict before saving',
-            },
-          ),
-        ).toBeDisabled();
-
-        await fireEvent.press(
-          screen.getByRole(
-            'button',
-            {
-              name:
-                'Review calendar conflict',
-            },
-          ),
-        );
 
         expect(
           screen.getByRole(
@@ -477,6 +445,28 @@ describe(
             },
           ),
         ).toBeOnTheScreen();
+
+        expect(
+          screen.getByText(
+            'This event was changed or deleted in more than one place. Compare each version and choose the result you want RISE and your connected calendars to keep.',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.queryByTestId(
+            'edit-event-form',
+          ),
+        ).toBeNull();
+
+        expect(
+          screen.queryByRole(
+            'button',
+            {
+              name:
+                'Back to edit event',
+            },
+          ),
+        ).toBeNull();
 
         expect(
           screen.getByText(
@@ -519,27 +509,37 @@ describe(
     );
 
     it(
-      'shows a Google conflict warning and opens the RISE versus Google comparison',
+      'opens directly to the RISE versus Google comparison for a Google conflict',
       async () => {
         await renderModal([
           GOOGLE_CONFLICT,
         ]);
 
         expect(
-          screen.getByText(
-            'This event was changed in both RISE and Google Calendar.',
+          screen.getByRole(
+            'header',
+            {
+              name:
+                'Review Conflict',
+            },
           ),
         ).toBeOnTheScreen();
 
-        await fireEvent.press(
-          screen.getByRole(
+        expect(
+          screen.queryByTestId(
+            'edit-event-form',
+          ),
+        ).toBeNull();
+
+        expect(
+          screen.queryByRole(
             'button',
             {
               name:
-                'Review calendar conflict',
+                'Back to edit event',
             },
           ),
-        );
+        ).toBeNull();
 
         expect(
           screen.getByText(
@@ -572,7 +572,7 @@ describe(
     );
 
     it(
-      'shows RISE, Apple, and Google when both providers conflict',
+      'opens directly to RISE, Apple, and Google when both providers conflict',
       async () => {
         await renderModal([
           APPLE_CONFLICT,
@@ -580,20 +580,36 @@ describe(
         ]);
 
         expect(
-          screen.getByText(
-            'This event was changed in RISE, Apple Calendar, and Google Calendar.',
+          screen.getByRole(
+            'header',
+            {
+              name:
+                'Review Conflict',
+            },
           ),
         ).toBeOnTheScreen();
 
-        await fireEvent.press(
-          screen.getByRole(
+        expect(
+          screen.getByText(
+            'This event was changed or deleted in more than one place. Compare each version and choose the result you want RISE and your connected calendars to keep.',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.queryByTestId(
+            'edit-event-form',
+          ),
+        ).toBeNull();
+
+        expect(
+          screen.queryByRole(
             'button',
             {
               name:
-                'Review calendar conflict',
+                'Back to edit event',
             },
           ),
-        );
+        ).toBeNull();
 
         expect(
           screen.getByText(
@@ -661,16 +677,6 @@ describe(
             'button',
             {
               name:
-                'Review calendar conflict',
-            },
-          ),
-        );
-
-        await fireEvent.press(
-          screen.getByRole(
-            'button',
-            {
-              name:
                 'Keep Apple Calendar version',
             },
           ),
@@ -720,16 +726,6 @@ describe(
         await renderModal([
           GOOGLE_CONFLICT,
         ]);
-
-        await fireEvent.press(
-          screen.getByRole(
-            'button',
-            {
-              name:
-                'Review calendar conflict',
-            },
-          ),
-        );
 
         await fireEvent.press(
           screen.getByRole(
@@ -804,16 +800,6 @@ describe(
             'button',
             {
               name:
-                'Review calendar conflict',
-            },
-          ),
-        );
-
-        await fireEvent.press(
-          screen.getByRole(
-            'button',
-            {
-              name:
                 'Keep Google Calendar version',
             },
           ),
@@ -873,5 +859,102 @@ describe(
         );
       },
     );
+
+    it(
+      'shows a provider deletion separately from surviving RISE and Google versions',
+      async () => {
+        const appleDeletionConflict:
+          CalendarEventConflict = {
+            ...APPLE_CONFLICT,
+
+            id:
+              'conflict-apple-deleted',
+
+            providerVersion: {
+              ...APPLE_CONFLICT.providerVersion,
+
+              deleted:
+                true,
+            },
+          };
+
+        await renderModal([
+          appleDeletionConflict,
+          GOOGLE_CONFLICT,
+        ]);
+
+        expect(
+          screen.getByRole(
+            'header',
+            {
+              name:
+                'Review Conflict',
+            },
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.getByText(
+            'Deleted',
+          ),
+        ).toBeOnTheScreen();
+
+        /*
+         * The deleted Apple snapshot must not be rendered as though
+         * it were still an existing event.
+         */
+        expect(
+          screen.queryByText(
+            'Study for Midterm',
+          ),
+        ).not.toBeOnTheScreen();
+
+        /*
+         * Google's surviving version still displays normally.
+         */
+        expect(
+          screen.getByText(
+            'Exam Review Session',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                'Keep RISE version',
+            },
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                'Keep Apple Calendar deletion',
+            },
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                'Keep Google Calendar version',
+            },
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.getByText(
+            'Keep Apple Deletion',
+          ),
+        ).toBeOnTheScreen();
+      },
+    );
+
   },
 );

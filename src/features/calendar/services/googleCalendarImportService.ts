@@ -1,7 +1,9 @@
 import {
   createImportedCalendarEvent,
+  deleteCalendarEvent,
   getCalendarEventsByIdsForSync,
   updateCalendarEvent,
+  type CalendarEventSyncRecord,
 } from '../../../repositories/calendarEventsRepository';
 
 import {
@@ -27,6 +29,7 @@ import {
 } from './googleTokenService';
 
 import {
+  googleCalendarEventExists,
   updateGoogleCalendarEvent,
 } from './googleCalendarService';
 
@@ -730,6 +733,72 @@ async function getGoogleCalendarEvents(
  * If both changed, neither copy is overwritten automatically.
  * Story #85 stores the conflicting versions for student review.
  */
+/**
+ * Stores a Google-side deletion as an unresolved conflict.
+ *
+ * The provider snapshot keeps the last known event values because the
+ * conflict table still requires those fields. deleted: true represents
+ * Google's actual state.
+ */
+async function saveGoogleDeletionConflict(
+  riseEvent: CalendarEventSyncRecord,
+  link: CalendarEventLink,
+) {
+  await saveCalendarEventConflict({
+    calendarEventId:
+      riseEvent.id,
+
+    calendarEventLinkId:
+      link.id,
+
+    userId:
+      link.userId,
+
+    provider:
+      'google',
+
+    riseVersion: {
+      title:
+        riseEvent.title,
+
+      startAt:
+        riseEvent.startAt,
+
+      endAt:
+        riseEvent.endAt,
+
+      location:
+        riseEvent.location,
+
+      description:
+        riseEvent.description,
+
+      updatedAt:
+        riseEvent.updatedAt,
+    },
+
+    providerVersion: {
+      title:
+        riseEvent.title,
+
+      startAt:
+        riseEvent.startAt,
+
+      endAt:
+        riseEvent.endAt,
+
+      location:
+        riseEvent.location,
+
+      description:
+        riseEvent.description,
+
+      deleted:
+        true,
+    },
+  });
+}
+
 export async function syncGoogleCalendarEvents(
   date: Date = new Date(),
 ): Promise<GoogleCalendarBulkSyncResult> {
@@ -765,6 +834,24 @@ export async function syncGoogleCalendarEvents(
   const crossProviderAllDayLinks =
     await getAllDayCalendarEventLinksByProvider(
       'apple',
+    );
+
+  /*
+   * A RISE-created event can have both a Google and Apple copy.
+   * Load every Apple link so Google cannot overwrite the RISE
+   * hub before Apple has been considered.
+   */
+  const otherProviderLinks =
+    await getCalendarEventLinksByProvider(
+      'apple',
+    );
+
+  const otherProviderEventIds =
+    new Set(
+      otherProviderLinks.map(
+        (link) =>
+          link.calendarEventId,
+      ),
     );
 
   /*
@@ -819,10 +906,151 @@ export async function syncGoogleCalendarEvents(
   let failed =
     0;
 
-
   let conflicts =
     0;
-for (
+
+  /*
+   * Detect linked Google events that are no longer returned by Google
+   * inside the same academic-term range.
+   *
+   * Google event IDs are scoped to their calendar, so compare both
+   * calendar ID and event ID.
+   */
+  const returnedGoogleEventKeys =
+    new Set(
+      candidates.map(
+        (candidate) =>
+          `${candidate.calendarId}|${candidate.eventId}`,
+      ),
+    );
+
+  for (
+    const link
+    of links
+  ) {
+    const key =
+      `${link.externalCalendarId ?? ''}|${link.externalEventId}`;
+
+    if (
+      returnedGoogleEventKeys.has(
+        key,
+      )
+    ) {
+      continue;
+    }
+
+    const riseEvent =
+      riseEventsById.get(
+        link.calendarEventId,
+      );
+
+    if (!riseEvent) {
+      continue;
+    }
+
+    const overlapsSyncRange =
+      new Date(
+        riseEvent.startAt,
+      ).getTime() <
+        end.getTime() &&
+      new Date(
+        riseEvent.endAt,
+      ).getTime() >
+        start.getTime();
+
+    if (!overlapsSyncRange) {
+      continue;
+    }
+
+    /*
+     * Missing from the academic-term query does not prove deletion.
+     * The Google event may simply have been moved outside the term.
+     * Verify the linked calendar ID + event ID directly first.
+     */
+    try {
+      if (!link.externalCalendarId) {
+        throw new Error(
+          'GOOGLE_CALENDAR_ID_MISSING',
+        );
+      }
+
+      const googleEventStillExists =
+        await googleCalendarEventExists(
+          link.externalEventId,
+          link.externalCalendarId,
+        );
+
+      if (googleEventStillExists) {
+        skipped += 1;
+        continue;
+      }
+    } catch (error) {
+      failed += 1;
+
+      console.log(
+        'Google Calendar missing-event verification failed:',
+        link.externalEventId,
+        error,
+      );
+
+      continue;
+    }
+
+    /*
+     * RISE owns this event, so Google's deletion is a competing
+     * version rather than permission to erase the central copy.
+     */
+    if (
+      riseEvent.source ===
+      'rise'
+    ) {
+      try {
+        await saveGoogleDeletionConflict(
+          riseEvent,
+          link,
+        );
+
+        conflicts += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Google Calendar deletion conflict could not be stored:',
+          link.externalEventId,
+          error,
+        );
+      }
+
+      continue;
+    }
+
+    /*
+     * Google owns a Google-imported event. If its original provider
+     * event disappears, synchronize that deletion into RISE.
+     */
+    if (
+      riseEvent.source ===
+      'google'
+    ) {
+      try {
+        await deleteCalendarEvent(
+          riseEvent.id,
+        );
+
+        skipped += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Google Calendar deleted event could not be removed from RISE:',
+          link.externalEventId,
+          error,
+        );
+      }
+    }
+  }
+
+  for (
     const candidate
     of candidates
   ) {
@@ -1058,6 +1286,62 @@ for (
           error,
         );
       }
+
+      continue;
+    }
+
+    /*
+     * Preserve a RISE-created event when it also has an Apple copy.
+     * Google must not become the RISE version merely because Google
+     * happened to synchronize before Apple.
+     */
+    const riseChangedForProviderGroup =
+      riseChangedSinceLastSync(
+        riseEvent.updatedAt,
+        link.lastSyncedAt,
+      );
+
+    const googleChangedForProviderGroup =
+      googleChangedSinceLastSync(
+        candidate,
+        link,
+      );
+
+    const isRiseMultiProviderHub =
+      riseEvent.source ===
+        'rise' &&
+      otherProviderEventIds.has(
+        riseEvent.id,
+      );
+
+    if (
+      isRiseMultiProviderHub &&
+      !riseChangedForProviderGroup &&
+      googleChangedForProviderGroup !==
+        false
+    ) {
+      try {
+        await saveGoogleConflict(
+          riseEvent,
+          link,
+          candidate,
+        );
+
+        conflicts += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Google Calendar multi-provider conflict could not be stored:',
+          candidate.eventId,
+          error,
+        );
+      }
+
+      console.log(
+        'Google Calendar multi-provider change preserved for conflict resolution:',
+        candidate.eventId,
+      );
 
       continue;
     }

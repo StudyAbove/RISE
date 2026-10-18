@@ -179,6 +179,11 @@ describe(
           rise_updated_at:
             '2026-10-18T20:00:00.000Z',
 
+          provider_deleted:
+
+            false,
+
+
           provider_title:
             'Apple Study Session',
 

@@ -261,7 +261,13 @@ export function useCalendarConnection({
         const googleUser = await getGoogleUserInfo(accessToken);
 
         await saveCalendarConnection('google', googleUser.email);
-        await saveGoogleAccessToken(accessToken);
+        // The refresh token and expiry let the access token be renewed when it
+        // runs out after about an hour, instead of needing a reconnect (#123).
+        await saveGoogleAccessToken(accessToken, {
+          refreshToken: googleResponse.authentication?.refreshToken,
+          expiresIn: googleResponse.authentication?.expiresIn,
+          issuedAt: googleResponse.authentication?.issuedAt,
+        });
 
         setGoogleEmail(googleUser.email);
         setGoogleConnected(true);

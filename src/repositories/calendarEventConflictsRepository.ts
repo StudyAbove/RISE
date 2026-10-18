@@ -31,6 +31,7 @@ interface CalendarEventConflictRow {
   provider_location: string | null;
   provider_description: string | null;
   provider_updated_at: string | null;
+  provider_deleted: boolean;
 
   status: CalendarEventConflictStatus;
   resolution: CalendarEventConflictResolution | null;
@@ -57,6 +58,7 @@ const CALENDAR_EVENT_CONFLICT_COLUMNS = `
   provider_location,
   provider_description,
   provider_updated_at,
+  provider_deleted,
   status,
   resolution,
   created_at,
@@ -124,6 +126,9 @@ const toCalendarEventConflict = (
     updatedAt:
       row.provider_updated_at ??
       undefined,
+
+    deleted:
+      row.provider_deleted,
   },
 
   status:
@@ -228,6 +233,10 @@ export async function saveCalendarEventConflict(
     provider_updated_at:
       input.providerVersion.updatedAt ??
       null,
+
+    provider_deleted:
+      input.providerVersion.deleted ??
+      false,
   };
 
   if (existingData) {

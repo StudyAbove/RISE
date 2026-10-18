@@ -12,6 +12,7 @@ import WellnessIcon from '../../../../../assets/icons/calendar/event-types/welln
 import WellnessSelectedIcon from '../../../../../assets/icons/calendar/event-types/wellness-selected.svg';
 import type { CalendarEventType } from '../../../../models/CalendarEvent';
 import { eventTypeButtonColors } from '../../calendarColors';
+import { EVENT_TYPE_LABELS } from '../../utils/eventLabels';
 import { styles } from './EventTypePicker.styles';
 
 type IconPair = { default: FC<SvgProps>; selected: FC<SvgProps>; size: number };
@@ -19,11 +20,11 @@ type IconPair = { default: FC<SvgProps>; selected: FC<SvgProps>; size: number };
 // Order, labels, and icons from the Figma "Event Type Picker". Class is drawn
 // as an image in Figma, so it's handled separately below.
 const EVENT_TYPES: { type: CalendarEventType; label: string; icons?: IconPair }[] = [
-  { type: 'class', label: 'Class' },
-  { type: 'assignment', label: 'Assignment', icons: { default: AssignmentIcon, selected: AssignmentSelectedIcon, size: 24 } },
-  { type: 'study', label: 'Study', icons: { default: StudyIcon, selected: StudySelectedIcon, size: 24 } },
-  { type: 'personal', label: 'Personal', icons: { default: PersonalIcon, selected: PersonalSelectedIcon, size: 24 } },
-  { type: 'wellness', label: 'Wellness', icons: { default: WellnessIcon, selected: WellnessSelectedIcon, size: 28 } },
+  { type: 'class', label: EVENT_TYPE_LABELS.class },
+  { type: 'assignment', label: EVENT_TYPE_LABELS.assignment, icons: { default: AssignmentIcon, selected: AssignmentSelectedIcon, size: 24 } },
+  { type: 'study', label: EVENT_TYPE_LABELS.study, icons: { default: StudyIcon, selected: StudySelectedIcon, size: 24 } },
+  { type: 'personal', label: EVENT_TYPE_LABELS.personal, icons: { default: PersonalIcon, selected: PersonalSelectedIcon, size: 24 } },
+  { type: 'wellness', label: EVENT_TYPE_LABELS.wellness, icons: { default: WellnessIcon, selected: WellnessSelectedIcon, size: 28 } },
 ];
 
 interface EventTypePickerProps {

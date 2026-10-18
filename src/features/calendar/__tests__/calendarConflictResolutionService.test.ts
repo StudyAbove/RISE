@@ -3,12 +3,15 @@ import type {
 } from '../../../models/CalendarEventConflict';
 
 import {
+  deleteCalendarEvent,
   updateCalendarEvent,
 } from '../../../repositories/calendarEventsRepository';
 
 import {
   getCalendarEventLink,
+  getCalendarEventLinks,
   markCalendarEventLinkSynced,
+  saveCalendarEventLink,
 } from '../../../repositories/calendarEventLinksRepository';
 
 import {
@@ -16,10 +19,14 @@ import {
 } from '../../../repositories/calendarEventConflictsRepository';
 
 import {
+  createAppleCalendarEvent,
+  deleteAppleCalendarEvent,
   updateAppleCalendarEvent,
 } from '../services/calendarService';
 
 import {
+  createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
   updateGoogleCalendarEvent,
 } from '../services/googleCalendarService';
 
@@ -31,6 +38,9 @@ import {
 jest.mock(
   '../../../repositories/calendarEventsRepository',
   () => ({
+    deleteCalendarEvent:
+      jest.fn(),
+
     updateCalendarEvent:
       jest.fn(),
   }),
@@ -42,7 +52,13 @@ jest.mock(
     getCalendarEventLink:
       jest.fn(),
 
+    getCalendarEventLinks:
+      jest.fn(),
+
     markCalendarEventLinkSynced:
+      jest.fn(),
+
+    saveCalendarEventLink:
       jest.fn(),
   }),
 );
@@ -58,6 +74,12 @@ jest.mock(
 jest.mock(
   '../services/calendarService',
   () => ({
+    createAppleCalendarEvent:
+      jest.fn(),
+
+    deleteAppleCalendarEvent:
+      jest.fn(),
+
     updateAppleCalendarEvent:
       jest.fn(),
   }),
@@ -66,10 +88,19 @@ jest.mock(
 jest.mock(
   '../services/googleCalendarService',
   () => ({
+    createGoogleCalendarEvent:
+      jest.fn(),
+
+    deleteGoogleCalendarEvent:
+      jest.fn(),
+
     updateGoogleCalendarEvent:
       jest.fn(),
   }),
 );
+
+const mockDeleteCalendarEvent =
+  deleteCalendarEvent as jest.Mock;
 
 const mockUpdateCalendarEvent =
   updateCalendarEvent as jest.Mock;
@@ -77,14 +108,32 @@ const mockUpdateCalendarEvent =
 const mockGetCalendarEventLink =
   getCalendarEventLink as jest.Mock;
 
+const mockGetCalendarEventLinks =
+  getCalendarEventLinks as jest.Mock;
+
 const mockMarkCalendarEventLinkSynced =
   markCalendarEventLinkSynced as jest.Mock;
+
+const mockSaveCalendarEventLink =
+  saveCalendarEventLink as jest.Mock;
 
 const mockMarkCalendarEventConflictResolved =
   markCalendarEventConflictResolved as jest.Mock;
 
+const mockCreateAppleCalendarEvent =
+  createAppleCalendarEvent as jest.Mock;
+
+const mockDeleteAppleCalendarEvent =
+  deleteAppleCalendarEvent as jest.Mock;
+
 const mockUpdateAppleCalendarEvent =
   updateAppleCalendarEvent as jest.Mock;
+
+const mockCreateGoogleCalendarEvent =
+  createGoogleCalendarEvent as jest.Mock;
+
+const mockDeleteGoogleCalendarEvent =
+  deleteGoogleCalendarEvent as jest.Mock;
 
 const mockUpdateGoogleCalendarEvent =
   updateGoogleCalendarEvent as jest.Mock;
@@ -253,12 +302,38 @@ function mockProviderLinks() {
 beforeEach(() => {
   jest.clearAllMocks();
 
+  mockDeleteCalendarEvent.mockResolvedValue(
+    undefined,
+  );
+
   mockUpdateCalendarEvent.mockResolvedValue({
     id:
       'rise-event-1',
   });
 
+  mockGetCalendarEventLinks.mockResolvedValue([
+    appleLink,
+    googleLink,
+  ]);
+
   mockMarkCalendarEventLinkSynced.mockResolvedValue(
+    undefined,
+  );
+
+  mockSaveCalendarEventLink.mockResolvedValue(
+    undefined,
+  );
+
+  mockCreateAppleCalendarEvent.mockResolvedValue({
+    externalEventId:
+      'apple-event-recreated',
+    externalCalendarId:
+      'apple-calendar-new',
+    updatedAt:
+      '2026-10-18T22:40:00.000Z',
+  });
+
+  mockDeleteAppleCalendarEvent.mockResolvedValue(
     undefined,
   );
 
@@ -266,6 +341,19 @@ beforeEach(() => {
     updatedAt:
       '2026-10-18T22:10:00.000Z',
   });
+
+  mockCreateGoogleCalendarEvent.mockResolvedValue({
+    externalEventId:
+      'google-event-recreated',
+    externalCalendarId:
+      'primary',
+    updatedAt:
+      '2026-10-18T22:45:00.000Z',
+  });
+
+  mockDeleteGoogleCalendarEvent.mockResolvedValue(
+    undefined,
+  );
 
   mockUpdateGoogleCalendarEvent.mockResolvedValue({
     updatedAt:
@@ -932,6 +1020,344 @@ describe(
          * Retrying is safe because the desired winning version is
          * still the same.
          */
+        expect(
+          mockMarkCalendarEventConflictResolved,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it(
+      'keeps RISE by recreating a deleted Apple copy without creating a duplicate Google copy',
+      async () => {
+        const deletedAppleConflict:
+          CalendarEventConflict = {
+            ...appleConflict,
+
+            providerVersion: {
+              ...appleConflict.providerVersion,
+
+              deleted:
+                true,
+            },
+          };
+
+        mockProviderLinks();
+
+        await resolveCalendarEventConflictGroup(
+          [
+            deletedAppleConflict,
+            googleConflict,
+          ],
+          'rise',
+        );
+
+        expect(
+          mockCreateAppleCalendarEvent,
+        ).toHaveBeenCalledWith({
+          title:
+            'RISE Version',
+
+          startAt:
+            '2026-10-20T18:00:00.000Z',
+
+          endAt:
+            '2026-10-20T19:00:00.000Z',
+
+          location:
+            'Library',
+
+          description:
+            'Changed in RISE',
+        });
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            calendarEventId:
+              'rise-event-1',
+
+            userId:
+              'user-1',
+
+            provider:
+              'apple',
+
+            externalEventId:
+              'apple-event-recreated',
+
+            externalCalendarId:
+              'apple-calendar-new',
+          }),
+        );
+
+        /*
+         * Google already has a linked copy. It is updated using the
+         * existing external event ID rather than recreated.
+         */
+        expect(
+          mockUpdateGoogleCalendarEvent,
+        ).toHaveBeenCalledWith(
+          'google-event-1',
+          'primary',
+          {
+            title:
+              'RISE Version',
+
+            startAt:
+              '2026-10-20T18:00:00.000Z',
+
+            endAt:
+              '2026-10-20T19:00:00.000Z',
+
+            location:
+              'Library',
+
+            description:
+              'Changed in RISE',
+          },
+        );
+
+        expect(
+          mockCreateGoogleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockDeleteCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockMarkCalendarEventConflictResolved,
+        ).toHaveBeenCalledTimes(
+          2,
+        );
+      },
+    );
+
+    it(
+      'keeps Apple deletion by deleting the surviving Google copy before deleting RISE',
+      async () => {
+        const deletedAppleConflict:
+          CalendarEventConflict = {
+            ...appleConflict,
+
+            providerVersion: {
+              ...appleConflict.providerVersion,
+
+              deleted:
+                true,
+            },
+          };
+
+        mockProviderLinks();
+
+        const operations:
+          string[] = [];
+
+        mockDeleteGoogleCalendarEvent.mockImplementation(
+          async () => {
+            operations.push(
+              'google',
+            );
+          },
+        );
+
+        mockDeleteCalendarEvent.mockImplementation(
+          async () => {
+            operations.push(
+              'rise',
+            );
+          },
+        );
+
+        const result =
+          await resolveCalendarEventConflictGroup(
+            [
+              deletedAppleConflict,
+              googleConflict,
+            ],
+            'apple',
+          );
+
+        expect(
+          mockDeleteAppleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockDeleteGoogleCalendarEvent,
+        ).toHaveBeenCalledWith(
+          'google-event-1',
+          'primary',
+        );
+
+        expect(
+          mockDeleteCalendarEvent,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+        );
+
+        expect(
+          operations,
+        ).toEqual([
+          'google',
+          'rise',
+        ]);
+
+        /*
+         * Deleting RISE cascades its links/conflicts, so there are no
+         * surviving conflict rows to mark individually afterward.
+         */
+        expect(
+          mockMarkCalendarEventConflictResolved,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          result,
+        ).toEqual([]);
+      },
+    );
+
+    it(
+      'keeps Google by updating RISE and recreating Apple when Apple was deleted',
+      async () => {
+        const deletedAppleConflict:
+          CalendarEventConflict = {
+            ...appleConflict,
+
+            providerVersion: {
+              ...appleConflict.providerVersion,
+
+              deleted:
+                true,
+            },
+          };
+
+        mockProviderLinks();
+
+        await resolveCalendarEventConflictGroup(
+          [
+            deletedAppleConflict,
+            googleConflict,
+          ],
+          'google',
+        );
+
+        expect(
+          mockUpdateCalendarEvent,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          {
+            title:
+              'Google Version',
+
+            startAt:
+              '2026-10-20T20:00:00.000Z',
+
+            endAt:
+              '2026-10-20T21:00:00.000Z',
+
+            location:
+              'ECS 302',
+
+            description:
+              'Changed in Google',
+          },
+        );
+
+        expect(
+          mockCreateAppleCalendarEvent,
+        ).toHaveBeenCalledWith({
+          title:
+            'Google Version',
+
+          startAt:
+            '2026-10-20T20:00:00.000Z',
+
+          endAt:
+            '2026-10-20T21:00:00.000Z',
+
+          location:
+            'ECS 302',
+
+          description:
+            'Changed in Google',
+        });
+
+        expect(
+          mockUpdateAppleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        /*
+         * Google is the winning provider and already has the selected
+         * version, so it is not recreated or rewritten.
+         */
+        expect(
+          mockCreateGoogleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockUpdateGoogleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockMarkCalendarEventLinkSynced,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'google',
+          '2026-10-18T21:30:00.000Z',
+        );
+
+        expect(
+          mockMarkCalendarEventConflictResolved,
+        ).toHaveBeenCalledTimes(
+          2,
+        );
+      },
+    );
+
+    it(
+      'keeps RISE when deleting a surviving provider fails during deletion resolution',
+      async () => {
+        const deletedAppleConflict:
+          CalendarEventConflict = {
+            ...appleConflict,
+
+            providerVersion: {
+              ...appleConflict.providerVersion,
+
+              deleted:
+                true,
+            },
+          };
+
+        mockProviderLinks();
+
+        mockDeleteGoogleCalendarEvent.mockRejectedValue(
+          new Error(
+            'GOOGLE_CALENDAR_DELETE_FAILED',
+          ),
+        );
+
+        await expect(
+          resolveCalendarEventConflictGroup(
+            [
+              deletedAppleConflict,
+              googleConflict,
+            ],
+            'apple',
+          ),
+        ).rejects.toThrow(
+          'GOOGLE_CALENDAR_DELETE_FAILED',
+        );
+
+        /*
+         * The central RISE event must survive when propagation of the
+         * winning deletion did not complete.
+         */
+        expect(
+          mockDeleteCalendarEvent,
+        ).not.toHaveBeenCalled();
+
         expect(
           mockMarkCalendarEventConflictResolved,
         ).not.toHaveBeenCalled();
