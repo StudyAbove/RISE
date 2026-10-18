@@ -32,6 +32,7 @@ import {
 } from '../../../repositories/calendarEventLinksRepository';
 
 import { AddEventSheet } from '../components/addEvent/AddEventSheet';
+import { AddEventSyncNotice } from '../components/AddEventSyncNotice';
 import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
@@ -54,16 +55,12 @@ import {
 } from '../services/calendarBackgroundSyncService';
 
 import {
-  getCalendarConnection,
-} from '../services/calendarConnectionService';
+  getConnectedCalendarProviders,
+} from '../services/connectedCalendars';
 
 import type {
   CalendarEventSyncResult,
 } from '../services/calendarEventSyncService';
-
-import {
-  getAppleCalendarAccess,
-} from '../services/calendarService';
 
 import {
   getTimeGridDays,
@@ -71,6 +68,8 @@ import {
   shiftAnchorDate,
   type CalendarViewMode,
 } from '../utils/calendarDates';
+
+import { getAddEventSyncMessage } from '../utils/addEventSyncMessage';
 
 import { styles } from './CalendarScreen.styles';
 
@@ -140,6 +139,18 @@ export function CalendarScreen() {
     setIsAddingEvent,
   ] =
     useState(false);
+
+  // Says when a new event didn't reach a connected Google or Apple calendar (#123).
+  const [
+    addEventNotice,
+    setAddEventNotice,
+  ] =
+    useState<string | null>(null);
+
+  const dismissAddEventNotice =
+    useCallback(() => {
+      setAddEventNotice(null);
+    }, []);
 
   const [
     todayCardRefreshKey,
@@ -264,15 +275,18 @@ export function CalendarScreen() {
    * Google Calendar, and refresh every view and the today card (AC3).
    */
   function handleEventAdded(
-    event: CalendarEvent,
+    result: CalendarEventSyncResult,
   ) {
     setIsAddingEvent(false);
     setAnchorDate(
       startOfDay(
-        parseISO(event.startAt),
+        parseISO(result.event.startAt),
       ),
     );
     refreshCalendar();
+    setAddEventNotice(
+      getAddEventSyncMessage(result),
+    );
   }
 
   /*
@@ -352,52 +366,6 @@ export function CalendarScreen() {
   }, [
     refreshCalendar,
   ]);
-
-  const getConnectedCalendarProviders =
-    useCallback(
-      async (): Promise<
-        ConnectedCalendarProvider[]
-      > => {
-        const [
-          appleConnection,
-          googleConnection,
-          appleAccess,
-        ] =
-          await Promise.all([
-            getCalendarConnection(
-              'apple',
-            ),
-            getCalendarConnection(
-              'google',
-            ),
-            getAppleCalendarAccess(),
-          ]);
-
-        const providers:
-          ConnectedCalendarProvider[] =
-          [];
-
-        if (
-          appleConnection?.connected &&
-          appleAccess === 'full'
-        ) {
-          providers.push(
-            'apple',
-          );
-        }
-
-        if (
-          googleConnection?.connected
-        ) {
-          providers.push(
-            'google',
-          );
-        }
-
-        return providers;
-      },
-      [],
-    );
 
   const loadLatestSuccessfulSync =
     useCallback(
@@ -1333,6 +1301,17 @@ export function CalendarScreen() {
             retry
           }
         />
+
+        {addEventNotice && (
+          <AddEventSyncNotice
+            message={
+              addEventNotice
+            }
+            onDismiss={
+              dismissAddEventNotice
+            }
+          />
+        )}
       </View>
 
       <EditCalendarEventModal

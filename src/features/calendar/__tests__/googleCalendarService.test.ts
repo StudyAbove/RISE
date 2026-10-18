@@ -5,6 +5,7 @@ import {
 
 import {
   getGoogleUserInfo,
+  deleteGoogleCalendarEvent,
   hasGoogleCalendarAccess,
   updateGoogleCalendarEvent,
 } from '../services/googleCalendarService';
@@ -390,5 +391,48 @@ describe('updateGoogleCalendarEvent', () => {
     ).rejects.toThrow(
       'GOOGLE_CALENDAR_UPDATE_FAILED',
     );
+  });
+});
+
+describe('deleteGoogleCalendarEvent', () => {
+  beforeEach(() => {
+    mockGetGoogleAccessToken.mockResolvedValue('access-token');
+  });
+
+  it('deletes the event from its Google calendar', async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+    await deleteGoogleCalendarEvent('event/1', 'student@example.com');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://www.googleapis.com/calendar/v3/calendars/student%40example.com/events/event%2F1',
+      { method: 'DELETE', headers: { Authorization: 'Bearer access-token' } },
+    );
+  });
+
+  it.each([404, 410])('counts an event that is already gone (%i) as deleted', async (status) => {
+    mockFetch.mockResolvedValue({ ok: false, status });
+
+    await expect(deleteGoogleCalendarEvent('event-1', 'primary')).resolves.toBeUndefined();
+  });
+
+  it('asks to reconnect when there is no saved sign-in', async () => {
+    mockGetGoogleAccessToken.mockResolvedValue(null);
+
+    await expect(deleteGoogleCalendarEvent('event-1', 'primary')).rejects.toThrow('GOOGLE_CALENDAR_RECONNECT_REQUIRED');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('clears an expired sign-in and asks to reconnect', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 401 });
+
+    await expect(deleteGoogleCalendarEvent('event-1', 'primary')).rejects.toThrow('GOOGLE_CALENDAR_RECONNECT_REQUIRED');
+    expect(mockClearGoogleAccessToken).toHaveBeenCalled();
+  });
+
+  it('throws when Google cannot delete the event', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+    await expect(deleteGoogleCalendarEvent('event-1', 'primary')).rejects.toThrow('GOOGLE_CALENDAR_DELETE_FAILED');
   });
 });
