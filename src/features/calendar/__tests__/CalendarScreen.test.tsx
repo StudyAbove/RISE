@@ -986,7 +986,7 @@ describe(
 
               expect(
                 await screen.findByLabelText(
-                  'Biology Lecture, 9:00 AM to 10:30 AM',
+                  'Biology Lecture, RISE, 9:00 AM to 10:30 AM',
                 ),
               ).toBeOnTheScreen();
             }
@@ -1012,7 +1012,7 @@ describe(
 
             expect(
               await screen.findAllByLabelText(
-                'Late-Night Review, 11:30 PM to 1:00 AM',
+                'Late-Night Review, RISE, 11:30 PM to 1:00 AM',
               ),
             ).toHaveLength(
               2,
@@ -2058,7 +2058,7 @@ describe('CalendarScreen: adding an event (#31)', () => {
 
     for (const view of ['Week', '2 Day', 'Day']) {
       await fireEvent.press(screen.getByRole('tab', { name: view }));
-      expect(await screen.findByLabelText('Chem Lab, 9:00 AM to 10:00 AM')).toBeOnTheScreen();
+      expect(await screen.findByLabelText('Chem Lab, RISE, 9:00 AM to 10:00 AM')).toBeOnTheScreen();
     }
   });
 
@@ -2268,5 +2268,48 @@ describe('CalendarScreen: deleting an event (#80)', () => {
       'The event is still on your calendar. Check your connection and try again.',
     );
     expect(screen.getByRole('header', { name: 'Office Hours' })).toBeOnTheScreen();
+  });
+});
+
+describe('CalendarScreen: where events came from (#82)', () => {
+  // One event from each source. Today in these tests is Friday, November 13, 2026.
+  // A Month cell fits two events, so the Month test spreads them over four days.
+  function makeEvents(days: number[]): CalendarEvent[] {
+    const at = (i: number, hour: number) => new Date(2026, 10, days[i], hour).toISOString();
+    return [
+      { id: 'e-rise', userId: 'user-1', title: 'Study Session', startAt: at(0, 8), endAt: at(0, 9), source: 'rise' },
+      { id: 'e-google', userId: 'user-1', title: 'Dentist', startAt: at(1, 10), endAt: at(1, 11), source: 'google' },
+      { id: 'e-apple', userId: 'user-1', title: 'Club Meeting', startAt: at(2, 12), endAt: at(2, 13), source: 'apple' },
+      { id: 'e-canvas', userId: 'user-1', title: 'Problem Set 5', startAt: at(3, 14), endAt: at(3, 15), source: 'canvas' },
+    ];
+  }
+  const sourceNames = { rise: 'RISE', google: 'Google Calendar', apple: 'Apple Calendar', canvas: 'Canvas' };
+
+
+  it.each(['Month', 'Week', '2 Day', 'Day'])(
+    'shows each source the same way in %s, without hiding the title (AC1-4, AC6-8)',
+    async (view) => {
+      const events = makeEvents(view === 'Month' ? [10, 11, 12, 16] : [13, 13, 13, 13]);
+      mockGetCalendarEventsInRange.mockResolvedValue(events);
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+      for (const event of events) {
+        const chip = await screen.findByLabelText(
+          new RegExp(`^${event.title}, ${sourceNames[event.source]}, \\d`),
+        );
+        expect(within(chip).getByTestId('event-chip-logo')).toBeOnTheScreen();
+        expect(within(chip).getByText(event.title)).toBeOnTheScreen();
+      }
+    },
+  );
+
+  it("names the source in today's card too", async () => {
+    mockGetCalendarEventsInRange.mockResolvedValue(makeEvents([13, 13, 13, 13]));
+    await render(<CalendarScreen />);
+
+    const row = await screen.findByLabelText('Dentist, Google Calendar, 10:00 AM – 11:00 AM');
+    expect(within(row).getByTestId('today-event-logo')).toBeOnTheScreen();
+    expect(within(row).getByText('Dentist')).toBeOnTheScreen();
   });
 });

@@ -1,6 +1,7 @@
 import {
   Pressable,
   Text,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -8,7 +9,9 @@ import { format, parseISO } from 'date-fns';
 
 import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { eventSourceColors } from '../calendarColors';
-import { styles } from './EventChip.styles';
+import { EVENT_SOURCE_LABELS } from '../utils/eventLabels';
+import { EVENT_CHIP_LOGO_SIZE, styles } from './EventChip.styles';
+import { SourceLogo } from './SourceLogo';
 
 export type EventChipSize =
   | 'mini'
@@ -39,9 +42,16 @@ const SIZE_STYLES = {
   regular: styles.regularChip,
 };
 
+const CONTENT_STYLES = {
+  mini: styles.miniContent,
+  compact: styles.compactContent,
+  regular: styles.regularContent,
+};
+
 /**
  * An event drawn as in Figma: a colored tab (by source) on the left of a pale
- * chip with the title. Titles that don't fit end in "…".
+ * chip, then the source's logo and the title (#82). Titles that don't fit end
+ * in "…".
  */
 export function EventChip({
   event,
@@ -59,7 +69,8 @@ export function EventChip({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${event.title}, ${timeRange}`}
+      // Names the source too, so it isn't told by color and logo alone (#82, AC8).
+      accessibilityLabel={`${event.title}, ${EVENT_SOURCE_LABELS[event.source]}, ${timeRange}`}
       accessibilityHint="Opens this event"
       onPress={() => {
         onPress?.(event);
@@ -77,12 +88,19 @@ export function EventChip({
         },
       ]}
     >
-      <Text
-        numberOfLines={maxTitleLines}
-        style={styles.title}
-      >
-        {event.title}
-      </Text>
+      <View style={[styles.content, CONTENT_STYLES[size]]}>
+        <SourceLogo
+          testID="event-chip-logo"
+          source={event.source}
+          size={EVENT_CHIP_LOGO_SIZE[size]}
+        />
+        <Text
+          numberOfLines={maxTitleLines}
+          style={styles.title}
+        >
+          {event.title}
+        </Text>
+      </View>
     </Pressable>
   );
 }

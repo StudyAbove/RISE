@@ -8,6 +8,9 @@ import { calendarColors } from '../calendarColors';
 // two per month cell.
 export const EVENT_CHIP_MIN_HEIGHT = { mini: 14, compact: 16, regular: 18 } as const;
 export const EVENT_TITLE_LINE_HEIGHT = 12;
+// The source logo before the title (#82), from the Figma "Option B" board.
+// Month (mini) is 10 rather than Figma's 8, so the logos are easier to make out.
+export const EVENT_CHIP_LOGO_SIZE = { mini: 10, compact: 10, regular: 13 } as const;
 
 export const styles = StyleSheet.create({
   chip: {
@@ -38,7 +41,22 @@ export const styles = StyleSheet.create({
     borderRadius: 5,
     borderLeftWidth: 10,
   },
+  // The logo and title side by side, centered on the title's line.
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  miniContent: {
+    gap: 2,
+  },
+  compactContent: {
+    gap: 2,
+  },
+  regularContent: {
+    gap: 5,
+  },
   title: {
+    flexShrink: 1,
     fontFamily: fonts.body.medium,
     fontSize: 10,
     lineHeight: EVENT_TITLE_LINE_HEIGHT,
