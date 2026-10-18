@@ -1,5 +1,5 @@
 import { type FC, type ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, type ImageSourcePropType, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { SvgProps } from 'react-native-svg';
 import { format, parseISO } from 'date-fns';
 
@@ -12,13 +12,14 @@ import AssignmentIcon from '../../../../assets/icons/calendar/event-types/assign
 import PersonalIcon from '../../../../assets/icons/calendar/event-types/personal.svg';
 import StudyIcon from '../../../../assets/icons/calendar/event-types/study.svg';
 import WellnessIcon from '../../../../assets/icons/calendar/event-types/wellness.svg';
-import type { CalendarEvent, CalendarEventType, CalendarSource } from '../../../models/CalendarEvent';
+import type { CalendarEvent, CalendarEventType } from '../../../models/CalendarEvent';
 import { colors } from '../../../theme/colors';
 import { eventTypeCircleColors } from '../calendarColors';
 import { getLinkedCalendarProviders } from '../services/calendarEventSyncService';
 import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS, formatReminder } from '../utils/eventLabels';
 import { styles } from './EventDetailsSheet.styles';
+import { SourceLogo } from './SourceLogo';
 import { formatEventTime } from './TodayEventsCard';
 
 const BIG_ICON_SIZE = 44;
@@ -29,14 +30,6 @@ const TYPE_ICONS: Partial<Record<CalendarEventType, FC<SvgProps>>> = {
   study: StudyIcon,
   personal: PersonalIcon,
   wellness: WellnessIcon,
-};
-
-// Each source's logo for the "From" row; RISE events use the app icon.
-const SOURCE_LOGOS: Record<CalendarSource, ImageSourcePropType> = {
-  rise: require('../../../../assets/icon.png'),
-  google: require('../../../../assets/icons/google.png'),
-  apple: require('../../../../assets/icons/apple.png'),
-  canvas: require('../../../../assets/icons/canvas/canvas-logo.png'),
 };
 
 interface EventDetailsSheetProps {
@@ -136,13 +129,7 @@ export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, o
 
               <DetailRow
                 icon={
-                  <Image
-                    testID="event-source-logo"
-                    source={SOURCE_LOGOS[event.source]}
-                    // The Apple logo is white (made for the dark Apple button), so it's darkened here to show on the card.
-                    style={[styles.sourceLogo, event.source === 'apple' && styles.appleLogo]}
-                    accessibilityIgnoresInvertColors
-                  />
+                  <SourceLogo testID="event-source-logo" source={event.source} size={22} style={styles.sourceLogo} />
                 }
               >
                 From {EVENT_SOURCE_LABELS[event.source]}

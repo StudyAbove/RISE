@@ -75,13 +75,7 @@ export const styles = StyleSheet.create({
   // The Google, Apple, Canvas, and RISE logos are full-color images, so a
   // little smaller than the line icons to look the same size.
   sourceLogo: {
-    width: 22,
-    height: 22,
     borderRadius: 5,
-  },
-  // Same dark gray as the line icons.
-  appleLogo: {
-    tintColor: '#1E1E1E',
   },
   rowText: {
     flex: 1,

@@ -49,13 +49,15 @@ export const eventTypeButtonColors: Record<CalendarEventType | 'selected', { bac
 
 /**
  * The colored tab on the left of each event chip, by where the event came from.
- * RISE and Canvas use the two tab colors from Figma; Google and Apple, which
- * Figma doesn't show, use palette colors.
+ * RISE and Canvas use the two tab colors from Figma; Apple uses a palette color.
  */
 export const eventSourceColors: Record<CalendarSource, string> = {
   rise: '#F4DF8A', // butterYellow family
   canvas: '#C7BFA0',
-  google: colors.softSage,
+  // The blue from the Figma calendar frames. The palette has no blue, so this is
+  // an exception to the family rule, approved by the calendar's designer (#82):
+  // a palette green would look like Apple's tab.
+  google: '#8CA6DD',
   apple: colors.eucalyptus,
 };
 
