@@ -2304,6 +2304,14 @@ describe('CalendarScreen: where events came from (#82)', () => {
     },
   );
 
+  it.each(['Month', 'Week', '2 Day', 'Day'])('shows the legend under the %s grid', async (view) => {
+    mockGetCalendarEventsInRange.mockResolvedValue([]);
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+    expect(screen.getByLabelText(/^Event sources:/)).toBeOnTheScreen();
+  });
+
   it("names the source in today's card too", async () => {
     mockGetCalendarEventsInRange.mockResolvedValue(makeEvents([13, 13, 13, 13]));
     await render(<CalendarScreen />);

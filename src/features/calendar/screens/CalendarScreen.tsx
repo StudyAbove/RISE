@@ -39,6 +39,7 @@ import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
 import { EditCalendarEventModal } from '../components/EditCalendarEventModal';
 import { EventDetailsSheet } from '../components/EventDetailsSheet';
+import { EventSourceLegend } from '../components/EventSourceLegend';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
 import { TodayEventsCard } from '../components/TodayEventsCard';
@@ -1348,6 +1349,8 @@ export function CalendarScreen() {
               }
             />
 
+            <EventSourceLegend />
+
             <TodayEventsCard
               key={
                 todayCardRefreshKey
@@ -1358,24 +1361,28 @@ export function CalendarScreen() {
             />
           </ScrollView>
         ) : (
-          <TimeGrid
-            key={
-              view
-            }
-            days={getTimeGridDays(
-              view,
-              anchorDate,
-            )}
-            view={
-              view
-            }
-            events={
-              events
-            }
-            onEventPress={
-              handleEventPress
-            }
-          />
+          <>
+            <TimeGrid
+              key={
+                view
+              }
+              days={getTimeGridDays(
+                view,
+                anchorDate,
+              )}
+              view={
+                view
+              }
+              events={
+                events
+              }
+              onEventPress={
+                handleEventPress
+              }
+            />
+
+            <EventSourceLegend />
+          </>
         )}
 
         <CalendarEventsStatus
