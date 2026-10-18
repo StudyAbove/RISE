@@ -1701,6 +1701,55 @@ describe(
         }
 
         it(
+          'keeps Apple and Google in Last synced when their successful times differ',
+          async () => {
+            mockGetLatestCalendarEventLinkSyncTime.mockImplementation(
+              async (
+                provider: string,
+              ) => {
+                if (
+                  provider ===
+                  'apple'
+                ) {
+                  return new Date(
+                    2026,
+                    10,
+                    13,
+                    9,
+                    24,
+                  ).toISOString();
+                }
+
+                if (
+                  provider ===
+                  'google'
+                ) {
+                  return new Date(
+                    2026,
+                    10,
+                    13,
+                    9,
+                    25,
+                  ).toISOString();
+                }
+
+                return null;
+              },
+            );
+
+            await render(
+              <CalendarScreen />,
+            );
+
+            expect(
+              await screen.findByText(
+                'Last synced: Apple + Google • 9:25 AM',
+              ),
+            ).toBeOnTheScreen();
+          },
+        );
+
+        it(
           'manually syncs Apple when only Apple Calendar is connected',
           async () => {
             mockGetCalendarConnection.mockImplementation(

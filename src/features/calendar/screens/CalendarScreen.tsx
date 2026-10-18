@@ -441,10 +441,24 @@ export function CalendarScreen() {
             'idle' &&
           snapshot.provider
         ) {
+          const syncedProvider =
+            snapshot.provider;
+
           setLastSyncedProviders(
-            [
-              snapshot.provider,
-            ],
+            (current) => {
+              if (
+                current.includes(
+                  syncedProvider,
+                )
+              ) {
+                return current;
+              }
+
+              return [
+                ...current,
+                syncedProvider,
+              ];
+            },
           );
         }
       }
@@ -567,17 +581,18 @@ export function CalendarScreen() {
               latestTimestamp,
             );
 
+          /*
+           * Apple and Google sync sequentially, so their stored successful
+           * timestamps normally differ by a few milliseconds or seconds.
+           *
+           * Keep every provider with a valid successful sync represented in
+           * the label, while the newest timestamp remains the displayed time.
+           */
           const latestProviders =
-            providerDates
-              .filter(
-                (entry) =>
-                  entry.date.getTime() ===
-                  latestTimestamp,
-              )
-              .map(
-                (entry) =>
-                  entry.provider,
-              );
+            providerDates.map(
+              (entry) =>
+                entry.provider,
+            );
 
           latestSuccessfulSyncRef.current =
             latestTimestamp;
