@@ -6,6 +6,8 @@ const mockSaveCalendarEventLink = jest.fn();
 const mockGetConnectedCalendarProviders = jest.fn();
 const mockCreateGoogleCalendarEvent = jest.fn();
 const mockCreateAppleCalendarEvent = jest.fn();
+const mockDeleteGoogleCalendarEvent = jest.fn();
+const mockDeleteAppleCalendarEvent = jest.fn();
 const mockDevFlags = { skipAuth: false };
 
 jest.mock('../../../lib/devFlags', () => ({
@@ -24,9 +26,11 @@ jest.mock('../services/connectedCalendars', () => ({
 }));
 jest.mock('../services/googleCalendarService', () => ({
   createGoogleCalendarEvent: (...args: unknown[]) => mockCreateGoogleCalendarEvent(...args),
+  deleteGoogleCalendarEvent: (...args: unknown[]) => mockDeleteGoogleCalendarEvent(...args),
 }));
 jest.mock('../services/calendarService', () => ({
   createAppleCalendarEvent: (...args: unknown[]) => mockCreateAppleCalendarEvent(...args),
+  deleteAppleCalendarEvent: (...args: unknown[]) => mockDeleteAppleCalendarEvent(...args),
 }));
 
 const input = {
@@ -54,6 +58,8 @@ beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
   mockCreateCalendarEvent.mockResolvedValue(savedEvent);
   mockSaveCalendarEventLink.mockResolvedValue(undefined);
+  mockDeleteGoogleCalendarEvent.mockResolvedValue(undefined);
+  mockDeleteAppleCalendarEvent.mockResolvedValue(undefined);
   mockCreateGoogleCalendarEvent.mockResolvedValue({
     externalEventId: 'google-event-1',
     externalCalendarId: 'student@csulb.edu',
@@ -133,13 +139,57 @@ describe('createCalendarEventWithSync', () => {
     expect(result.event).toEqual(savedEvent);
   });
 
-  it('counts a copy whose link could not be saved as failed', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+  // Without a link, the next import would bring the copy back as a duplicate.
+  it('deletes a copy whose link could not be saved, and counts it as failed', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
     mockSaveCalendarEventLink.mockRejectedValue(new Error('permission denied for table calendar_event_links'));
 
     const result = await createCalendarEventWithSync(input);
 
     expect(result.status).toBe('failed');
+    expect(result.providerResults).toEqual([
+      { provider: 'apple', status: 'failed', error: 'permission denied for table calendar_event_links' },
+      { provider: 'google', status: 'failed', error: 'permission denied for table calendar_event_links' },
+    ]);
+    expect(mockDeleteGoogleCalendarEvent).toHaveBeenCalledWith('google-event-1', 'student@csulb.edu');
+    expect(mockDeleteAppleCalendarEvent).toHaveBeenCalledWith('apple-event-1', input.startAt);
+  });
+
+  it('only removes the copy whose link failed', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+    mockSaveCalendarEventLink.mockImplementation(async ({ provider }: { provider: string }) => {
+      if (provider === 'google') {
+        throw new Error('Network request failed');
+      }
+    });
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('partial');
+    expect(mockDeleteGoogleCalendarEvent).toHaveBeenCalledTimes(1);
+    expect(mockDeleteAppleCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('still reports the failure when the unlinked copy cannot be removed either', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockSaveCalendarEventLink.mockRejectedValue(new Error('Network request failed'));
+    mockDeleteGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_DELETE_FAILED'));
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('failed');
+    expect(result.providerResults).toEqual([
+      { provider: 'google', status: 'failed', error: 'Network request failed' },
+    ]);
+  });
+
+  it("doesn't delete anything when creating the copy itself failed", async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockCreateGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_CREATE_FAILED'));
+
+    await createCalendarEventWithSync(input);
+
+    expect(mockDeleteGoogleCalendarEvent).not.toHaveBeenCalled();
   });
 
   it('reports a failure when the connected calendars cannot be checked', async () => {

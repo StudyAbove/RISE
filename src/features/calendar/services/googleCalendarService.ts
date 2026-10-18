@@ -329,3 +329,72 @@ export async function createGoogleCalendarEvent(
     updatedAt: created.updated,
   };
 }
+
+/**
+ * Deletes an event from Google Calendar, so the next sync doesn't
+ * import it into RISE again. Used to remove a new copy RISE couldn't
+ * link (#123).
+ *
+ * An event that is already gone from Google counts as deleted.
+ */
+export async function deleteGoogleCalendarEvent(
+  externalEventId: string,
+  externalCalendarId: string,
+): Promise<void> {
+  if (!externalEventId) {
+    throw new Error(
+      'GOOGLE_EVENT_ID_MISSING',
+    );
+  }
+
+  if (!externalCalendarId) {
+    throw new Error(
+      'GOOGLE_CALENDAR_ID_MISSING',
+    );
+  }
+
+  const accessToken =
+    await getGoogleAccessToken();
+
+  if (!accessToken) {
+    throw new Error(
+      'GOOGLE_CALENDAR_RECONNECT_REQUIRED',
+    );
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      externalCalendarId,
+    )}/events/${encodeURIComponent(
+      externalEventId,
+    )}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (response.status === 401) {
+    await clearGoogleAccessToken();
+
+    throw new Error(
+      'GOOGLE_CALENDAR_RECONNECT_REQUIRED',
+    );
+  }
+
+  // 404: no such event; 410: already deleted.
+  if (
+    response.status === 404 ||
+    response.status === 410
+  ) {
+    return;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      'GOOGLE_CALENDAR_DELETE_FAILED',
+    );
+  }
+}

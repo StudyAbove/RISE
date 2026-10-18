@@ -298,3 +298,59 @@ export async function createAppleCalendarEvent(
       ),
   };
 }
+
+/**
+ * Deletes an event from Apple Calendar, so the next sync doesn't
+ * import it into RISE again. Used to remove a new copy RISE couldn't
+ * link (#123).
+ *
+ * Only the one occurrence on startAt is removed, never a whole
+ * repeating series. An event that is already gone counts as deleted.
+ */
+export async function deleteAppleCalendarEvent(
+  externalEventId: string,
+  startAt: string,
+): Promise<void> {
+  const access =
+    await getAppleCalendarAccess();
+
+  if (
+    access !==
+    'full'
+  ) {
+    throw new Error(
+      'APPLE_CALENDAR_NOT_CONNECTED',
+    );
+  }
+
+  if (
+    !externalEventId
+  ) {
+    throw new Error(
+      'APPLE_EVENT_ID_MISSING',
+    );
+  }
+
+  let appleEvent:
+    ExpoCalendarEvent;
+
+  try {
+    // Throws when no event has this ID anymore.
+    appleEvent =
+      await ExpoCalendarEvent.get(
+        externalEventId,
+      );
+  } catch {
+    return;
+  }
+
+  const occurrence =
+    appleEvent.recurrenceRule
+      ? appleEvent.getOccurrenceSync({
+          instanceStartDate:
+            startAt,
+        })
+      : appleEvent;
+
+  await occurrence.delete();
+}
