@@ -27,7 +27,7 @@ import {
   updateAppleCalendarEvent,
 } from './calendarService';
 
-import { getConnectedCalendarProviders } from './connectedCalendars';
+import { checkCalendarProviders } from './connectedCalendars';
 
 import {
   createGoogleCalendarEvent,
@@ -420,8 +420,8 @@ async function removeUnlinkedCopy(
  * the copy is deleted again and that calendar counts as failed.
  *
  * Status: 'saved-only' when no calendar is connected, 'synced' / 'partial' /
- * 'failed' otherwise. 'failed' with no provider results means the connected
- * calendars couldn't be checked.
+ * 'failed' otherwise. A calendar whose connection couldn't be checked counts
+ * as failed.
  */
 export async function createCalendarEventWithSync(
   input: NewCalendarEvent,
@@ -433,16 +433,22 @@ export async function createCalendarEventWithSync(
     return { event, status: 'saved-only', providerResults: [] };
   }
 
-  let providers: ExternalCalendarProvider[];
+  const providerResults: ProviderSyncResult[] = [];
+  const providers: ExternalCalendarProvider[] = [];
 
-  try {
-    providers = await getConnectedCalendarProviders();
-  } catch (error) {
-    console.log('Could not check connected calendars:', getSyncErrorMessage(error));
-    return { event, status: 'failed', providerResults: [] };
+  // Each calendar is checked on its own, so a problem checking one doesn't
+  // stop the event from reaching the other.
+  for (const check of await checkCalendarProviders()) {
+    if (check.status === 'connected') {
+      providers.push(check.provider);
+    } else if (check.status === 'check-failed') {
+      const message = getSyncErrorMessage(check.error);
+      console.log(`Could not check whether ${check.provider} Calendar is connected:`, message);
+      providerResults.push({ provider: check.provider, status: 'failed', error: message });
+    }
   }
 
-  if (providers.length === 0) {
+  if (providers.length === 0 && providerResults.length === 0) {
     return { event, status: 'saved-only', providerResults: [] };
   }
 
@@ -454,8 +460,6 @@ export async function createCalendarEventWithSync(
     description: event.description,
     reminderMinutes: event.reminderMinutes,
   };
-
-  const providerResults: ProviderSyncResult[] = [];
 
   for (const provider of providers) {
     let created: { externalEventId: string; externalCalendarId: string; updatedAt?: string };

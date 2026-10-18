@@ -14,7 +14,7 @@ export function getAddEventSyncMessage(result: CalendarEventSyncResult): string 
 
   const failed = result.providerResults.filter((provider) => provider.status === 'failed');
 
-  // The connected calendars couldn't even be checked (e.g. no internet).
+  // A failure always names a calendar now; this is only a fallback.
   if (failed.length === 0) {
     return "Added to RISE, but couldn't reach your connected calendars.";
   }

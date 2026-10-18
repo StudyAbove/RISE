@@ -3,7 +3,7 @@ import { createCalendarEventWithSync } from '../services/calendarEventSyncServic
 
 const mockCreateCalendarEvent = jest.fn();
 const mockSaveCalendarEventLink = jest.fn();
-const mockGetConnectedCalendarProviders = jest.fn();
+const mockCheckCalendarProviders = jest.fn();
 const mockCreateGoogleCalendarEvent = jest.fn();
 const mockCreateAppleCalendarEvent = jest.fn();
 const mockDeleteGoogleCalendarEvent = jest.fn();
@@ -22,8 +22,18 @@ jest.mock('../../../repositories/calendarEventLinksRepository', () => ({
   saveCalendarEventLink: (...args: unknown[]) => mockSaveCalendarEventLink(...args),
 }));
 jest.mock('../services/connectedCalendars', () => ({
-  getConnectedCalendarProviders: () => mockGetConnectedCalendarProviders(),
+  checkCalendarProviders: () => mockCheckCalendarProviders(),
 }));
+
+// Apple and Google are both checked; the ones listed are connected.
+function mockConnectedCalendars(connected: ('apple' | 'google')[]) {
+  mockCheckCalendarProviders.mockResolvedValue(
+    (['apple', 'google'] as const).map((provider) => ({
+      provider,
+      status: connected.includes(provider) ? 'connected' : 'not-connected',
+    })),
+  );
+}
 jest.mock('../services/googleCalendarService', () => ({
   createGoogleCalendarEvent: (...args: unknown[]) => mockCreateGoogleCalendarEvent(...args),
   deleteGoogleCalendarEvent: (...args: unknown[]) => mockDeleteGoogleCalendarEvent(...args),
@@ -78,7 +88,7 @@ afterEach(() => {
 
 describe('createCalendarEventWithSync', () => {
   it('just saves in RISE when no calendar is connected', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue([]);
+    mockConnectedCalendars([]);
 
     await expect(createCalendarEventWithSync(input)).resolves.toEqual({
       event: savedEvent,
@@ -90,7 +100,7 @@ describe('createCalendarEventWithSync', () => {
   });
 
   it('adds the event to every connected calendar and links each copy', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+    mockConnectedCalendars(['apple', 'google']);
 
     const result = await createCalendarEventWithSync(input);
 
@@ -115,7 +125,7 @@ describe('createCalendarEventWithSync', () => {
   });
 
   it('keeps going when one calendar fails, and reports why', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+    mockConnectedCalendars(['apple', 'google']);
     mockCreateGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_RECONNECT_REQUIRED'));
 
     const result = await createCalendarEventWithSync(input);
@@ -130,7 +140,7 @@ describe('createCalendarEventWithSync', () => {
   });
 
   it('still keeps the RISE event when every calendar fails', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockConnectedCalendars(['google']);
     mockCreateGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_CREATE_FAILED'));
 
     const result = await createCalendarEventWithSync(input);
@@ -141,7 +151,7 @@ describe('createCalendarEventWithSync', () => {
 
   // Without a link, the next import would bring the copy back as a duplicate.
   it('deletes a copy whose link could not be saved, and counts it as failed', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+    mockConnectedCalendars(['apple', 'google']);
     mockSaveCalendarEventLink.mockRejectedValue(new Error('permission denied for table calendar_event_links'));
 
     const result = await createCalendarEventWithSync(input);
@@ -156,7 +166,7 @@ describe('createCalendarEventWithSync', () => {
   });
 
   it('only removes the copy whose link failed', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+    mockConnectedCalendars(['apple', 'google']);
     mockSaveCalendarEventLink.mockImplementation(async ({ provider }: { provider: string }) => {
       if (provider === 'google') {
         throw new Error('Network request failed');
@@ -171,7 +181,7 @@ describe('createCalendarEventWithSync', () => {
   });
 
   it('still reports the failure when the unlinked copy cannot be removed either', async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockConnectedCalendars(['google']);
     mockSaveCalendarEventLink.mockRejectedValue(new Error('Network request failed'));
     mockDeleteGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_DELETE_FAILED'));
 
@@ -184,7 +194,7 @@ describe('createCalendarEventWithSync', () => {
   });
 
   it("doesn't delete anything when creating the copy itself failed", async () => {
-    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockConnectedCalendars(['google']);
     mockCreateGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_CREATE_FAILED'));
 
     await createCalendarEventWithSync(input);
@@ -192,21 +202,54 @@ describe('createCalendarEventWithSync', () => {
     expect(mockDeleteGoogleCalendarEvent).not.toHaveBeenCalled();
   });
 
-  it('reports a failure when the connected calendars cannot be checked', async () => {
-    mockGetConnectedCalendarProviders.mockRejectedValue(new Error('Network request failed'));
+  it('still adds the event to Apple when checking Google fails', async () => {
+    mockCheckCalendarProviders.mockResolvedValue([
+      { provider: 'apple', status: 'connected' },
+      { provider: 'google', status: 'check-failed', error: new Error('Network request failed') },
+    ]);
 
-    await expect(createCalendarEventWithSync(input)).resolves.toEqual({
-      event: savedEvent,
-      status: 'failed',
-      providerResults: [],
-    });
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('partial');
+    expect(result.providerResults).toEqual([
+      { provider: 'google', status: 'failed', error: 'Network request failed' },
+      { provider: 'apple', status: 'synced' },
+    ]);
+    expect(mockCreateAppleCalendarEvent).toHaveBeenCalled();
+    expect(mockCreateGoogleCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('still adds the event to Google when checking Apple fails', async () => {
+    mockCheckCalendarProviders.mockResolvedValue([
+      { provider: 'apple', status: 'check-failed', error: new Error('Calendar permission error') },
+      { provider: 'google', status: 'connected' },
+    ]);
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('partial');
+    expect(mockCreateGoogleCalendarEvent).toHaveBeenCalled();
+    expect(mockCreateAppleCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('reports a failure when no calendar could be checked', async () => {
+    mockCheckCalendarProviders.mockResolvedValue([
+      { provider: 'apple', status: 'check-failed', error: new Error('Network request failed') },
+      { provider: 'google', status: 'check-failed', error: new Error('Network request failed') },
+    ]);
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('failed');
+    expect(result.providerResults).toHaveLength(2);
+    expect(result.event).toEqual(savedEvent);
   });
 
   it('sends nothing anywhere when saving in RISE fails', async () => {
     mockCreateCalendarEvent.mockRejectedValue(new Error('permission denied for table calendar_events'));
 
     await expect(createCalendarEventWithSync(input)).rejects.toThrow('permission denied');
-    expect(mockGetConnectedCalendarProviders).not.toHaveBeenCalled();
+    expect(mockCheckCalendarProviders).not.toHaveBeenCalled();
     expect(mockCreateGoogleCalendarEvent).not.toHaveBeenCalled();
   });
 
@@ -216,6 +259,6 @@ describe('createCalendarEventWithSync', () => {
     const result = await createCalendarEventWithSync(input);
 
     expect(result.status).toBe('saved-only');
-    expect(mockGetConnectedCalendarProviders).not.toHaveBeenCalled();
+    expect(mockCheckCalendarProviders).not.toHaveBeenCalled();
   });
 });
