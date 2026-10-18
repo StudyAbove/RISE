@@ -134,9 +134,14 @@ export const styles = StyleSheet.create({
   deleteButton: {
     backgroundColor: statusColors.urgentRed,
   },
-  // Delete arrives with #80; until then it shows but can't be pressed.
+  // While a delete is running.
   disabledButton: {
-    opacity: 0.45,
+    opacity: 0.6,
+  },
+  deletingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   editLabel: {
     fontFamily: fonts.heading.bold,

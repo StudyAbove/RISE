@@ -60,8 +60,9 @@ import {
   getConnectedCalendarProviders,
 } from '../services/connectedCalendars';
 
-import type {
-  CalendarEventSyncResult,
+import {
+  deleteCalendarEventWithSync,
+  type CalendarEventSyncResult,
 } from '../services/calendarEventSyncService';
 
 import {
@@ -1031,6 +1032,24 @@ export function CalendarScreen() {
     );
   }
 
+  /*
+   * Runs after the student confirms in the details sheet (#80). Errors
+   * go back to the sheet, which explains them and keeps the event.
+   */
+  async function handleDeleteEvent(
+    event: CalendarEvent,
+  ) {
+    await deleteCalendarEventWithSync(
+      event,
+    );
+
+    setDetailsVisible(
+      false,
+    );
+
+    refreshCalendar();
+  }
+
   function handleEditFromDetails() {
     openEditAfterDetailsRef.current =
       true;
@@ -1392,6 +1411,9 @@ export function CalendarScreen() {
         }
         onEdit={
           handleEditFromDetails
+        }
+        onDelete={
+          handleDeleteEvent
         }
         onDismiss={
           handleDetailsDismissed

@@ -1,5 +1,5 @@
-import type { FC, ReactNode } from 'react';
-import { Image, type ImageSourcePropType, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { type FC, type ReactNode, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, type ImageSourcePropType, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { SvgProps } from 'react-native-svg';
 import { format, parseISO } from 'date-fns';
 
@@ -13,7 +13,9 @@ import PersonalIcon from '../../../../assets/icons/calendar/event-types/personal
 import StudyIcon from '../../../../assets/icons/calendar/event-types/study.svg';
 import WellnessIcon from '../../../../assets/icons/calendar/event-types/wellness.svg';
 import type { CalendarEvent, CalendarEventType, CalendarSource } from '../../../models/CalendarEvent';
+import { colors } from '../../../theme/colors';
 import { eventTypeCircleColors } from '../calendarColors';
+import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS, formatReminder } from '../utils/eventLabels';
 import { styles } from './EventDetailsSheet.styles';
 import { formatEventTime } from './TodayEventsCard';
@@ -42,6 +44,12 @@ interface EventDetailsSheetProps {
   event: CalendarEvent | null;
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
+  /**
+   * Deletes the event after the student confirms (#80). Resolves once it's
+   * gone, so the calendar can close the sheet; a rejection shows the error
+   * and keeps the event.
+   */
+  onDelete: (event: CalendarEvent) => Promise<void>;
   /** iOS only: called once the sheet has finished sliding away. */
   onDismiss?: () => void;
 }
@@ -51,7 +59,35 @@ interface EventDetailsSheetProps {
  * sheet when an event is tapped. Date, time, and where it came from always
  * show; type, location, reminder, and notes only when the event has them.
  */
-export function EventDetailsSheet({ visible, event, onClose, onEdit, onDismiss }: EventDetailsSheetProps) {
+export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, onDismiss }: EventDetailsSheetProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Each time the sheet opens, it starts ready to delete again.
+  useEffect(() => {
+    if (visible) {
+      setIsDeleting(false);
+    }
+  }, [visible]);
+
+  // Asks first (AC2); Cancel leaves everything as it was (AC4).
+  function confirmDelete(eventToDelete: CalendarEvent) {
+    Alert.alert(`Delete "${eventToDelete.title}"?`, getDeleteConfirmMessage(eventToDelete), [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void deleteEvent(eventToDelete) },
+    ]);
+  }
+
+  async function deleteEvent(eventToDelete: CalendarEvent) {
+    setIsDeleting(true);
+    try {
+      await onDelete(eventToDelete);
+    } catch (error) {
+      Alert.alert("Couldn't delete event", getDeleteErrorMessage(error));
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <Modal
       testID="event-details-sheet"
@@ -124,24 +160,33 @@ export function EventDetailsSheet({ visible, event, onClose, onEdit, onDismiss }
             ) : null}
 
             <View style={styles.buttons}>
+              {/* Both wait while a delete is running, so nothing else can change the event. */}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Edit"
+                accessibilityState={{ disabled: isDeleting }}
+                disabled={isDeleting}
                 onPress={() => onEdit(event)}
-                style={[styles.button, styles.editButton]}
+                style={[styles.button, styles.editButton, isDeleting && styles.disabledButton]}
               >
                 <Text style={styles.editLabel}>Edit</Text>
               </Pressable>
-              {/* Deleting comes with #80; the button shows now so the layout matches Figma. */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Delete"
-                accessibilityHint="Coming soon"
-                accessibilityState={{ disabled: true }}
-                disabled
-                style={[styles.button, styles.deleteButton, styles.disabledButton]}
+                accessibilityLabel={isDeleting ? 'Deleting' : 'Delete'}
+                accessibilityState={{ disabled: isDeleting, busy: isDeleting }}
+                disabled={isDeleting}
+                onPress={() => confirmDelete(event)}
+                style={[styles.button, styles.deleteButton, isDeleting && styles.disabledButton]}
               >
-                <Text style={styles.deleteLabel}>Delete</Text>
+                {isDeleting ? (
+                  <View style={styles.deletingRow}>
+                    <ActivityIndicator size="small" color={colors.softWhite} />
+                    <Text style={styles.deleteLabel}>Deleting…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.deleteLabel}>Delete</Text>
+                )}
               </Pressable>
             </View>
           </ScrollView>

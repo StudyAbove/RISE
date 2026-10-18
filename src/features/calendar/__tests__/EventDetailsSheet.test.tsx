@@ -1,9 +1,12 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert, type AlertButton } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { format, parseISO } from 'date-fns';
 
 import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { formatEventTime } from '../components/TodayEventsCard';
+import { CalendarEventDeleteError } from '../services/calendarEventSyncService';
+import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, formatReminder } from '../utils/eventLabels';
 
 const basicEvent: CalendarEvent = {
@@ -23,11 +26,27 @@ const fullEvent: CalendarEvent = {
   description: 'Bring the lab notebook.',
 };
 
-async function renderSheet(event: CalendarEvent | null) {
+async function renderSheet(event: CalendarEvent | null, onDelete = jest.fn().mockResolvedValue(undefined)) {
   const onClose = jest.fn();
   const onEdit = jest.fn();
-  const result = await render(<EventDetailsSheet visible event={event} onClose={onClose} onEdit={onEdit} />);
-  return { ...result, onClose, onEdit };
+  const result = await render(
+    <EventDetailsSheet visible event={event} onClose={onClose} onEdit={onEdit} onDelete={onDelete} />,
+  );
+  return { ...result, onClose, onEdit, onDelete };
+}
+
+const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+beforeEach(() => {
+  alertSpy.mockClear();
+});
+
+// Presses a button in the most recent alert, the way a student would.
+async function pressAlertButton(text: string) {
+  const buttons: AlertButton[] = alertSpy.mock.calls.at(-1)?.[2] ?? [];
+  await act(async () => {
+    buttons.find((button) => button.text === text)?.onPress?.();
+  });
 }
 
 describe('EventDetailsSheet', () => {
@@ -99,10 +118,64 @@ describe('EventDetailsSheet', () => {
     expect(onEdit).toHaveBeenCalledWith(fullEvent);
   });
 
-  it('shows Delete but keeps it disabled until #80', async () => {
-    await renderSheet(basicEvent);
+  describe('Delete (#80)', () => {
+    it('asks before deleting (AC2)', async () => {
+      const { onDelete } = await renderSheet(basicEvent);
 
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+
+      expect(alertSpy).toHaveBeenCalledWith('Delete "Biology Lab Report"?', "This can't be undone.", [
+        expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+        expect.objectContaining({ text: 'Delete', style: 'destructive' }),
+      ]);
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('keeps the event when the student cancels (AC4)', async () => {
+      const { onDelete } = await renderSheet(basicEvent);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+      await pressAlertButton('Cancel');
+
+      expect(onDelete).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+    });
+
+    it('deletes the event once confirmed (AC3)', async () => {
+      const { onDelete } = await renderSheet(fullEvent);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+      await pressAlertButton('Delete');
+
+      expect(onDelete).toHaveBeenCalledWith(fullEvent);
+    });
+
+    it('shows "Deleting…" and waits while the delete runs', async () => {
+      let finishDelete = () => {};
+      const onDelete = jest.fn(() => new Promise<void>((resolve) => (finishDelete = resolve)));
+      await renderSheet(basicEvent, onDelete);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+      await pressAlertButton('Delete');
+
+      expect(screen.getByText('Deleting…')).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Deleting' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+
+      await act(async () => finishDelete());
+    });
+
+    it('explains a failed delete and keeps the event (AC8)', async () => {
+      const error = new CalendarEventDeleteError('GOOGLE_CALENDAR_RECONNECT_REQUIRED', 'google');
+      await renderSheet(basicEvent, jest.fn().mockRejectedValue(error));
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+      await pressAlertButton('Delete');
+
+      expect(alertSpy).toHaveBeenLastCalledWith("Couldn't delete event", getDeleteErrorMessage(error));
+      expect(screen.getByRole('header', { name: 'Biology Lab Report' })).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+    });
   });
 
   it('shows only the close button when there is no event', async () => {
@@ -123,5 +196,34 @@ describe('formatReminder', () => {
     expect(formatReminder(120)).toBe('2 hours before');
     expect(formatReminder(45)).toBe('45 minutes before');
     expect(formatReminder(1)).toBe('1 minute before');
+  });
+});
+
+describe('delete messages', () => {
+  it('says an imported event also leaves the calendar it came from', () => {
+    expect(getDeleteConfirmMessage({ ...basicEvent, source: 'google' })).toBe(
+      "This can't be undone. It will also be removed from Google Calendar.",
+    );
+    expect(getDeleteConfirmMessage({ ...basicEvent, source: 'apple' })).toBe(
+      "This can't be undone. It will also be removed from Apple Calendar.",
+    );
+  });
+
+  it.each([
+    [
+      new CalendarEventDeleteError('GOOGLE_CALENDAR_RECONNECT_REQUIRED', 'google'),
+      'The event is still on your calendar. Reconnect Google Calendar in Settings, then try again.',
+    ],
+    [
+      new CalendarEventDeleteError('APPLE_CALENDAR_NOT_CONNECTED', 'apple'),
+      'The event is still on your calendar. RISE needs Full Calendar Access to remove it from Apple Calendar. Turn it on in Settings, then try again.',
+    ],
+    [
+      new CalendarEventDeleteError('GOOGLE_CALENDAR_DELETE_FAILED', 'google'),
+      "The event is still on your calendar. It couldn't be removed from Google Calendar. Check your connection and try again.",
+    ],
+    [new Error('Network request failed'), 'The event is still on your calendar. Check your connection and try again.'],
+  ])('explains %s', (error, message) => {
+    expect(getDeleteErrorMessage(error)).toBe(message);
   });
 });
