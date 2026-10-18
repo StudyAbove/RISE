@@ -17,6 +17,8 @@ import {
   CalendarScreen,
 } from '../screens/CalendarScreen';
 
+import * as googleTokenService from '../services/googleTokenService';
+
 const mockGetCalendarEventsInRange =
   jest.fn();
 
@@ -2071,6 +2073,39 @@ describe('CalendarScreen: adding an event (#31)', () => {
 
     expect(await screen.findByText('9:00 AM – 10:00 AM')).toBeOnTheScreen();
     expect(screen.queryByText('No events today.')).not.toBeOnTheScreen();
+  });
+
+  it('says when a new event could not be added to a connected Google Calendar (#123)', async () => {
+    useFakeEventStore();
+    mockGetCalendarConnection.mockImplementation(async (provider: string) =>
+      provider === 'google'
+        ? { provider: 'google', provider_email: 'student@gmail.com', connected: true }
+        : null
+    );
+    // No saved Google access token, so Google asks the student to reconnect.
+    const tokenSpy = jest.spyOn(googleTokenService, 'getGoogleAccessToken').mockResolvedValue(null);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    await render(<CalendarScreen />);
+
+    await addEvent('Chem Lab', 'Wednesday, November 18');
+
+    expect(
+      await screen.findByText("Added to RISE, but couldn't add it to Google Calendar. Reconnect Google in Settings.")
+    ).toBeOnTheScreen();
+    // The event is still in RISE.
+    expect(await screen.findByLabelText('Wednesday, November 18, 1 event')).toBeOnTheScreen();
+    tokenSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  it('shows no note when no calendar is connected', async () => {
+    useFakeEventStore();
+    await render(<CalendarScreen />);
+
+    await addEvent('Chem Lab', 'Wednesday, November 18');
+
+    expect(await screen.findByLabelText('Wednesday, November 18, 1 event')).toBeOnTheScreen();
+    expect(screen.queryByText(/^Added to RISE, but/)).not.toBeOnTheScreen();
   });
 
   it('saves nothing when the form is closed', async () => {

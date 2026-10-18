@@ -32,6 +32,7 @@ import {
 } from '../../../repositories/calendarEventLinksRepository';
 
 import { AddEventSheet } from '../components/addEvent/AddEventSheet';
+import { AddEventSyncNotice } from '../components/AddEventSyncNotice';
 import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
@@ -67,6 +68,8 @@ import {
   shiftAnchorDate,
   type CalendarViewMode,
 } from '../utils/calendarDates';
+
+import { getAddEventSyncMessage } from '../utils/addEventSyncMessage';
 
 import { styles } from './CalendarScreen.styles';
 
@@ -136,6 +139,18 @@ export function CalendarScreen() {
     setIsAddingEvent,
   ] =
     useState(false);
+
+  // Says when a new event didn't reach a connected Google or Apple calendar (#123).
+  const [
+    addEventNotice,
+    setAddEventNotice,
+  ] =
+    useState<string | null>(null);
+
+  const dismissAddEventNotice =
+    useCallback(() => {
+      setAddEventNotice(null);
+    }, []);
 
   const [
     todayCardRefreshKey,
@@ -260,15 +275,18 @@ export function CalendarScreen() {
    * Google Calendar, and refresh every view and the today card (AC3).
    */
   function handleEventAdded(
-    event: CalendarEvent,
+    result: CalendarEventSyncResult,
   ) {
     setIsAddingEvent(false);
     setAnchorDate(
       startOfDay(
-        parseISO(event.startAt),
+        parseISO(result.event.startAt),
       ),
     );
     refreshCalendar();
+    setAddEventNotice(
+      getAddEventSyncMessage(result),
+    );
   }
 
   /*
@@ -1283,6 +1301,17 @@ export function CalendarScreen() {
             retry
           }
         />
+
+        {addEventNotice && (
+          <AddEventSyncNotice
+            message={
+              addEventNotice
+            }
+            onDismiss={
+              dismissAddEventNotice
+            }
+          />
+        )}
       </View>
 
       <EditCalendarEventModal
