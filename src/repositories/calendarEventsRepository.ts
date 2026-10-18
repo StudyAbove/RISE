@@ -2,6 +2,7 @@ import { DEV_SKIP_AUTH } from '../lib/devFlags';
 import { supabase } from '../lib/supabase';
 import {
   addMockCalendarEvent,
+  deleteMockCalendarEvent,
   getMockCalendarEvents,
 } from '../mocks/calendarEvents';
 
@@ -414,15 +415,24 @@ export async function createCalendarEvent(
 }
 
 /**
- * Deletes one RISE calendar event.
+ * Permanently deletes one RISE calendar event.
  *
- * Database foreign keys cascade the deletion to its calendar links and
- * conflict records. Provider copies must be handled by the sync/resolution
- * service before this function is called when those copies still exist.
+ * Provider copies in Apple or Google Calendar must be handled before this
+ * function runs. Database foreign keys then cascade the RISE deletion to its
+ * calendar links and conflict records.
+ *
+ * Row-level security only lets students delete their own events, so a row
+ * that does not exist or cannot be deleted counts as a failure.
  */
 export async function deleteCalendarEvent(
   eventId: string,
 ): Promise<void> {
+  if (DEV_SKIP_AUTH) {
+    // No one is signed in, so Supabase would reject the delete.
+    deleteMockCalendarEvent(eventId);
+    return;
+  }
+
   const {
     data,
     error,
@@ -434,16 +444,13 @@ export async function deleteCalendarEvent(
         'id',
         eventId,
       )
-      .select(
-        'id',
-      )
-      .maybeSingle();
+      .select('id');
 
   if (error) {
     throw error;
   }
 
-  if (!data) {
+  if (!data || data.length === 0) {
     throw new Error(
       'Calendar event could not be found or deleted.',
     );

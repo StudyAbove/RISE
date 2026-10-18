@@ -17,6 +17,7 @@ import {
 
 import {
   createCalendarEvent,
+  deleteCalendarEvent,
   updateCalendarEvent,
   type UpdateCalendarEventInput,
 } from '../../../repositories/calendarEventsRepository';
@@ -544,5 +545,142 @@ export async function retryCalendarEventSync(
       error:
         message,
     };
+  }
+}
+
+/**
+ * The calendars an event has copies in, from its links: the same ones
+ * deleteCalendarEventWithSync deletes from. Google first, then Apple.
+ */
+export async function getLinkedCalendarProviders(
+  eventId: string,
+): Promise<ExternalCalendarProvider[]> {
+  // While the login skip is on there are no saved links to look up.
+  if (DEV_SKIP_AUTH) {
+    return [];
+  }
+
+  const links =
+    await getCalendarEventLinks(
+      eventId,
+    );
+
+  return (['google', 'apple'] as const).filter(
+    (provider) =>
+      links.some(
+        (link) =>
+          link.provider ===
+          provider,
+      ),
+  );
+}
+
+/**
+ * Thrown when an event can't be deleted. provider is set when the
+ * Apple or Google copy is what failed, so the screen can say which
+ * calendar to check.
+ */
+export class CalendarEventDeleteError extends Error {
+  provider?: ExternalCalendarProvider;
+
+  constructor(
+    message: string,
+    provider?: ExternalCalendarProvider,
+  ) {
+    super(message);
+    this.name =
+      'CalendarEventDeleteError';
+    this.provider =
+      provider;
+  }
+}
+
+/**
+ * Deletes an event everywhere it lives (#80).
+ *
+ * Linked Apple and Google copies are deleted first. If any of them
+ * can't be deleted, the RISE event is kept, so it doesn't vanish now
+ * and get imported again on the next sync. Trying again is safe:
+ * copies that are already gone count as deleted.
+ *
+ * The RISE event is deleted last; its links are deleted with it.
+ */
+export async function deleteCalendarEventWithSync(
+  event: CalendarEvent,
+): Promise<void> {
+  // While the login skip is on there are no saved links to look up.
+  const links =
+    DEV_SKIP_AUTH
+      ? []
+      : await getCalendarEventLinks(
+          event.id,
+        );
+
+  for (
+    const link
+    of links
+  ) {
+    try {
+      if (
+        link.provider ===
+        'apple'
+      ) {
+        await deleteAppleCalendarEvent(
+          link.externalEventId,
+          event.startAt,
+        );
+      }
+
+      if (
+        link.provider ===
+        'google'
+      ) {
+        if (
+          !link.externalCalendarId
+        ) {
+          throw new Error(
+            'GOOGLE_CALENDAR_ID_MISSING',
+          );
+        }
+
+        await deleteGoogleCalendarEvent(
+          link.externalEventId,
+          link.externalCalendarId,
+        );
+      }
+    } catch (error) {
+      const message =
+        getSyncErrorMessage(
+          error,
+        );
+
+      console.log(
+        `${link.provider} Calendar delete failed:`,
+        message,
+        error,
+      );
+
+      throw new CalendarEventDeleteError(
+        message,
+        link.provider,
+      );
+    }
+  }
+
+  try {
+    await deleteCalendarEvent(
+      event.id,
+    );
+  } catch (error) {
+    console.log(
+      'RISE event delete failed:',
+      error,
+    );
+
+    throw new CalendarEventDeleteError(
+      getSyncErrorMessage(
+        error,
+      ),
+    );
   }
 }

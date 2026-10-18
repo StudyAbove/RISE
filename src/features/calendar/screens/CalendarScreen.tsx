@@ -79,8 +79,9 @@ import {
   getConnectedCalendarProviders,
 } from '../services/connectedCalendars';
 
-import type {
-  CalendarEventSyncResult,
+import {
+  deleteCalendarEventWithSync,
+  type CalendarEventSyncResult,
 } from '../services/calendarEventSyncService';
 
 import {
@@ -1515,14 +1516,41 @@ export function CalendarScreen() {
     );
   }
 
-  async function handleEditFromDetails() {
+  async function handleDeleteEvent(
+    event: CalendarEvent,
+  ) {
+    /*
+     * Conflict and read-only events are intentionally not deletable.
+     * EventDetailsSheet hides Delete in both cases, but keep the rule
+     * enforced here too in case the UI changes later.
+     */
+    if (
+      selectedEventConflicts.length >
+        0 ||
+      selectedEventReadOnly
+    ) {
+      return;
+    }
+
+    await deleteCalendarEventWithSync(
+      event,
+    );
+
+    setDetailsVisible(
+      false,
+    );
+
+    refreshCalendar();
+  }
+
+  function handleEditFromDetails() {
     if (!selectedEvent) {
       return;
     }
 
     /*
      * A conflicted event must be resolved before normal editing.
-     * The Details UI will hide Edit too, but keep this guard here so
+     * The Details UI hides Edit too, but keep this guard here so
      * the rule is enforced even if the UI changes later.
      */
     if (
@@ -2039,6 +2067,9 @@ export function CalendarScreen() {
         }
         onReviewConflict={
           handleReviewConflictFromDetails
+        }
+        onDelete={
+          handleDeleteEvent
         }
         onDismiss={
           handleDetailsDismissed
