@@ -54,16 +54,12 @@ import {
 } from '../services/calendarBackgroundSyncService';
 
 import {
-  getCalendarConnection,
-} from '../services/calendarConnectionService';
+  getConnectedCalendarProviders,
+} from '../services/connectedCalendars';
 
 import type {
   CalendarEventSyncResult,
 } from '../services/calendarEventSyncService';
-
-import {
-  getAppleCalendarAccess,
-} from '../services/calendarService';
 
 import {
   getTimeGridDays,
@@ -352,52 +348,6 @@ export function CalendarScreen() {
   }, [
     refreshCalendar,
   ]);
-
-  const getConnectedCalendarProviders =
-    useCallback(
-      async (): Promise<
-        ConnectedCalendarProvider[]
-      > => {
-        const [
-          appleConnection,
-          googleConnection,
-          appleAccess,
-        ] =
-          await Promise.all([
-            getCalendarConnection(
-              'apple',
-            ),
-            getCalendarConnection(
-              'google',
-            ),
-            getAppleCalendarAccess(),
-          ]);
-
-        const providers:
-          ConnectedCalendarProvider[] =
-          [];
-
-        if (
-          appleConnection?.connected &&
-          appleAccess === 'full'
-        ) {
-          providers.push(
-            'apple',
-          );
-        }
-
-        if (
-          googleConnection?.connected
-        ) {
-          providers.push(
-            'google',
-          );
-        }
-
-        return providers;
-      },
-      [],
-    );
 
   const loadLatestSuccessfulSync =
     useCallback(

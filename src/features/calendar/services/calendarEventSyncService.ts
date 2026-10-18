@@ -1,5 +1,8 @@
+import { DEV_SKIP_AUTH } from '../../../lib/devFlags';
+
 import type {
   CalendarEvent,
+  NewCalendarEvent,
 } from '../../../models/CalendarEvent';
 
 import type {
@@ -9,18 +12,24 @@ import type {
 import {
   getCalendarEventLinks,
   markCalendarEventLinkSynced,
+  saveCalendarEventLink,
 } from '../../../repositories/calendarEventLinksRepository';
 
 import {
+  createCalendarEvent,
   updateCalendarEvent,
   type UpdateCalendarEventInput,
 } from '../../../repositories/calendarEventsRepository';
 
 import {
+  createAppleCalendarEvent,
   updateAppleCalendarEvent,
 } from './calendarService';
 
+import { getConnectedCalendarProviders } from './connectedCalendars';
+
 import {
+  createGoogleCalendarEvent,
   updateGoogleCalendarEvent,
 } from './googleCalendarService';
 
@@ -368,6 +377,87 @@ export async function updateCalendarEventWithSync(
 
     providerResults,
   };
+}
+
+/**
+ * Saves an event the student made in RISE, then adds it to each connected
+ * Google or Apple calendar (#123).
+ *
+ * Like editing, RISE comes first: if saving in RISE fails, this throws and
+ * nothing is sent anywhere. After that, each calendar is tried on its own, and
+ * a calendar that fails never undoes the RISE save or stops the other one.
+ *
+ * Each new external copy gets a link back to the RISE event. The link is what
+ * lets later edits reach that copy, and what stops the next import from
+ * bringing it back into RISE as a duplicate.
+ *
+ * Status: 'saved-only' when no calendar is connected, 'synced' / 'partial' /
+ * 'failed' otherwise. 'failed' with no provider results means the connected
+ * calendars couldn't be checked.
+ */
+export async function createCalendarEventWithSync(
+  input: NewCalendarEvent,
+): Promise<CalendarEventSyncResult> {
+  const event = await createCalendarEvent(input);
+
+  // With the dev login skip on, no one is signed in, so nothing is connected.
+  if (DEV_SKIP_AUTH) {
+    return { event, status: 'saved-only', providerResults: [] };
+  }
+
+  let providers: ExternalCalendarProvider[];
+
+  try {
+    providers = await getConnectedCalendarProviders();
+  } catch (error) {
+    console.log('Could not check connected calendars:', getSyncErrorMessage(error));
+    return { event, status: 'failed', providerResults: [] };
+  }
+
+  if (providers.length === 0) {
+    return { event, status: 'saved-only', providerResults: [] };
+  }
+
+  const details = {
+    title: event.title,
+    startAt: event.startAt,
+    endAt: event.endAt,
+    location: event.location,
+    description: event.description,
+    reminderMinutes: event.reminderMinutes,
+  };
+
+  const providerResults: ProviderSyncResult[] = [];
+
+  for (const provider of providers) {
+    try {
+      const created =
+        provider === 'google'
+          ? await createGoogleCalendarEvent(details)
+          : await createAppleCalendarEvent(details);
+
+      await saveCalendarEventLink({
+        calendarEventId: event.id,
+        userId: event.userId,
+        provider,
+        externalEventId: created.externalEventId,
+        externalCalendarId: created.externalCalendarId,
+        externalUpdatedAt: created.updatedAt,
+      });
+
+      providerResults.push({ provider, status: 'synced' });
+    } catch (error) {
+      const message = getSyncErrorMessage(error);
+      console.log(`Could not add the event to ${provider} Calendar:`, message);
+      providerResults.push({ provider, status: 'failed', error: message });
+    }
+  }
+
+  const successfulCount = providerResults.filter((result) => result.status === 'synced').length;
+  const status =
+    successfulCount === providerResults.length ? 'synced' : successfulCount === 0 ? 'failed' : 'partial';
+
+  return { event, status, providerResults };
 }
 
 /**

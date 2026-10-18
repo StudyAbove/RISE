@@ -1,0 +1,171 @@
+import type { CalendarEvent } from '../../../models/CalendarEvent';
+import { createCalendarEventWithSync } from '../services/calendarEventSyncService';
+
+const mockCreateCalendarEvent = jest.fn();
+const mockSaveCalendarEventLink = jest.fn();
+const mockGetConnectedCalendarProviders = jest.fn();
+const mockCreateGoogleCalendarEvent = jest.fn();
+const mockCreateAppleCalendarEvent = jest.fn();
+const mockDevFlags = { skipAuth: false };
+
+jest.mock('../../../lib/devFlags', () => ({
+  get DEV_SKIP_AUTH() {
+    return mockDevFlags.skipAuth;
+  },
+}));
+jest.mock('../../../repositories/calendarEventsRepository', () => ({
+  createCalendarEvent: (...args: unknown[]) => mockCreateCalendarEvent(...args),
+}));
+jest.mock('../../../repositories/calendarEventLinksRepository', () => ({
+  saveCalendarEventLink: (...args: unknown[]) => mockSaveCalendarEventLink(...args),
+}));
+jest.mock('../services/connectedCalendars', () => ({
+  getConnectedCalendarProviders: () => mockGetConnectedCalendarProviders(),
+}));
+jest.mock('../services/googleCalendarService', () => ({
+  createGoogleCalendarEvent: (...args: unknown[]) => mockCreateGoogleCalendarEvent(...args),
+}));
+jest.mock('../services/calendarService', () => ({
+  createAppleCalendarEvent: (...args: unknown[]) => mockCreateAppleCalendarEvent(...args),
+}));
+
+const input = {
+  title: 'Chem Lab',
+  startAt: '2026-11-18T17:00:00.000Z',
+  endAt: '2026-11-18T18:00:00.000Z',
+  location: 'Room 204',
+  reminderMinutes: 1440,
+};
+
+const savedEvent: CalendarEvent = { ...input, id: 'rise-event-1', userId: 'user-1', source: 'rise' };
+
+const sentDetails = {
+  title: 'Chem Lab',
+  startAt: '2026-11-18T17:00:00.000Z',
+  endAt: '2026-11-18T18:00:00.000Z',
+  location: 'Room 204',
+  description: undefined,
+  reminderMinutes: 1440,
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockDevFlags.skipAuth = false;
+  jest.spyOn(console, 'log').mockImplementation(() => {});
+  mockCreateCalendarEvent.mockResolvedValue(savedEvent);
+  mockSaveCalendarEventLink.mockResolvedValue(undefined);
+  mockCreateGoogleCalendarEvent.mockResolvedValue({
+    externalEventId: 'google-event-1',
+    externalCalendarId: 'student@csulb.edu',
+    updatedAt: '2026-11-13T09:31:00.000Z',
+  });
+  mockCreateAppleCalendarEvent.mockResolvedValue({
+    externalEventId: 'apple-event-1',
+    externalCalendarId: 'apple-default',
+    updatedAt: '2026-11-13T09:31:05.000Z',
+  });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+describe('createCalendarEventWithSync', () => {
+  it('just saves in RISE when no calendar is connected', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue([]);
+
+    await expect(createCalendarEventWithSync(input)).resolves.toEqual({
+      event: savedEvent,
+      status: 'saved-only',
+      providerResults: [],
+    });
+    expect(mockCreateGoogleCalendarEvent).not.toHaveBeenCalled();
+    expect(mockCreateAppleCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('adds the event to every connected calendar and links each copy', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('synced');
+    expect(result.providerResults).toEqual([
+      { provider: 'apple', status: 'synced' },
+      { provider: 'google', status: 'synced' },
+    ]);
+    expect(mockCreateAppleCalendarEvent).toHaveBeenCalledWith(sentDetails);
+    expect(mockCreateGoogleCalendarEvent).toHaveBeenCalledWith(sentDetails);
+    expect(mockSaveCalendarEventLink).toHaveBeenCalledWith({
+      calendarEventId: 'rise-event-1',
+      userId: 'user-1',
+      provider: 'google',
+      externalEventId: 'google-event-1',
+      externalCalendarId: 'student@csulb.edu',
+      externalUpdatedAt: '2026-11-13T09:31:00.000Z',
+    });
+    expect(mockSaveCalendarEventLink).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'apple', externalEventId: 'apple-event-1' })
+    );
+  });
+
+  it('keeps going when one calendar fails, and reports why', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['apple', 'google']);
+    mockCreateGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_RECONNECT_REQUIRED'));
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('partial');
+    expect(result.providerResults).toEqual([
+      { provider: 'apple', status: 'synced' },
+      { provider: 'google', status: 'failed', error: 'GOOGLE_CALENDAR_RECONNECT_REQUIRED' },
+    ]);
+    // Only the copy that exists gets a link.
+    expect(mockSaveCalendarEventLink).toHaveBeenCalledTimes(1);
+  });
+
+  it('still keeps the RISE event when every calendar fails', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockCreateGoogleCalendarEvent.mockRejectedValue(new Error('GOOGLE_CALENDAR_CREATE_FAILED'));
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('failed');
+    expect(result.event).toEqual(savedEvent);
+  });
+
+  it('counts a copy whose link could not be saved as failed', async () => {
+    mockGetConnectedCalendarProviders.mockResolvedValue(['google']);
+    mockSaveCalendarEventLink.mockRejectedValue(new Error('permission denied for table calendar_event_links'));
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('failed');
+  });
+
+  it('reports a failure when the connected calendars cannot be checked', async () => {
+    mockGetConnectedCalendarProviders.mockRejectedValue(new Error('Network request failed'));
+
+    await expect(createCalendarEventWithSync(input)).resolves.toEqual({
+      event: savedEvent,
+      status: 'failed',
+      providerResults: [],
+    });
+  });
+
+  it('sends nothing anywhere when saving in RISE fails', async () => {
+    mockCreateCalendarEvent.mockRejectedValue(new Error('permission denied for table calendar_events'));
+
+    await expect(createCalendarEventWithSync(input)).rejects.toThrow('permission denied');
+    expect(mockGetConnectedCalendarProviders).not.toHaveBeenCalled();
+    expect(mockCreateGoogleCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it("doesn't check calendars while the login skip is on", async () => {
+    mockDevFlags.skipAuth = true;
+
+    const result = await createCalendarEventWithSync(input);
+
+    expect(result.status).toBe('saved-only');
+    expect(mockGetConnectedCalendarProviders).not.toHaveBeenCalled();
+  });
+});
