@@ -2119,3 +2119,67 @@ describe('CalendarScreen: adding an event (#31)', () => {
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 });
+
+describe('CalendarScreen: opening an event (#34)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const todayEvent: CalendarEvent = {
+    id: 'event-1',
+    userId: 'user-1',
+    title: 'Bio Lab',
+    startAt: new Date(2026, 10, 13, 9).toISOString(),
+    endAt: new Date(2026, 10, 13, 10).toISOString(),
+    source: 'google',
+    location: 'Hall of Science 210',
+  };
+
+  async function openTodayEvent() {
+    mockGetCalendarEventsInRange.mockResolvedValue([todayEvent]);
+    await render(<CalendarScreen />);
+    const [eventButton] = await screen.findAllByRole('button', { name: /^Bio Lab,/ });
+    await fireEvent.press(eventButton);
+  }
+
+  // iOS tells the details sheet once it has finished sliding away. The test
+  // Modal disappears as soon as it's hidden, so keep its onDismiss from while
+  // it's open and call it after the sheet closes.
+  function captureDetailsDismiss(): () => Promise<void> {
+    const onDismiss = screen.getByTestId('event-details-sheet').props.onDismiss as () => void;
+    return () =>
+      act(async () => {
+        onDismiss();
+      });
+  }
+
+  it('opens the details when an event is tapped (AC1, AC2)', async () => {
+    await openTodayEvent();
+
+    expect(screen.getByRole('header', { name: 'Bio Lab' })).toBeOnTheScreen();
+    expect(screen.getByText('From Google Calendar')).toBeOnTheScreen();
+    expect(screen.getByText('Hall of Science 210')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Close edit event')).not.toBeOnTheScreen();
+  });
+
+  it('returns to the calendar when the details are closed (AC3)', async () => {
+    await openTodayEvent();
+
+    const finishClosingDetails = captureDetailsDismiss();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+    await finishClosingDetails();
+
+    expect(screen.queryByRole('header', { name: 'Bio Lab' })).not.toBeOnTheScreen();
+    expect(screen.queryByLabelText('Close edit event')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Month' })).toBeOnTheScreen();
+  });
+
+  it('opens the edit form from Edit once the details have closed', async () => {
+    await openTodayEvent();
+
+    const finishClosingDetails = captureDetailsDismiss();
+    await fireEvent.press(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByLabelText('Close edit event')).not.toBeOnTheScreen();
+    await finishClosingDetails();
+
+    expect(screen.getByLabelText('Close edit event')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Event title')).toHaveDisplayValue('Bio Lab');
+  });
+});
