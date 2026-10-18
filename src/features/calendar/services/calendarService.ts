@@ -1,6 +1,7 @@
 import {
   ExpoCalendarEvent,
   getCalendarPermissions,
+  getDefaultCalendarSync,
   requestCalendarPermissions,
 } from 'expo-calendar';
 
@@ -207,6 +208,93 @@ export async function updateAppleCalendarEvent(
     updatedAt:
       normalizeAppleModifiedDate(
         refreshedEvent.lastModifiedDate,
+      ),
+  };
+}
+
+export interface AppleCalendarEventCreate {
+  title: string;
+  startAt: string;
+  endAt: string;
+  location?: string;
+  description?: string;
+  /** Minutes before the start to alert the student, e.g. 1440 for 1 day. */
+  reminderMinutes?: number;
+}
+
+export interface AppleCalendarEventCreateResult {
+  externalEventId: string;
+  externalCalendarId: string;
+  updatedAt?: string;
+}
+
+/**
+ * Adds an event the student made in RISE to the phone's default calendar
+ * (#123). Needs Full Access, like updates, since that's what counts as a
+ * connected Apple Calendar.
+ */
+export async function createAppleCalendarEvent(
+  event: AppleCalendarEventCreate,
+): Promise<AppleCalendarEventCreateResult> {
+  const access =
+    await getAppleCalendarAccess();
+
+  if (
+    access !==
+    'full'
+  ) {
+    throw new Error(
+      'APPLE_CALENDAR_NOT_CONNECTED',
+    );
+  }
+
+  let calendar;
+
+  try {
+    calendar =
+      getDefaultCalendarSync();
+  } catch {
+    // For example, the phone has no calendar that new events can go into.
+    throw new Error(
+      'APPLE_DEFAULT_CALENDAR_MISSING',
+    );
+  }
+
+  const created =
+    await calendar.createEvent({
+      title:
+        event.title,
+      startDate:
+        new Date(event.startAt),
+      endDate:
+        new Date(event.endAt),
+      location:
+        event.location?.trim() ||
+        undefined,
+      notes:
+        event.description?.trim() ||
+        undefined,
+      // A negative offset is that many minutes before the start.
+      alarms:
+        event.reminderMinutes
+          ? [
+              {
+                relativeOffset:
+                  -event.reminderMinutes,
+              },
+            ]
+          : undefined,
+    });
+
+  return {
+    externalEventId:
+      created.id,
+    externalCalendarId:
+      created.calendarId ??
+      calendar.id,
+    updatedAt:
+      normalizeAppleModifiedDate(
+        created.lastModifiedDate,
       ),
   };
 }
