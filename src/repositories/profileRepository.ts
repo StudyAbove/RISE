@@ -25,3 +25,28 @@ export async function fetchCurrentDisplayName(): Promise<string | null> {
 
   return profile?.display_name ?? null;
 }
+
+/** Records that the signed-in student finished onboarding so it isn't shown again. */
+export async function markOnboardingCompleted(): Promise<void> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error('No signed-in user was found.');
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ onboarding_completed: true })
+    .eq('id', user.id);
+
+  if (error) {
+    throw error;
+  }
+}

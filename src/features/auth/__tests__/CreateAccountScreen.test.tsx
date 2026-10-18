@@ -140,10 +140,14 @@ describe('CreateAccountScreen', () => {
       );
 
       expect(
-        getByText(
-          'Check your school email for a verification link.',
-        ),
-      ).toBeOnTheScreen();
+        mockNavigate,
+      ).toHaveBeenCalledWith(
+        'CheckInbox',
+        {
+          email:
+            'student@csulb.edu',
+        },
+      );
     });
 
     // Existing account
@@ -158,10 +162,10 @@ describe('CreateAccountScreen', () => {
 
     await waitFor(() => {
       expect(
-        queryByText(
-          'Check your school email for a verification link.',
-        ),
-      ).not.toBeOnTheScreen();
+        emailInput,
+      ).toHaveDisplayValue(
+        'existing@csulb.edu',
+      );
     });
 
     fireEvent.press(signUpButton);

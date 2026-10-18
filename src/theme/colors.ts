@@ -23,3 +23,20 @@ export const statusColors = {
   progressTrack: '#E5E6EB', // Empty part of assignment progress bars
   positiveGreen: '#32E86C', // Week-over-week gains on Analytics, e.g. "+18%"
 } as const;
+
+/**
+ * Colors from the onboarding Figma screens that aren't part of the final palette.
+ * Confirm with the designer before using them outside onboarding.
+ */
+export const onboardingColors = {
+  heading: '#1E2E22', // Titles, e.g. "Connect your classes"
+  bodyText: '#5C6A60', // Paragraphs under the titles
+  wordmark: '#353333', // "RISE" in the top-left corner
+  primaryButton: '#F5D166', // "Copy the Link", "Show me my week"
+  appleButton: '#2C3E2F', // "Apple Calendar" button
+  outlineBorder: '#C7C7C4', // "Google Calendar" button border
+  rowBorder: '#E4E4E0', // Rows on "You're all set"
+  inactiveDot: '#CFD6CB', // Page indicator dots that aren't the current step
+  iconCircle: '#D2DFCE', // Circles behind feature icons and check marks
+  iconGreen: '#537257', // Row icons and the "done" circle on "You're all set"
+} as const;

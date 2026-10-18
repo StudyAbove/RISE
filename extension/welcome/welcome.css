@@ -1,0 +1,144 @@
+/* The page that opens after install. Follows Figma's Screen4 welcome frame. */
+
+:root {
+  --ink: #2c2c24;
+  --muted: #7a7a6e;
+  --gold-dark: #d4a843;
+  --cream: #f2efe7;
+  --line: #e0d9c8;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 120px 24px 300px;
+  overflow-x: hidden;
+  background: var(--cream);
+  font-family: 'Rise Inter', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 520px;
+  max-width: 100%;
+  padding: 40px 52px 36px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 252, 0.9);
+  box-shadow: 0 4px 32px rgba(44, 44, 36, 0.09);
+  text-align: center;
+}
+
+.logo-tile {
+  width: 68px;
+  height: 68px;
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow: 0 4px 16px rgba(232, 200, 90, 0.33);
+}
+
+.logo-tile img {
+  display: block;
+}
+
+h1 {
+  padding-top: 22px;
+  font-family: 'Helvetica Neue', 'Rise Inter', Arial, sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 45px;
+  letter-spacing: 0.1px;
+}
+
+.ready {
+  color: var(--gold-dark);
+}
+
+.intro {
+  max-width: 360px;
+  padding-top: 10px;
+  font-size: 14.5px;
+  line-height: 23.9px;
+  color: var(--muted);
+}
+
+.hint {
+  padding: 24px 0 14px;
+  font-size: 13px;
+  line-height: 19.5px;
+  color: var(--muted);
+}
+
+.canvas-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 45.75px;
+  padding: 12px 28px;
+  border-radius: 12px;
+  background: var(--ink);
+  filter: drop-shadow(0 4px 7px rgba(44, 44, 36, 0.2));
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 21.75px;
+  color: #ffffff;
+  text-decoration: none;
+  transition: transform 0.12s ease;
+}
+
+.canvas-button:hover {
+  transform: translateY(-1px);
+}
+
+.canvas-button:focus-visible {
+  outline: 3px solid rgba(232, 200, 90, 0.6);
+  outline-offset: 3px;
+}
+
+/* Sun rising over the hills along the bottom of the page. */
+.scenery {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 230px;
+  pointer-events: none;
+}
+
+.sun {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  width: 220px;
+  height: 170px;
+  transform: translateX(-50%);
+}
+
+.hills {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 180px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-button {
+    transition: none;
+  }
+}

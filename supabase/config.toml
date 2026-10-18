@@ -424,3 +424,10 @@ entrypoint = "./functions/check-email-exists/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/check-email-exists/*.html" ]
+
+# Called by the Canvas browser extension, which has no Supabase session.
+# The function checks its own extension token instead (#22).
+[functions.canvas-extension]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/canvas-extension/index.ts"

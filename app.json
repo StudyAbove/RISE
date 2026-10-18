@@ -41,7 +41,8 @@
         {
           "calendarPermission": "Allow RISE to access your calendar so it can plan study sessions around your existing events."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

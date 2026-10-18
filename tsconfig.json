@@ -5,6 +5,7 @@
     "types": ["jest"]
   },
   "exclude": [
-    "supabase/functions"
+    "supabase/functions",
+    "extension"
   ]
 }

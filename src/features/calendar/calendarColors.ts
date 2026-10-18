@@ -1,4 +1,4 @@
-import type { CalendarSource } from '../../models/CalendarEvent';
+import type { CalendarEventType, CalendarSource } from '../../models/CalendarEvent';
 import { colors } from '../../theme/colors';
 
 /**
@@ -30,7 +30,22 @@ export const calendarColors = {
   eventChip: '#FBEFDE',
   // warmCream family: band behind the today card under the month grid
   todayCardBand: '#EFEEE9',
+  // warmCream family: background of the event details sheet (#34)
+  detailsBackground: '#F4F3F0',
 } as const;
+
+/**
+ * The Type buttons on the Add Event form (Figma "Event Type Button"). Each type
+ * has its own pastel; a selected button turns green.
+ */
+export const eventTypeButtonColors: Record<CalendarEventType | 'selected', { background: string; border: string }> = {
+  class: { background: '#F2F2F2', border: '#E2E2E2' },
+  assignment: { background: '#FAF2E6', border: '#EAE4B4' },
+  study: { background: '#E9F0E8', border: colors.softSage },
+  personal: { background: '#F2E5E5', border: '#DAAEAE' },
+  wellness: { background: '#D0DED5', border: '#83A48F' },
+  selected: { background: '#83A48F', border: '#31573E' },
+};
 
 /**
  * The colored tab on the left of each event chip, by where the event came from.
@@ -42,4 +57,18 @@ export const eventSourceColors: Record<CalendarSource, string> = {
   canvas: '#C7BFA0',
   google: colors.softSage,
   apple: colors.eucalyptus,
+};
+
+/**
+ * The circle behind the big icon at the top of the event details sheet (#34).
+ * Figma shows Assignment (paleSun); the other types use their Type button
+ * pastel, and events without a type use mistGreen.
+ */
+export const eventTypeCircleColors: Record<CalendarEventType | 'none', string> = {
+  assignment: colors.paleSun,
+  class: eventTypeButtonColors.class.background,
+  study: eventTypeButtonColors.study.background,
+  personal: eventTypeButtonColors.personal.background,
+  wellness: eventTypeButtonColors.wellness.background,
+  none: colors.mistGreen,
 };

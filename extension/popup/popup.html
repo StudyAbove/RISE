@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rise Canvas Sync</title>
+    <link rel="stylesheet" href="../styles/fonts.css">
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <div class="brand"><img src="../images/rise-logo.svg" alt="">Rise</div>
+
+      <!-- Shown until the extension is connected to a Rise account. -->
+      <section id="disconnected" hidden>
+        <h1>Connect Rise to Canvas</h1>
+        <p class="subtitle">
+          Open Canvas and sign in with the same email as your Rise app, plus the code from Settings → Canvas.
+        </p>
+        <button class="button button--gold" id="connect" type="button">Open Canvas →</button>
+      </section>
+
+      <section id="connected" hidden>
+        <h1>Canvas syncs automatically</h1>
+        <p class="subtitle">Connected as <strong id="email"></strong></p>
+
+        <p class="info-box" id="sync-status" role="status" aria-live="polite"></p>
+
+        <button class="button button--dark" id="sync-now" type="button">Sync now</button>
+        <button class="button button--light" id="classes" type="button">Classes &amp; colors</button>
+        <button class="link-button" id="disconnect" type="button">Disconnect</button>
+      </section>
+    </main>
+
+    <script src="../config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

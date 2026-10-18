@@ -24,6 +24,11 @@ export function CalendarSyncSuccessModal({
   provider,
   onDone,
 }: CalendarSyncSuccessModalProps) {
+  const providerName =
+    provider === 'Apple'
+      ? 'Apple Calendar'
+      : 'Google Calendar';
+
   return (
     <Modal
       visible={visible}
@@ -44,13 +49,11 @@ export function CalendarSyncSuccessModal({
           </View>
 
           <Text style={styles.modalTitle}>
-            Calendar synced!
+            Calendar connected!
           </Text>
 
           <Text style={styles.modalMessage}>
-            Your {provider} Calendar is now connected. We’ll use your
-            schedule to help plan study sessions around your existing
-            events.
+            {providerName} is connected. Your events are syncing in the background.
           </Text>
 
           <Pressable
@@ -136,7 +139,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontFamily: fonts.body.medium,
     fontSize: 14,
-    lineHeight: 18,
+    lineHeight: 19,
     color: '#71717B',
     textAlign: 'center',
   },
