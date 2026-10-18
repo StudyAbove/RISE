@@ -16,11 +16,18 @@ import {
 } from '../../../repositories/calendarEventsRepository';
 
 import {
+  getAllDayCalendarEventLinksByProvider,
   getCalendarEventLinkByExternalEvent,
   getCalendarEventLinksByProvider,
   markCalendarEventLinkSynced,
   saveCalendarEventLink,
+  updateCalendarEventLinkAllDayMetadata,
+  updateCalendarEventLinkWritability,
 } from '../../../repositories/calendarEventLinksRepository';
+
+import {
+  saveCalendarEventConflict,
+} from '../../../repositories/calendarEventConflictsRepository';
 
 import {
   getAcademicTermRange,
@@ -41,6 +48,15 @@ export interface AppleCalendarImportCandidate {
   location?: string;
   description?: string;
   allDay: boolean;
+  allDayStartDate?: string;
+  allDayEndDate?: string;
+
+  /**
+   * EventKit calendar permission.
+   * False means RISE may read the event but must not push changes back.
+   */
+  isWritable: boolean;
+
   updatedAt?: string;
 }
 
@@ -57,8 +73,79 @@ export type ImportAppleCalendarEventResult =
 export interface AppleCalendarBulkSyncResult {
   imported: number;
   skipped: number;
+
+  // Actual provider/database/persistence failures.
   failed: number;
+
+  // Events intentionally preserved for user conflict resolution.
+  conflicts: number;
+
   total: number;
+}
+
+function normalizeCrossProviderTitle(
+  value: string,
+) {
+  return value
+    .trim()
+    .replace(
+      /\s+/g,
+      ' ',
+    )
+    .toLocaleLowerCase();
+}
+
+function findCrossProviderAllDayMatch(
+  candidate: AppleCalendarImportCandidate,
+  otherProviderLinks: CalendarEventLink[],
+  riseEventsById: Map<
+    string,
+    CalendarEventSyncRecord
+  >,
+) {
+  if (
+    !candidate.allDay ||
+    !candidate.allDayStartDate ||
+    !candidate.allDayEndDate
+  ) {
+    return undefined;
+  }
+
+  const candidateTitle =
+    normalizeCrossProviderTitle(
+      candidate.title,
+    );
+
+  for (
+    const link
+    of otherProviderLinks
+  ) {
+    if (
+      !link.isAllDay ||
+      link.allDayStartDate !==
+        candidate.allDayStartDate ||
+      link.allDayEndDate !==
+        candidate.allDayEndDate
+    ) {
+      continue;
+    }
+
+    const riseEvent =
+      riseEventsById.get(
+        link.calendarEventId,
+      );
+
+    if (
+      riseEvent &&
+      normalizeCrossProviderTitle(
+        riseEvent.title,
+      ) === candidateTitle
+    ) {
+      return riseEvent;
+    }
+  }
+
+  return undefined;
 }
 
 function normalizeOptionalText(
@@ -76,6 +163,94 @@ function sameInstant(
     new Date(first).getTime() ===
     new Date(second).getTime()
   );
+}
+
+function toExclusiveAllDayEndDate(
+  value:
+    | string
+    | Date
+    | number,
+) {
+  const date =
+    value instanceof Date
+      ? new Date(
+          value.getTime(),
+        )
+      : new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return undefined;
+  }
+
+  const alreadyExclusive =
+    date.getHours() === 0 &&
+    date.getMinutes() === 0 &&
+    date.getSeconds() === 0 &&
+    date.getMilliseconds() === 0;
+
+  // EventKit may expose an all-day end in either form:
+  //
+  // 1. Midnight of the following day, which is already exclusive.
+  // 2. The final second/millisecond of the included day.
+  //
+  // RISE stores an exclusive semantic end date so it matches
+  // Google Calendar's all-day date representation.
+  if (
+    !alreadyExclusive
+  ) {
+    date.setDate(
+      date.getDate() + 1,
+    );
+  }
+
+  return toLocalCalendarDate(
+    date,
+  );
+}
+
+function toLocalCalendarDate(
+  value:
+    | string
+    | Date
+    | number,
+) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return undefined;
+  }
+
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1,
+    ).padStart(
+      2,
+      '0',
+    );
+
+  const day =
+    String(
+      date.getDate(),
+    ).padStart(
+      2,
+      '0',
+    );
+
+  return `${year}-${month}-${day}`;
 }
 
 function normalizeAppleModifiedDate(
@@ -222,6 +397,70 @@ async function markAppleLinkSynced(
 }
 
 /**
+ * Stores the RISE and Apple versions exactly as they exist when
+ * synchronization detects that neither copy can be safely overwritten.
+ */
+async function saveAppleConflict(
+  riseEvent: CalendarEventSyncRecord,
+  link: CalendarEventLink,
+  candidate: AppleCalendarImportCandidate,
+) {
+  await saveCalendarEventConflict({
+    calendarEventId:
+      riseEvent.id,
+
+    calendarEventLinkId:
+      link.id,
+
+    userId:
+      link.userId,
+
+    provider:
+      'apple',
+
+    riseVersion: {
+      title:
+        riseEvent.title,
+
+      startAt:
+        riseEvent.startAt,
+
+      endAt:
+        riseEvent.endAt,
+
+      location:
+        riseEvent.location,
+
+      description:
+        riseEvent.description,
+
+      updatedAt:
+        riseEvent.updatedAt,
+    },
+
+    providerVersion: {
+      title:
+        candidate.title,
+
+      startAt:
+        candidate.startAt,
+
+      endAt:
+        candidate.endAt,
+
+      location:
+        candidate.location,
+
+      description:
+        candidate.description,
+
+      updatedAt:
+        candidate.updatedAt,
+    },
+  });
+}
+
+/**
  * Reads existing events from calendars available through
  * Apple Calendar / iOS EventKit.
  *
@@ -275,6 +514,16 @@ export async function getAppleCalendarEvents(
         (calendar) => [
           calendar.id,
           calendar.title,
+        ],
+      ),
+    );
+
+  const calendarWritability =
+    new Map(
+      readableCalendars.map(
+        (calendar) => [
+          calendar.id,
+          calendar.allowsModifications,
         ],
       ),
     );
@@ -340,6 +589,26 @@ export async function getAppleCalendarEvents(
 
           allDay:
             event.allDay,
+
+          allDayStartDate:
+            event.allDay
+              ? toLocalCalendarDate(
+                  event.startDate,
+                )
+              : undefined,
+
+          allDayEndDate:
+            event.allDay
+              ? toExclusiveAllDayEndDate(
+                  event.endDate,
+                )
+              : undefined,
+
+          isWritable:
+            calendarWritability.get(
+              event.calendarId,
+            ) ??
+            false,
 
           ...(updatedAt
             ? {
@@ -424,6 +693,18 @@ export async function importAppleCalendarEvent(
 
     externalUpdatedAt:
       candidate.updatedAt,
+
+    isWritable:
+      candidate.isWritable,
+
+    isAllDay:
+      candidate.allDay,
+
+    allDayStartDate:
+      candidate.allDayStartDate,
+
+    allDayEndDate:
+      candidate.allDayEndDate,
   });
 
   return {
@@ -445,7 +726,7 @@ export async function importAppleCalendarEvent(
  * If only Apple changed, Apple is pulled into RISE.
  * If only RISE changed, RISE is pushed back to Apple.
  * If both changed, neither version is overwritten automatically.
- * Story #85 will resolve that conflict.
+ * Story #85 stores the conflicting versions for student review.
  */
 export async function syncAppleCalendarEvents(
   date: Date = new Date(),
@@ -469,6 +750,11 @@ export async function syncAppleCalendarEvents(
       'apple',
     );
 
+  const crossProviderAllDayLinks =
+    await getAllDayCalendarEventLinksByProvider(
+      'google',
+    );
+
   const linksByExternalId =
     new Map(
       existingLinks.map(
@@ -482,7 +768,10 @@ export async function syncAppleCalendarEvents(
   const linkedRiseEventIds =
     Array.from(
       new Set(
-        existingLinks.map(
+        [
+          ...existingLinks,
+          ...crossProviderAllDayLinks,
+        ].map(
           (link) =>
             link.calendarEventId,
         ),
@@ -507,6 +796,7 @@ export async function syncAppleCalendarEvents(
   let imported = 0;
   let skipped = 0;
   let failed = 0;
+  let conflicts = 0;
 
   for (
     const candidate
@@ -519,18 +809,61 @@ export async function syncAppleCalendarEvents(
 
     if (!existingLink) {
       try {
-        const result =
-          await importAppleCalendarEvent(
+        const crossProviderMatch =
+          findCrossProviderAllDayMatch(
             candidate,
+            crossProviderAllDayLinks,
+            riseEventsById,
           );
 
-        if (
-          result.status ===
-          'imported'
-        ) {
-          imported += 1;
-        } else {
+        if (crossProviderMatch) {
+          await saveCalendarEventLink({
+            calendarEventId:
+              crossProviderMatch.id,
+
+            userId:
+              crossProviderMatch.userId,
+
+            provider:
+              'apple',
+
+            externalEventId:
+              candidate.externalEventId,
+
+            externalCalendarId:
+              candidate.externalCalendarId,
+
+            externalUpdatedAt:
+              candidate.updatedAt,
+
+            isWritable:
+              candidate.isWritable,
+
+            isAllDay:
+              true,
+
+            allDayStartDate:
+              candidate.allDayStartDate,
+
+            allDayEndDate:
+              candidate.allDayEndDate,
+          });
+
           skipped += 1;
+        } else {
+          const result =
+            await importAppleCalendarEvent(
+              candidate,
+            );
+
+          if (
+            result.status ===
+            'imported'
+          ) {
+            imported += 1;
+          } else {
+            skipped += 1;
+          }
         }
       } catch (error) {
         failed += 1;
@@ -556,6 +889,56 @@ export async function syncAppleCalendarEvents(
       console.log(
         'Apple Calendar sync could not find linked RISE event:',
         existingLink.calendarEventId,
+      );
+
+      continue;
+    }
+
+    /*
+     * Refresh the stored permission from EventKit before making
+     * any write/conflict decision. This also corrects links that
+     * existed before writability tracking was added.
+     */
+    try {
+      await updateCalendarEventLinkWritability(
+        riseEvent.id,
+        'apple',
+        candidate.isWritable,
+      );
+    } catch (error) {
+      failed += 1;
+
+      console.log(
+        'Apple Calendar writability update failed:',
+        candidate.externalEventId,
+        error,
+      );
+
+      continue;
+    }
+
+    try {
+      await updateCalendarEventLinkAllDayMetadata(
+        riseEvent.id,
+        'apple',
+        {
+          isAllDay:
+            candidate.allDay,
+
+          allDayStartDate:
+            candidate.allDayStartDate,
+
+          allDayEndDate:
+            candidate.allDayEndDate,
+        },
+      );
+    } catch (error) {
+      failed += 1;
+
+      console.log(
+        'Apple Calendar all-day metadata update failed:',
+        candidate.externalEventId,
+        error,
       );
 
       continue;
@@ -593,6 +976,54 @@ export async function syncAppleCalendarEvents(
       continue;
     }
 
+    /*
+     * Read-only Apple calendars cannot accept RISE changes.
+     *
+     * If the shared fields differ, Apple is authoritative and
+     * its version is pulled into RISE. RISE-only Type and
+     * Reminder are preserved because they are omitted here.
+     */
+    if (!candidate.isWritable) {
+      try {
+        await updateCalendarEvent(
+          riseEvent.id,
+          {
+            title:
+              candidate.title,
+
+            startAt:
+              candidate.startAt,
+
+            endAt:
+              candidate.endAt,
+
+            location:
+              candidate.location,
+
+            description:
+              candidate.description,
+          },
+        );
+
+        await markAppleLinkSynced(
+          riseEvent.id,
+          candidate.updatedAt,
+        );
+
+        skipped += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Apple Calendar read-only event refresh failed:',
+          candidate.externalEventId,
+          error,
+        );
+      }
+
+      continue;
+    }
+
     const riseChanged =
       riseChangedSinceLastSync(
         riseEvent,
@@ -619,7 +1050,23 @@ export async function syncAppleCalendarEvents(
       null
     ) {
       if (riseChanged) {
-        failed += 1;
+        try {
+          await saveAppleConflict(
+            riseEvent,
+            existingLink,
+            candidate,
+          );
+
+          conflicts += 1;
+        } catch (error) {
+          failed += 1;
+
+          console.log(
+            'Apple Calendar conflict could not be stored:',
+            candidate.externalEventId,
+            error,
+          );
+        }
 
         console.log(
           'Apple Calendar sync conflict cannot be classified without provider baseline:',
@@ -772,13 +1219,31 @@ export async function syncAppleCalendarEvents(
 
     /*
      * Both copies changed since the previous successful sync.
-     * Story #85 will let the student choose which version wins.
+     *
+     * Preserve both versions so Story #85 can let the student
+     * choose which version should win.
      */
     if (
       riseChanged &&
       appleChanged
     ) {
-      failed += 1;
+      try {
+        await saveAppleConflict(
+          riseEvent,
+          existingLink,
+          candidate,
+        );
+
+        conflicts += 1;
+      } catch (error) {
+        failed += 1;
+
+        console.log(
+          'Apple Calendar conflict could not be stored:',
+          candidate.externalEventId,
+          error,
+        );
+      }
 
       console.log(
         'Apple Calendar sync conflict detected:',
@@ -790,9 +1255,26 @@ export async function syncAppleCalendarEvents(
 
     /*
      * The copies differ but neither timestamp reports a change.
-     * Preserve both rather than silently choosing one.
+     * Preserve both and let the student choose rather than
+     * silently selecting either version.
      */
-    failed += 1;
+    try {
+      await saveAppleConflict(
+        riseEvent,
+        existingLink,
+        candidate,
+      );
+
+      conflicts += 1;
+    } catch (error) {
+      failed += 1;
+
+      console.log(
+        'Apple Calendar conflict could not be stored:',
+        candidate.externalEventId,
+        error,
+      );
+    }
 
     console.log(
       'Apple Calendar sync could not safely classify differing copies:',
@@ -804,6 +1286,7 @@ export async function syncAppleCalendarEvents(
     imported,
     skipped,
     failed,
+    conflicts,
     total:
       candidates.length,
   };

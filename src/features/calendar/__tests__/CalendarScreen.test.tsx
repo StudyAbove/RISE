@@ -23,7 +23,16 @@ const mockGetCalendarEventsInRange =
 const mockCreateCalendarEvent =
   jest.fn();
 
+const mockGetCalendarEventsByIdsForSync =
+  jest.fn();
+
 const mockGetLatestCalendarEventLinkSyncTime =
+  jest.fn();
+
+const mockGetCalendarEventLinks =
+  jest.fn();
+
+const mockGetUnresolvedCalendarEventConflicts =
   jest.fn();
 
 const mockStartAppleCalendarBackgroundSync =
@@ -99,19 +108,57 @@ jest.mock(
         mockCreateCalendarEvent(
           ...args,
         ),
+
+    getCalendarEventsByIdsForSync:
+      (...args: unknown[]) =>
+        mockGetCalendarEventsByIdsForSync(
+          ...args,
+        ),
   }),
 );
 
 beforeEach(() => {
   mockCreateCalendarEvent.mockReset();
+
+  mockGetCalendarEventsByIdsForSync.mockReset();
+  mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+    [],
+  );
+
+  mockGetUnresolvedCalendarEventConflicts.mockReset();
+  mockGetUnresolvedCalendarEventConflicts.mockResolvedValue(
+    [],
+  );
+
+  mockGetCalendarEventLinks.mockReset();
+  mockGetCalendarEventLinks.mockResolvedValue(
+    [],
+  );
 });
 
 jest.mock(
   '../../../repositories/calendarEventLinksRepository',
   () => ({
+    getCalendarEventLinks:
+      (...args: unknown[]) =>
+        mockGetCalendarEventLinks(
+          ...args,
+        ),
+
     getLatestCalendarEventLinkSyncTime:
       (...args: unknown[]) =>
         mockGetLatestCalendarEventLinkSyncTime(
+          ...args,
+        ),
+  }),
+);
+
+jest.mock(
+  '../../../repositories/calendarEventConflictsRepository',
+  () => ({
+    getUnresolvedCalendarEventConflicts:
+      (...args: unknown[]) =>
+        mockGetUnresolvedCalendarEventConflicts(
           ...args,
         ),
   }),
@@ -1984,6 +2031,123 @@ describe(
             ),
           ).toBeDisabled();
         }
+      },
+    );
+  },
+);
+
+describe(
+  'CalendarScreen: read-only provider events',
+  () => {
+    it(
+      'opens an event as read-only when its provider link is not writable',
+      async () => {
+        const readOnlyEvent =
+          makeEvent(
+            'Thanksgiving',
+            new Date(
+              2026,
+              10,
+              26,
+              0,
+              0,
+            ),
+            new Date(
+              2026,
+              10,
+              27,
+              0,
+              0,
+            ),
+          );
+
+        mockGetCalendarEventsInRange.mockResolvedValue(
+          [
+            readOnlyEvent,
+          ],
+        );
+
+        mockGetCalendarEventLinks.mockResolvedValue(
+          [
+            {
+              id:
+                'link-read-only',
+
+              calendarEventId:
+                readOnlyEvent.id,
+
+              userId:
+                'user-1',
+
+              provider:
+                'apple',
+
+              externalEventId:
+                'apple-thanksgiving',
+
+              externalCalendarId:
+                'holidays',
+
+              isWritable:
+                false,
+
+              createdAt:
+                '2026-11-01T00:00:00.000Z',
+
+              updatedAt:
+                '2026-11-01T00:00:00.000Z',
+            },
+          ],
+        );
+
+        await render(
+          <CalendarScreen />,
+        );
+
+        const day =
+          await screen.findByLabelText(
+            'Thursday, November 26, 1 event',
+          );
+
+        await fireEvent.press(
+          within(
+            day,
+          ).getByText(
+            'Thanksgiving',
+          ),
+        );
+
+        await waitFor(
+          () => {
+            expect(
+              screen.getByText(
+                'Read-only calendar event. This event is controlled by a connected calendar and cannot be edited in RISE.',
+              ),
+            ).toBeOnTheScreen();
+          },
+        );
+
+        expect(
+          mockGetCalendarEventLinks,
+        ).toHaveBeenCalledWith(
+          readOnlyEvent.id,
+        );
+
+        expect(
+          screen.getByLabelText(
+            'Title',
+          ),
+        ).toBeDisabled();
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name:
+                'Read-only calendar event',
+            },
+          ),
+        ).toBeDisabled();
       },
     );
   },

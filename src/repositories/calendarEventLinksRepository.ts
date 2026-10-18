@@ -12,12 +12,16 @@ interface CalendarEventLinkRow {
   provider: ExternalCalendarProvider;
   external_event_id: string;
   external_calendar_id: string | null;
+  is_writable: boolean;
+  is_all_day: boolean;
+  all_day_start_date: string | null;
+  all_day_end_date: string | null;
   last_synced_at: string | null;
   external_updated_at: string | null;
 }
 
 const CALENDAR_EVENT_LINK_COLUMNS =
-  'id, calendar_event_id, user_id, provider, external_event_id, external_calendar_id, last_synced_at, external_updated_at';
+  'id, calendar_event_id, user_id, provider, external_event_id, external_calendar_id, is_writable, is_all_day, all_day_start_date, all_day_end_date, last_synced_at, external_updated_at';
 
 const toCalendarEventLink = (
   row: CalendarEventLinkRow,
@@ -38,6 +42,20 @@ const toCalendarEventLink = (
 
   externalCalendarId:
     row.external_calendar_id ??
+    undefined,
+
+  isWritable:
+    row.is_writable,
+
+  isAllDay:
+    row.is_all_day,
+
+  allDayStartDate:
+    row.all_day_start_date ??
+    undefined,
+
+  allDayEndDate:
+    row.all_day_end_date ??
     undefined,
 
   lastSyncedAt:
@@ -250,6 +268,10 @@ export async function saveCalendarEventLink({
   externalEventId,
   externalCalendarId,
   externalUpdatedAt,
+  isWritable = true,
+  isAllDay = false,
+  allDayStartDate,
+  allDayEndDate,
 }: {
   calendarEventId: string;
   userId: string;
@@ -257,6 +279,10 @@ export async function saveCalendarEventLink({
   externalEventId: string;
   externalCalendarId?: string;
   externalUpdatedAt?: string;
+  isWritable?: boolean;
+  isAllDay?: boolean;
+  allDayStartDate?: string;
+  allDayEndDate?: string;
 }) {
   const now =
     new Date().toISOString();
@@ -267,6 +293,10 @@ export async function saveCalendarEventLink({
     provider: ExternalCalendarProvider;
     external_event_id: string;
     external_calendar_id: string | null;
+    is_writable: boolean;
+    is_all_day: boolean;
+    all_day_start_date: string | null;
+    all_day_end_date: string | null;
     last_synced_at: string;
     updated_at: string;
     external_updated_at?: string;
@@ -285,6 +315,24 @@ export async function saveCalendarEventLink({
     external_calendar_id:
       externalCalendarId ??
       null,
+
+    is_writable:
+      isWritable,
+
+    is_all_day:
+      isAllDay,
+
+    all_day_start_date:
+      isAllDay
+        ? allDayStartDate ??
+          null
+        : null,
+
+    all_day_end_date:
+      isAllDay
+        ? allDayEndDate ??
+          null
+        : null,
 
     last_synced_at:
       now,
@@ -315,6 +363,45 @@ export async function saveCalendarEventLink({
     throw error;
   }
 }
+
+/**
+ * Refreshes whether the external provider currently allows RISE
+ * to modify this linked event.
+ *
+ * Provider permissions can change, and links created before
+ * writability tracking may have an old/default value.
+ */
+export async function updateCalendarEventLinkWritability(
+  calendarEventId: string,
+  provider: ExternalCalendarProvider,
+  isWritable: boolean,
+) {
+  const {
+    error,
+  } =
+    await supabase
+      .from('calendar_event_links')
+      .update({
+        is_writable:
+          isWritable,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        'calendar_event_id',
+        calendarEventId,
+      )
+      .eq(
+        'provider',
+        provider,
+      );
+
+  if (error) {
+    throw error;
+  }
+}
+
 
 /**
  * Marks one provider link as successfully synchronized.
@@ -416,4 +503,99 @@ export async function markCalendarEventLinksSynced(
   if (error) {
     throw error;
   }
+}
+/**
+ * Refreshes the provider's semantic all-day metadata for an existing link.
+ *
+ * All-day events are compared using provider calendar dates rather than
+ * concrete UTC timestamps because Apple and Google can encode midnight
+ * differently.
+ */
+export async function updateCalendarEventLinkAllDayMetadata(
+  calendarEventId: string,
+  provider: ExternalCalendarProvider,
+  {
+    isAllDay,
+    allDayStartDate,
+    allDayEndDate,
+  }: {
+    isAllDay: boolean;
+    allDayStartDate?: string;
+    allDayEndDate?: string;
+  },
+) {
+  const {
+    error,
+  } =
+    await supabase
+      .from('calendar_event_links')
+      .update({
+        is_all_day:
+          isAllDay,
+
+        all_day_start_date:
+          isAllDay
+            ? allDayStartDate ??
+              null
+            : null,
+
+        all_day_end_date:
+          isAllDay
+            ? allDayEndDate ??
+              null
+            : null,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        'calendar_event_id',
+        calendarEventId,
+      )
+      .eq(
+        'provider',
+        provider,
+      );
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * Loads all all-day links for one provider.
+ *
+ * This is used only for conservative cross-provider duplicate detection.
+ * A new Apple event may compare against Google all-day links and vice versa.
+ */
+export async function getAllDayCalendarEventLinksByProvider(
+  provider: ExternalCalendarProvider,
+): Promise<CalendarEventLink[]> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('calendar_event_links')
+      .select(
+        CALENDAR_EVENT_LINK_COLUMNS,
+      )
+      .eq(
+        'provider',
+        provider,
+      )
+      .eq(
+        'is_all_day',
+        true,
+      );
+
+  if (error) {
+    throw error;
+  }
+
+  return (
+    data as CalendarEventLinkRow[]
+  ).map(
+    toCalendarEventLink,
+  );
 }
