@@ -161,11 +161,6 @@ jest.mock(
         mockGetLatestCalendarEventLinkSyncTime(
           ...args,
         ),
-    getCalendarEventLinks:
-      (...args: unknown[]) =>
-        mockGetCalendarEventLinks(
-          ...args,
-        ),
   }),
 );
 
