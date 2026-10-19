@@ -4,7 +4,7 @@ import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { EventChip } from '../components/EventChip';
 import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { formatEventTime } from '../components/TodayEventsCard';
-import { getAllDayRange, isAllDayEvent } from '../utils/allDayEvents';
+import { getAllDayRange, isAllDayEvent, layoutAllDayBars } from '../utils/allDayEvents';
 
 // Times are in the phone's time zone, like imported events.
 const local = (day: number, hour = 0, minute = 0, second = 0) =>
@@ -81,5 +81,50 @@ describe('all-day wording', () => {
 
     expect(screen.getByText(/Monday, November 16 – Friday, November 20, 2026/)).toBeOnTheScreen();
     expect(screen.getByText(/All day/)).toBeOnTheScreen();
+  });
+});
+
+describe('layoutAllDayBars', () => {
+  // A week from Sunday, November 15 to Saturday, November 21, 2026.
+  const week = Array.from({ length: 7 }, (_, i) => new Date(2026, 10, 15 + i));
+  const allDay = (id: string, firstDay: number, lastDay: number): CalendarEvent => ({
+    ...event(local(firstDay), local(lastDay + 1)),
+    id,
+    title: id,
+  });
+
+  it('draws a multi-day event as one bar across its days', () => {
+    expect(layoutAllDayBars([allDay('Spring Break', 16, 20)], week)).toEqual([
+      expect.objectContaining({ startIndex: 1, span: 5, lane: 0 }),
+    ]);
+  });
+
+  it('cuts a bar off at the edges of the visible days', () => {
+    const twoDays = [new Date(2026, 10, 18), new Date(2026, 10, 19)];
+
+    expect(layoutAllDayBars([allDay('Spring Break', 16, 20)], twoDays)).toEqual([
+      expect.objectContaining({ startIndex: 0, span: 2 }),
+    ]);
+  });
+
+  it('leaves out all-day events outside the visible days, and timed events', () => {
+    const timed = { ...event(local(16, 9), local(16, 10)), id: 'Dentist' };
+
+    expect(layoutAllDayBars([allDay('Last Week', 8, 10), allDay('Next Week', 23, 24), timed], week)).toEqual([]);
+  });
+
+  it('stacks bars that share a day, and reuses a lane once it is free', () => {
+    const bars = layoutAllDayBars(
+      [allDay('Holiday', 19, 19), allDay('Spring Break', 16, 20), allDay('Trip', 21, 21), allDay('Retreat', 15, 16)],
+      week,
+    );
+    const laneOf = (id: string) => bars.find((bar) => bar.event.id === id)?.lane;
+
+    // Retreat (Sun–Mon) is earliest, so lane 0; Spring Break (Mon–Fri) shares Monday, so lane 1;
+    // Holiday (Thu) is under Spring Break but Retreat's lane is free by then; Trip (Sat) fits lane 0 too.
+    expect(laneOf('Retreat')).toBe(0);
+    expect(laneOf('Spring Break')).toBe(1);
+    expect(laneOf('Holiday')).toBe(0);
+    expect(laneOf('Trip')).toBe(0);
   });
 });
