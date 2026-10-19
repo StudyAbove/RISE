@@ -1,40 +1,30 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
   View,
   type LayoutChangeEvent,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { endOfDay, format, isSameYear } from 'date-fns';
 import Svg, { Path, Rect } from 'react-native-svg';
 
-// Reuse the team's scroll container, theme, and settings button.
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
+import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { supabase } from '../../../lib/supabase';
+import {
+  fetchAssignments,
+  type Assignment,
+} from '../../../repositories/assignmentsRepository';
 import { colors, statusColors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
-import { SettingsButton } from '../../settings/components/SettingsButton';
-
-// Reuse the team's sky artwork and time-of-day selection.
-import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
 import { getTimeOfDay } from '../../home/utils/greeting';
+import { SettingsButton } from '../../settings/components/SettingsButton';
 
-// Get the sample assignments from the JSON file.
-import assignmentData from '../../../mocks/assignments.json';
-
-// Describe the information each assignment should have.
-type Assignment = {
-  id: string;
-  courseId: string;
-  courseColor: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  needsAttention: boolean;
-  progress: number;
-};
-
-// TypeScript checks that the imported data has these fields.
-const assignments: Assignment[] = assignmentData;
+type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
 
 // Let the hills extend slightly below the subtitle.
 const SKY_OVERLAP_BELOW_HEADER = 8;
@@ -68,77 +58,119 @@ function CalendarIcon({ color }: { color: string }) {
   );
 }
 
-// Build one card. The list reuses this for every assignment.
-function AssignmentCard({ assignment }: { assignment: Assignment }) {
-  // Keep progress between 0 and 100 so the fill stays inside its track.
-  const progress = Number.isFinite(assignment.progress)
-    ? Math.min(100, Math.max(0, assignment.progress))
-    : 0;
+// Build one card using a real assignment from Supabase.
+function AssignmentCard({
+  assignment,
+  today,
+}: {
+  assignment: Assignment;
+  today: Date;
+}) {
+  // This is assignment completion, not microtask progress.
+  const completionPercent = assignment.completed ? 100 : 0;
 
-  // The mock data decides whether the due date needs red styling.
-  const dueColor = assignment.needsAttention
+  const needsAttention =
+    !assignment.completed &&
+    assignment.dueAt !== null &&
+    assignment.dueAt.getTime() <= endOfDay(today).getTime();
+
+  const dueColor = needsAttention
     ? statusColors.urgentRed
     : colors.deepOlive;
 
+  // Include the year when an assignment belongs to a different year.
+  const dueLabel = assignment.dueAt
+    ? `Due ${format(
+        assignment.dueAt,
+        isSameYear(assignment.dueAt, today)
+          ? 'EEE, MMM d'
+          : 'EEE, MMM d, yyyy',
+      )}`
+    : 'No due date';
+
+  const courseLabel =
+    assignment.courseCode ||
+    assignment.courseName ||
+    'No course assigned';
+
+  // The extension already converts Canvas descriptions to plain text.
+  const description =
+    assignment.description?.replace(/\s+/g, ' ').trim() ||
+    'No description provided';
+
   return (
     <View style={styles.card}>
-      {/* The left circle gets its course color from the JSON. */}
+      {/* Use the student's saved course color. */}
       <View
         accessible
-        accessibilityLabel={`Course: ${assignment.courseId}`}
+        accessibilityLabel={`Course: ${courseLabel}`}
         style={[
           styles.courseDot,
           { backgroundColor: assignment.courseColor },
         ]}
       />
 
-      {/* Show this assignment's information from the JSON. */}
       <View style={styles.cardContent}>
         <Text style={styles.assignmentTitle}>
           {assignment.title}
         </Text>
 
-        <Text style={styles.description}>
-          {assignment.description}
+        {/* Shorten only what is visible, without rewriting the instructions. */}
+        <Text
+          style={styles.description}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          accessibilityLabel={description}
+        >
+          {description}
         </Text>
 
-        {/* Keep the calendar icon and due date together. */}
         <View style={styles.dueRow}>
           <CalendarIcon color={dueColor} />
-
-          <Text style={[styles.dueDate, { color: dueColor }]}>
-            Due {assignment.dueDate}
+          <Text
+            style={[styles.dueDate, { color: dueColor }]}
+            accessibilityLabel={
+              assignment.dueAt
+                ? `Due ${format(
+                    assignment.dueAt,
+                    'EEEE, MMMM d, yyyy, h:mm a',
+                  )}`
+                : 'No due date'
+            }
+          >
+            {dueLabel}
           </Text>
         </View>
 
-        {/* The bar and percentage use the same progress value. */}
+        {/* Until microtasks are available, completion is 0% or 100%. */}
         <View
           style={styles.progressRow}
           accessible
           accessibilityRole="progressbar"
-          accessibilityLabel={`${assignment.title} progress`}
+          accessibilityLabel={`${assignment.title} completion`}
           accessibilityValue={{
             min: 0,
             max: 100,
-            now: progress,
+            now: completionPercent,
+            text: assignment.completed ? 'Completed' : 'Not completed',
           }}
         >
           <View style={styles.progressTrack}>
             <View
               style={[
                 styles.progressFill,
-                { width: `${progress}%` },
+                { width: `${completionPercent}%` },
               ]}
             />
           </View>
 
           <Text style={styles.progressText}>
-            {progress}%
+            {completionPercent}%
           </Text>
         </View>
       </View>
 
-      {/* Display only. Opening assignment details comes later. */}
+      {/* Display only. Opening assignment details comes in another story. */}
       <View
         style={styles.playCircle}
         pointerEvents="none"
@@ -154,13 +186,58 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
   );
 }
 
-// Main page shown when the List tab is opened.
 export function AssignmentsScreen() {
   const titleRef = useRef<Text>(null);
   const date = useCurrentDate();
 
-  // Measure where the header ends to position the sky behind it.
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [reloadCount, setReloadCount] = useState(0);
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
+
+  // Reload when the student opens this tab or requests a refresh.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      async function loadAssignments() {
+        setStatus('loading');
+        setAssignments([]);
+
+        try {
+          const { data, error } = await supabase.auth.getSession();
+
+          if (!active) return;
+          if (error) throw error;
+
+          // Skipping the login screen does not create a real session.
+          if (!data.session) {
+            setStatus('signedOut');
+            return;
+          }
+
+          const loadedAssignments = await fetchAssignments();
+
+          if (!active) return;
+
+          setAssignments(loadedAssignments);
+          setStatus('ready');
+        } catch {
+          if (!active) return;
+
+          setAssignments([]);
+          setStatus('error');
+        }
+      }
+
+      void loadAssignments();
+
+      // Ignore a request's result if the student leaves this screen.
+      return () => {
+        active = false;
+      };
+    }, [reloadCount]),
+  );
 
   const handleHeaderLayout = ({
     nativeEvent: { layout },
@@ -168,12 +245,16 @@ export function AssignmentsScreen() {
     setHeaderBottom(layout.y + layout.height);
   };
 
+  const refreshAssignments = () => {
+    setReloadCount((count) => count + 1);
+  };
+
   return (
     <TabScreenScrollView
       focusTargetRef={titleRef}
       contentContainerStyle={styles.container}
     >
-      {/* Draw the artwork first so it stays behind the header. */}
+      {/* Draw the artwork behind the header. */}
       {headerBottom !== null && (
         <HomeSkyBackdrop
           timeOfDay={getTimeOfDay(date)}
@@ -181,7 +262,6 @@ export function AssignmentsScreen() {
         />
       )}
 
-      {/* Measure the settings row, title, and subtitle together. */}
       <View onLayout={handleHeaderLayout}>
         <View style={styles.headerRow}>
           <SettingsButton />
@@ -202,41 +282,99 @@ export function AssignmentsScreen() {
         </View>
       </View>
 
-      {/* Show every assignment without filtering by due date. */}
       <View style={styles.list}>
-        {assignments.length === 0 ? (
-          <Text style={styles.emptyText}>
-            No assignments to display.
-          </Text>
-        ) : (
+        {status === 'loading' && (
+          <View style={styles.statusCard}>
+            <ActivityIndicator color={colors.deepOlive} />
+            <Text
+              style={styles.statusText}
+              accessibilityLiveRegion="polite"
+            >
+              Loading your assignments…
+            </Text>
+          </View>
+        )}
+
+        {status === 'signedOut' && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>
+              Sign in to RISE to view your assignments.
+            </Text>
+            <Text style={styles.statusNote}>
+              A signed-in account is required to load your saved coursework.
+            </Text>
+          </View>
+        )}
+
+        {status === 'error' && (
+          <View style={styles.statusCard}>
+            <Text accessibilityRole="alert" style={styles.statusText}>
+              Couldn’t load your assignments.
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={refreshAssignments}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {status === 'ready' && assignments.length === 0 && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>
+              No assignments to display.
+            </Text>
+            <Text style={styles.statusNote}>
+              Connect and sync your Canvas courses to import assignments.
+            </Text>
+          </View>
+        )}
+
+        {/* No due-soon cutoff: display every assignment returned. */}
+        {status === 'ready' &&
           assignments.map((assignment) => (
             <AssignmentCard
               key={assignment.id}
               assignment={assignment}
+              today={date}
             />
-          ))
+          ))}
+
+        {status === 'ready' && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh assignments from Supabase"
+            onPress={refreshAssignments}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.retryText}>Refresh assignments</Text>
+          </Pressable>
         )}
       </View>
     </TabScreenScrollView>
   );
 }
 
-// App colors and fonts come from the shared theme
+// Keep the existing card design and shared theme.
 const styles = StyleSheet.create({
-  // Space around the page content.
   container: {
     paddingHorizontal: 18,
     paddingBottom: 36,
   },
-
-  // Position the settings button on the right.
   headerRow: {
     minHeight: 44,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-
-  // leave room for the hills below the subtitle
   header: {
     paddingBottom: 8,
   },
@@ -249,14 +387,10 @@ const styles = StyleSheet.create({
     color: colors.mutedGrayGreen,
     marginTop: 2,
   },
-
-  // space above the list and between its cards.
   list: {
     gap: 8,
     marginTop: 12,
   },
-
-  // white rounded card with a light green border.
   card: {
     minHeight: 76,
     flexDirection: 'row',
@@ -268,8 +402,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
-
-  // the course circle on the left Its fill comes from the JSON.
   courseDot: {
     width: 11,
     height: 11,
@@ -280,8 +412,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: 10,
   },
-
-  // give the text room without pushing out the play icon
   cardContent: {
     flex: 1,
     minWidth: 0,
@@ -295,8 +425,6 @@ const styles = StyleSheet.create({
     color: colors.mutedGrayGreen,
     marginTop: 2,
   },
-
-  // to place the calendar icon beside the date
   dueRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -307,16 +435,12 @@ const styles = StyleSheet.create({
     ...textStyles.tinyLabel,
     flexShrink: 1,
   },
-
-  // place the progress bar beside its percentage
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 3,
   },
-
-  // the gray background of the progress bar
   progressTrack: {
     flex: 1,
     height: 4,
@@ -324,8 +448,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
   },
-
-  // for the green fill which shows the completion percentage
   progressFill: {
     height: '100%',
     backgroundColor: colors.softSage,
@@ -337,8 +459,6 @@ const styles = StyleSheet.create({
     color: colors.mutedGrayGreen,
     minWidth: 26,
   },
-
-  // for the play buttons so pale green circle around the play icon on the right
   playCircle: {
     width: 30,
     height: 30,
@@ -348,12 +468,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 12,
   },
-
-  // this is the message shown when the JSON list is empty
-  emptyText: {
+  statusCard: {
+    padding: 20,
+    gap: 10,
+    alignItems: 'center',
+    backgroundColor: colors.softWhite,
+    borderWidth: 1,
+    borderColor: colors.mistGreen,
+    borderRadius: 15,
+  },
+  statusText: {
     ...textStyles.body,
-    color: colors.mutedGrayGreen,
-    paddingVertical: 24,
+    color: colors.deepOlive,
     textAlign: 'center',
+  },
+  statusNote: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.mistGreen,
+    justifyContent: 'center',
+  },
+  retryText: {
+    ...textStyles.link,
+    color: colors.deepOlive,
+    textAlign: 'center',
+  },
+  refreshButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });
