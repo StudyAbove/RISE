@@ -9,6 +9,7 @@ import { format, parseISO } from 'date-fns';
 
 import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { eventSourceColors } from '../calendarColors';
+import { isAllDayEvent } from '../utils/allDayEvents';
 import { EVENT_SOURCE_LABELS } from '../utils/eventLabels';
 import { EVENT_CHIP_LOGO_SIZE, styles } from './EventChip.styles';
 import { SourceLogo } from './SourceLogo';
@@ -61,10 +62,12 @@ export function EventChip({
   onPress,
 }: EventChipProps) {
   const timeRange =
-    `${format(parseISO(event.startAt), 'h:mm a')} to ${format(
-      parseISO(event.endAt),
-      'h:mm a',
-    )}`;
+    isAllDayEvent(event)
+      ? 'all day'
+      : `${format(parseISO(event.startAt), 'h:mm a')} to ${format(
+          parseISO(event.endAt),
+          'h:mm a',
+        )}`;
 
   return (
     <Pressable
