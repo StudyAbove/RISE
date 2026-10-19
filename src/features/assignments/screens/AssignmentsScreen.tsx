@@ -349,7 +349,7 @@ export function AssignmentsScreen() {
         {status === 'ready' && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Refresh assignments from Supabase"
+            accessibilityLabel="Refresh assignments"
             onPress={refreshAssignments}
             style={({ pressed }) => [
               styles.refreshButton,
