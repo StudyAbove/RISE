@@ -37,6 +37,7 @@ export default function CheckInboxScreen() {
     <OnboardingLayout
       step={ONBOARDING_STEPS.checkInbox}
       headerHeight={TALL_HEADER_HEIGHT}
+      showBackButton
     >
       <Text style={[onboardingTextStyles.title, styles.title]}>
         Check your inbox
