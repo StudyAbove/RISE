@@ -75,22 +75,15 @@ export const styles = StyleSheet.create({
   // The Google, Apple, Canvas, and RISE logos are full-color images, so a
   // little smaller than the line icons to look the same size.
   sourceLogo: {
-    width: 22,
-    height: 22,
     borderRadius: 5,
   },
-  // Same dark gray as the line icons.
-  appleLogo: {
-    tintColor: '#1E1E1E',
-  },
+  // When an event is in both Apple and Google, their logos overlap a little.
   multipleSourceLogos: {
     flexDirection: 'row',
     alignItems: 'center',
     width: ROW_ICON_SIZE,
   },
   multipleSourceLogo: {
-    width: 17,
-    height: 17,
     borderRadius: 4,
     marginRight: -6,
   },
