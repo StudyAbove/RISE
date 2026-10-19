@@ -14,6 +14,7 @@ import {
 import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { eventSourceColors } from '../calendarColors';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
+import { isAllDayEvent } from '../utils/allDayEvents';
 import { getDaySegments } from '../utils/calendarEvents';
 import { EVENT_SOURCE_LABELS } from '../utils/eventLabels';
 import { SourceLogo } from './SourceLogo';
@@ -25,10 +26,19 @@ interface TodayEventsCardProps {
   ) => void;
 }
 
-/** "9:00 AM – 10:30 AM", or "At 11:59 PM" for an event with no length. */
+/**
+ * "9:00 AM – 10:30 AM", "At 11:59 PM" for an event with no length, or
+ * "All day".
+ */
 export function formatEventTime(
   event: CalendarEvent,
 ): string {
+  if (
+    isAllDayEvent(event)
+  ) {
+    return 'All day';
+  }
+
   const start =
     parseISO(event.startAt);
 

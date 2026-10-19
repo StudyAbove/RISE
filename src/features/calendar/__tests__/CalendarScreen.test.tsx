@@ -2924,3 +2924,133 @@ describe('CalendarScreen: where events came from (#82)', () => {
     expect(within(row).getByText('Dentist')).toBeOnTheScreen();
   });
 });
+
+describe('CalendarScreen: all-day events', () => {
+  // Today in these tests is Friday, November 13, 2026. Spring Break is Mon 9 – Fri 13,
+  // stored the way Google sends it: midnight to the midnight after the last day.
+  const springBreak: CalendarEvent = {
+    id: 'spring-break',
+    userId: 'user-1',
+    title: 'Spring Break',
+    startAt: new Date(2026, 10, 9).toISOString(),
+    endAt: new Date(2026, 10, 14).toISOString(),
+    source: 'google',
+  };
+  const dentist: CalendarEvent = {
+    id: 'dentist',
+    userId: 'user-1',
+    title: 'Dentist',
+    startAt: new Date(2026, 10, 13, 10).toISOString(),
+    endAt: new Date(2026, 10, 13, 11).toISOString(),
+    source: 'apple',
+  };
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([springBreak, dentist]);
+  });
+
+  it.each(['Week', '2 Day', 'Day'])(
+    'shows an all-day event once, in the all-day strip of %s, not across the hours',
+    async (view) => {
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+      // One bar, even though Spring Break covers several of the visible days.
+      expect(await screen.findAllByLabelText('Spring Break, Google Calendar, all day')).toHaveLength(1);
+      // Timed events still go in the hourly grid.
+      expect(screen.getByLabelText('Dentist, Apple Calendar, 10:00 AM to 11:00 AM')).toBeOnTheScreen();
+    },
+  );
+
+  describe('more than 2 on a day', () => {
+    // Four all-day events on Friday, November 13 (one-day, Google style).
+    const fridayEvents = ['Holiday', 'Birthday', 'Fair', 'Retreat'].map(
+      (title): CalendarEvent => ({
+        id: title,
+        userId: 'user-1',
+        title,
+        startAt: new Date(2026, 10, 13).toISOString(),
+        endAt: new Date(2026, 10, 14).toISOString(),
+        source: 'rise',
+      }),
+    );
+    const shownAllDay = () => screen.queryAllByLabelText(/, RISE, all day$/);
+
+    beforeEach(() => {
+      mockGetCalendarEventsInRange.mockResolvedValue(fridayEvents);
+    });
+
+    it.each(['Week', '2 Day'])('shows 2 and "+2 more" in %s, expands on tap, and collapses with the chevron', async (view) => {
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+      expect(await screen.findByRole('button', { name: 'Show 2 more all-day events' })).toBeOnTheScreen();
+      expect(screen.getByText('+2 more')).toBeOnTheScreen();
+      expect(shownAllDay()).toHaveLength(2);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show 2 more all-day events' }));
+      expect(shownAllDay()).toHaveLength(4);
+      expect(screen.queryByText('+2 more')).not.toBeOnTheScreen();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show fewer all-day events' }));
+      expect(shownAllDay()).toHaveLength(2);
+    });
+
+    it('shows 2 and "+2 more" beside the date in Day, and "Show less" when expanded', async () => {
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: 'Day' }));
+
+      expect(await screen.findByText('+2 more')).toBeOnTheScreen();
+      expect(shownAllDay()).toHaveLength(2);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show 2 more all-day events' }));
+      expect(shownAllDay()).toHaveLength(4);
+
+      await fireEvent.press(screen.getByText('Show less'));
+      expect(shownAllDay()).toHaveLength(2);
+    });
+
+    it('has no "+ more" or chevron with 2 or fewer on every day', async () => {
+      mockGetCalendarEventsInRange.mockResolvedValue(fridayEvents.slice(0, 2));
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: 'Week' }));
+
+      expect(await screen.findAllByLabelText(/, RISE, all day$/)).toHaveLength(2);
+      expect(screen.queryByText(/more$/)).not.toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: /all-day events$/ })).not.toBeOnTheScreen();
+    });
+  });
+
+  it("says \"All day\" in today's card", async () => {
+    await render(<CalendarScreen />);
+
+    expect(await screen.findByLabelText('Spring Break, Google Calendar, All day')).toBeOnTheScreen();
+  });
+});
+
+describe('CalendarScreen: "+N more" on Month', () => {
+  // Three events on Wednesday, November 11; a Month cell shows two and "+1 more".
+  const wednesday = ['Lab', 'Lecture', 'Club'].map(
+    (title, i): CalendarEvent => ({
+      id: title,
+      userId: 'user-1',
+      title,
+      startAt: new Date(2026, 10, 11, 9 + i * 2).toISOString(),
+      endAt: new Date(2026, 10, 11, 10 + i * 2).toISOString(),
+      source: 'rise',
+    }),
+  );
+
+  it('opens that day in Day view', async () => {
+    mockGetCalendarEventsInRange.mockResolvedValue(wednesday);
+    await render(<CalendarScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: '1 more event on Wednesday, November 11' }));
+
+    expect(screen.getByRole('tab', { name: 'Day', selected: true })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Wednesday, November 11' })).toBeOnTheScreen();
+    for (const title of ['Lab', 'Lecture', 'Club']) {
+      expect(await screen.findByLabelText(new RegExp(`^${title}, RISE, `))).toBeOnTheScreen();
+    }
+  });
+});

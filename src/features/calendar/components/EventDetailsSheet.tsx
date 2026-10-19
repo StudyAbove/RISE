@@ -16,6 +16,7 @@ import type { CalendarEvent, CalendarEventType } from '../../../models/CalendarE
 import { colors } from '../../../theme/colors';
 import { eventTypeCircleColors } from '../calendarColors';
 import { getLinkedCalendarProviders } from '../services/calendarEventSyncService';
+import { getAllDayRange } from '../utils/allDayEvents';
 import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS, formatReminder } from '../utils/eventLabels';
 import { styles } from './EventDetailsSheet.styles';
@@ -174,7 +175,7 @@ export function EventDetailsSheet({
               </Text>
 
               <DetailRow icon={<CalendarIcon width={25} height={25} />}>
-                {format(parseISO(event.startAt), 'EEEE, MMMM d, yyyy')}
+                {formatEventDate(event)}
                 {'\n'}
                 {formatEventTime(event)}
               </DetailRow>
@@ -365,6 +366,18 @@ export function EventDetailsSheet({
       </View>
     </Modal>
   );
+}
+
+/**
+ * "Wednesday, November 18, 2026", or for an all-day event over several days,
+ * "Monday, November 16 – Friday, November 20, 2026".
+ */
+function formatEventDate(event: CalendarEvent): string {
+  const range = getAllDayRange(event);
+  if (range && range.lastDay > range.firstDay) {
+    return `${format(range.firstDay, 'EEEE, MMMM d')} – ${format(range.lastDay, 'EEEE, MMMM d, yyyy')}`;
+  }
+  return format(parseISO(event.startAt), 'EEEE, MMMM d, yyyy');
 }
 
 /** The colored circle with the event type's icon, or a calendar for events without a type. */

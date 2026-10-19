@@ -1170,6 +1170,21 @@ export function CalendarScreen() {
         ),
     );
 
+  // "+N more" on Month opens that day in Day view, where every event fits.
+  function handleShowDay(
+    day: Date,
+  ) {
+    setAnchorDate(
+      startOfDay(
+        day,
+      ),
+    );
+
+    setView(
+      'day',
+    );
+  }
+
   /*
    * Load provider-link information before showing Event Details.
    *
@@ -1989,6 +2004,9 @@ export function CalendarScreen() {
               }
               onEventPress={
                 handleEventPress
+              }
+              onShowDay={
+                handleShowDay
               }
             />
 
