@@ -77,6 +77,21 @@ function getErrorMessage(
     : 'UNKNOWN_SYNC_ERROR';
 }
 
+export function markCalendarBackgroundSyncFailed(
+  error: string,
+  provider: CalendarBackgroundSyncProvider =
+    null,
+) {
+  updateSnapshot({
+    status:
+      'error',
+
+    provider,
+
+    error,
+  });
+}
+
 export function getCalendarBackgroundSyncSnapshot() {
   return snapshot;
 }

@@ -14,6 +14,7 @@ interface ReminderFieldProps {
   /** Whether its choices are showing. */
   open: boolean;
   onToggle: () => void;
+  disabled?: boolean;
   triggerRef?: RefObject<View | null>;
 }
 
@@ -22,7 +23,13 @@ interface ReminderFieldProps {
  * saved with the event so notifications (#27) can use it once they're built;
  * until then nothing is sent, and the note under the field says so.
  */
-export function ReminderField({ reminderMinutes, open, onToggle, triggerRef }: ReminderFieldProps) {
+export function ReminderField({
+  reminderMinutes,
+  open,
+  onToggle,
+  disabled = false,
+  triggerRef,
+}: ReminderFieldProps) {
   const chosen = REMINDER_CHOICES.find((option) => option.value === reminderMinutes);
 
   return (
@@ -33,6 +40,7 @@ export function ReminderField({ reminderMinutes, open, onToggle, triggerRef }: R
         valueText={chosen?.label}
         open={open}
         onToggle={onToggle}
+        disabled={disabled}
         triggerRef={triggerRef}
       />
       <Text style={formStyles.noteText}>Reminders will be sent once notifications are available.</Text>

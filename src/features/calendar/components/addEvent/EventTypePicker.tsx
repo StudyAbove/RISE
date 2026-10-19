@@ -31,13 +31,18 @@ interface EventTypePickerProps {
   selectedType: CalendarEventType | null;
   /** Tapping the chosen type again clears it, since type is optional. */
   onChange: (type: CalendarEventType | null) => void;
+  disabled?: boolean;
 }
 
 /**
  * The five Type buttons on the Add Event form. Only one can be chosen; it turns
  * green with a white icon and label.
  */
-export function EventTypePicker({ selectedType, onChange }: EventTypePickerProps) {
+export function EventTypePicker({
+  selectedType,
+  onChange,
+  disabled = false,
+}: EventTypePickerProps) {
   return (
     <View accessibilityRole="radiogroup" style={styles.row}>
       {EVENT_TYPES.map(({ type, label, icons }) => {
@@ -50,8 +55,18 @@ export function EventTypePicker({ selectedType, onChange }: EventTypePickerProps
             key={type}
             accessibilityRole="radio"
             accessibilityLabel={label}
-            accessibilityState={{ checked: isSelected }}
-            onPress={() => onChange(isSelected ? null : type)}
+            accessibilityState={{
+              checked: isSelected,
+              disabled,
+            }}
+            disabled={disabled}
+            onPress={() =>
+              onChange(
+                isSelected
+                  ? null
+                  : type,
+              )
+            }
             style={[styles.button, { backgroundColor: buttonColors.background, borderColor: buttonColors.border }]}
           >
             <View style={styles.iconBox}>

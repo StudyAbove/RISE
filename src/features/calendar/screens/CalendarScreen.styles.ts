@@ -43,11 +43,23 @@ export const styles = StyleSheet.create({
       colors.warmCream,
   },
 
-  syncStatusText: {
+  syncStatusContainer: {
     flex: 1,
-
     marginRight: 12,
+  },
 
+  conflictStatusText: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.deepOlive,
+  },
+
+  conflictStatusPressed: {
+    opacity: 0.6,
+  },
+
+  syncStatusText: {
     fontSize: 13,
 
     color:
@@ -56,7 +68,7 @@ export const styles = StyleSheet.create({
 
   syncStatusError: {
     color:
-      colors.deepOlive,
+      colors.mutedGrayGreen,
   },
 
   syncButton: {

@@ -32,27 +32,83 @@ const fullEvent: CalendarEvent = {
   description: 'Bring the lab notebook.',
 };
 
-async function renderSheet(event: CalendarEvent | null, onDelete = jest.fn().mockResolvedValue(undefined)) {
+async function renderSheet(
+  event: CalendarEvent | null,
+  conflictOrDelete:
+    | boolean
+    | ((event: CalendarEvent) => Promise<void>) = false,
+  readOnly = false,
+  providerSources: Array<'apple' | 'google'> = [],
+) {
+  const hasUnresolvedConflict =
+    typeof conflictOrDelete === 'boolean'
+      ? conflictOrDelete
+      : false;
+
+  const onDelete =
+    typeof conflictOrDelete === 'function'
+      ? conflictOrDelete
+      : jest.fn().mockResolvedValue(undefined);
+
   const onClose = jest.fn();
   const onEdit = jest.fn();
+  const onReviewConflict = jest.fn();
+
   const result = await render(
-    <EventDetailsSheet visible event={event} onClose={onClose} onEdit={onEdit} onDelete={onDelete} />,
+    <EventDetailsSheet
+      visible
+      event={event}
+      hasUnresolvedConflict={hasUnresolvedConflict}
+      readOnly={readOnly}
+      providerSources={providerSources}
+      onClose={onClose}
+      onEdit={onEdit}
+      onReviewConflict={onReviewConflict}
+      onDelete={onDelete}
+    />,
   );
-  return { ...result, onClose, onEdit, onDelete };
+
+  return {
+    ...result,
+    onClose,
+    onEdit,
+    onReviewConflict,
+    onDelete,
+  };
 }
 
-const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+const alertSpy = jest
+  .spyOn(
+    Alert,
+    'alert',
+  )
+  .mockImplementation(
+    () => {},
+  );
 
 beforeEach(() => {
   alertSpy.mockClear();
-  mockGetCalendarEventLinks.mockReset().mockResolvedValue([]);
+
+  mockGetCalendarEventLinks
+    .mockReset()
+    .mockResolvedValue([]);
 });
 
 // Presses a button in the most recent alert, the way a student would.
-async function pressAlertButton(text: string) {
-  const buttons: AlertButton[] = alertSpy.mock.calls.at(-1)?.[2] ?? [];
+async function pressAlertButton(
+  text: string,
+) {
+  const buttons: AlertButton[] =
+    alertSpy.mock.calls.at(-1)?.[2] ??
+    [];
+
   await act(async () => {
-    buttons.find((button) => button.text === text)?.onPress?.();
+    buttons
+      .find(
+        (button) =>
+          button.text === text,
+      )
+      ?.onPress?.();
   });
 }
 
@@ -211,6 +267,147 @@ describe('EventDetailsSheet', () => {
       expect(screen.getByRole('header', { name: 'Biology Lab Report' })).toBeOnTheScreen();
       expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
     });
+  });
+
+  it('requires conflict review before Edit or Delete are available', async () => {
+    await renderSheet(fullEvent, true);
+
+    expect(screen.getByRole('header', { name: 'Calendar conflict' })).toBeTruthy();
+    expect(
+      screen.getByText(
+        'This event was changed or deleted in more than one calendar. Review the differences before editing or deleting it.',
+      ),
+    ).toBeTruthy();
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Review Conflict' })).toBeTruthy();
+  });
+
+  it('passes the event to Review Conflict', async () => {
+    const { onReviewConflict } =
+      await renderSheet(fullEvent, true);
+
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Review Conflict' }),
+    );
+
+    expect(onReviewConflict).toHaveBeenCalledWith(fullEvent);
+  });
+
+  it('shows a read-only notice instead of Edit and Delete', async () => {
+    await renderSheet(
+      {
+        ...basicEvent,
+        source: 'apple',
+      },
+      false,
+      true,
+      ['apple'],
+    );
+
+    expect(
+      screen.getByRole('header', {
+        name: 'Read-only calendar event',
+      }),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText(
+        'This event is controlled by a connected calendar and cannot be edited or deleted in RISE.',
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Edit',
+      }),
+    ).toBeNull();
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Delete',
+      }),
+    ).toBeNull();
+  });
+
+  it('shows both providers for a deduplicated Apple and Google event', async () => {
+    await renderSheet(
+      {
+        ...basicEvent,
+        source: 'google',
+      },
+      false,
+      false,
+      [
+        'apple',
+        'google',
+      ],
+    );
+
+    expect(
+      screen.getByText(
+        'From Apple Calendar + Google Calendar',
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByTestId(
+        'event-source-logo-apple',
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByTestId(
+        'event-source-logo-google',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('keeps a RISE-created event labeled From RISE even when provider copies exist', async () => {
+    await renderSheet(
+      basicEvent,
+      false,
+      false,
+      [
+        'apple',
+        'google',
+      ],
+    );
+
+    expect(
+      screen.getByText('From RISE'),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText(
+        'From Apple Calendar + Google Calendar',
+      ),
+    ).toBeNull();
+  });
+
+  it('gives conflict review priority over the read-only notice', async () => {
+    await renderSheet(
+      {
+        ...basicEvent,
+        source: 'apple',
+      },
+      true,
+      true,
+      ['apple'],
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Review Conflict',
+      }),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByRole('header', {
+        name: 'Read-only calendar event',
+      }),
+    ).toBeNull();
   });
 
   it('shows only the close button when there is no event', async () => {
