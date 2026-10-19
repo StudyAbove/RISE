@@ -171,6 +171,41 @@ export function RootNavigator({
       return;
     }
 
+    /*
+     * getSession() restores the session stored on the device, but that
+     * session may have been revoked or expired since it was saved.
+     *
+     * Verify the user with Supabase before allowing access to the
+     * authenticated application (#26 AC4).
+     */
+    const {
+      data: {
+        user,
+      },
+      error:
+        userError,
+    } =
+      await supabase.auth.getUser();
+
+    if (
+      userError ||
+      !user
+    ) {
+      setIsSignedIn(
+        false,
+      );
+
+      setHasCompletedOnboarding(
+        false,
+      );
+
+      setIsLoading(
+        false,
+      );
+
+      return;
+    }
+
     const {
       data:
         profile,
@@ -185,7 +220,7 @@ export function RootNavigator({
         )
         .eq(
           'id',
-          session.user.id,
+          user.id,
         )
         .maybeSingle();
 

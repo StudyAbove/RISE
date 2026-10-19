@@ -18,6 +18,11 @@ import {
 const mockGetSession =
   jest.fn();
 
+
+const mockGetUser =
+  jest.fn();
+
+
 const mockMaybeSingle =
   jest.fn();
 
@@ -63,6 +68,12 @@ jest.mock(
         getSession:
           () =>
             mockGetSession(),
+
+
+        getUser:
+          () =>
+            mockGetUser(),
+
 
         onAuthStateChange:
           (...args: unknown[]) =>
@@ -301,6 +312,20 @@ describe(
 
       setDefaultAppleMocks();
 
+      mockGetUser.mockReset();
+
+      mockGetUser.mockResolvedValue({
+        data: {
+          user: {
+            id:
+              'test-user-id',
+          },
+        },
+
+        error:
+          null,
+      });
+
       mockOnAuthStateChange.mockImplementation(
         (
           callback: () => void,
@@ -444,6 +469,69 @@ describe(
         });
       },
     );
+
+    it(
+      'returns to authentication when a stored session is no longer valid',
+      async () => {
+        mockGetSession.mockResolvedValue({
+          data: {
+            session: {
+              user: {
+                id:
+                  'test-user-id',
+              },
+            },
+          },
+        });
+
+        mockGetUser.mockResolvedValue({
+          data: {
+            user:
+              null,
+          },
+
+          error:
+            new Error(
+              'Auth session is invalid or expired.',
+            ),
+        });
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getByRole(
+              'button',
+              {
+                name:
+                  'Create Account',
+              },
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            screen.getByRole(
+              'button',
+              {
+                name:
+                  'Log In',
+              },
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            screen.queryByRole(
+              'tab',
+              {
+                name:
+                  'Home',
+              },
+            ),
+          ).not.toBeOnTheScreen();
+        });
+      },
+    );
+
 
     it(
       'opens the main tabs when signed in and onboarding is complete',
