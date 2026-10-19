@@ -8,7 +8,10 @@ import {
 
 import CheckInboxScreen from '../screens/CheckInboxScreen';
 
+const mockGoBack = jest.fn();
+
 jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ goBack: mockGoBack }),
   useRoute: () => ({ params: { email: 'student@csulb.edu' } }),
 }));
 
@@ -41,6 +44,14 @@ describe('CheckInboxScreen', () => {
     });
 
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('goes back to sign-up so the student can change the email', async () => {
+    await render(<CheckInboxScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
   it('explains what to do when no email app can open', async () => {
