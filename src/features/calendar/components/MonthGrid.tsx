@@ -49,6 +49,11 @@ interface MonthGridProps {
   onEventPress?: (
     event: CalendarEvent,
   ) => void;
+
+  /** Called with a day's date when its "+N more" is tapped, to open that day. */
+  onShowDay?: (
+    day: Date,
+  ) => void;
 }
 
 /**
@@ -61,6 +66,7 @@ export function MonthGrid({
   conflictEventIds,
   onConflictPress,
   onEventPress,
+  onShowDay,
 }: MonthGridProps) {
   const days =
     getMonthGridDays(month);
@@ -296,17 +302,34 @@ export function MonthGrid({
 
                     {hiddenCount >
                       0 && (
-                      <Text
-                        style={
-                          styles.moreEvents
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${hiddenCount} more ${
+                          hiddenCount ===
+                          1
+                            ? 'event'
+                            : 'events'
+                        } on ${dateLabel}`}
+                        accessibilityHint="Opens this day"
+                        hitSlop={4}
+                        onPress={() =>
+                          onShowDay?.(
+                            day,
+                          )
                         }
                       >
-                        +
-                        {
-                          hiddenCount
-                        }{' '}
-                        more
-                      </Text>
+                        <Text
+                          style={
+                            styles.moreEvents
+                          }
+                        >
+                          +
+                          {
+                            hiddenCount
+                          }{' '}
+                          more
+                        </Text>
+                      </Pressable>
                     )}
                   </View>
                 </View>

@@ -3027,3 +3027,30 @@ describe('CalendarScreen: all-day events', () => {
     expect(await screen.findByLabelText('Spring Break, Google Calendar, All day')).toBeOnTheScreen();
   });
 });
+
+describe('CalendarScreen: "+N more" on Month', () => {
+  // Three events on Wednesday, November 11; a Month cell shows two and "+1 more".
+  const wednesday = ['Lab', 'Lecture', 'Club'].map(
+    (title, i): CalendarEvent => ({
+      id: title,
+      userId: 'user-1',
+      title,
+      startAt: new Date(2026, 10, 11, 9 + i * 2).toISOString(),
+      endAt: new Date(2026, 10, 11, 10 + i * 2).toISOString(),
+      source: 'rise',
+    }),
+  );
+
+  it('opens that day in Day view', async () => {
+    mockGetCalendarEventsInRange.mockResolvedValue(wednesday);
+    await render(<CalendarScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: '1 more event on Wednesday, November 11' }));
+
+    expect(screen.getByRole('tab', { name: 'Day', selected: true })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Wednesday, November 11' })).toBeOnTheScreen();
+    for (const title of ['Lab', 'Lecture', 'Club']) {
+      expect(await screen.findByLabelText(new RegExp(`^${title}, RISE, `))).toBeOnTheScreen();
+    }
+  });
+});
