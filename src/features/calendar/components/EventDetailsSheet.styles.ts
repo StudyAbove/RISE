@@ -83,6 +83,17 @@ export const styles = StyleSheet.create({
   appleLogo: {
     tintColor: '#1E1E1E',
   },
+  multipleSourceLogos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: ROW_ICON_SIZE,
+  },
+  multipleSourceLogo: {
+    width: 17,
+    height: 17,
+    borderRadius: 4,
+    marginRight: -6,
+  },
   rowText: {
     flex: 1,
   },
@@ -114,6 +125,59 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#6D6D6D',
   },
+  readOnlyCard: {
+    marginTop: 16,
+    padding: ROW_SIDE_PADDING,
+    gap: 8,
+  },
+
+  readOnlyTitle: {
+    fontFamily: fonts.heading.bold,
+    fontSize: 18,
+    color: colors.deepOlive,
+  },
+
+  readOnlyText: {
+    fontFamily: fonts.body.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.deepOlive,
+  },
+
+  conflictCard: {
+    marginTop: 16,
+    padding: ROW_SIDE_PADDING,
+    gap: 12,
+    borderColor: statusColors.urgentRed,
+  },
+
+  conflictTitle: {
+    fontFamily: fonts.heading.bold,
+    fontSize: 18,
+    color: statusColors.urgentRed,
+  },
+
+  conflictText: {
+    fontFamily: fonts.body.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.deepOlive,
+  },
+
+  reviewConflictButton: {
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.deepOlive,
+  },
+
+  reviewConflictLabel: {
+    fontFamily: fonts.heading.bold,
+    fontSize: 14,
+    color: colors.softWhite,
+  },
+
   buttons: {
     flexDirection: 'row',
     gap: 13,

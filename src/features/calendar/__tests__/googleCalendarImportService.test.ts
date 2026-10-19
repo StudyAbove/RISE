@@ -5,10 +5,17 @@ import {
 } from '../../../repositories/calendarEventsRepository';
 
 import {
+  getAllDayCalendarEventLinksByProvider,
   getCalendarEventLinksByProvider,
   markCalendarEventLinkSynced,
   saveCalendarEventLink,
+  updateCalendarEventLinkAllDayMetadata,
+  updateCalendarEventLinkWritability,
 } from '../../../repositories/calendarEventLinksRepository';
+
+import {
+  saveCalendarEventConflict,
+} from '../../../repositories/calendarEventConflictsRepository';
 
 import {
   clearGoogleAccessToken,
@@ -40,13 +47,30 @@ jest.mock(
 jest.mock(
   '../../../repositories/calendarEventLinksRepository',
   () => ({
+    getAllDayCalendarEventLinksByProvider:
+      jest.fn(),
+
     getCalendarEventLinksByProvider:
       jest.fn(),
 
     markCalendarEventLinkSynced:
       jest.fn(),
 
+    updateCalendarEventLinkAllDayMetadata:
+      jest.fn(),
+
+    updateCalendarEventLinkWritability:
+      jest.fn(),
+
     saveCalendarEventLink:
+      jest.fn(),
+  }),
+);
+
+jest.mock(
+  '../../../repositories/calendarEventConflictsRepository',
+  () => ({
+    saveCalendarEventConflict:
       jest.fn(),
   }),
 );
@@ -79,14 +103,26 @@ const mockGetCalendarEventsByIdsForSync =
 const mockUpdateCalendarEvent =
   updateCalendarEvent as jest.Mock;
 
+const mockGetAllDayCalendarEventLinksByProvider =
+  getAllDayCalendarEventLinksByProvider as jest.Mock;
+
 const mockGetCalendarEventLinksByProvider =
   getCalendarEventLinksByProvider as jest.Mock;
 
 const mockMarkCalendarEventLinkSynced =
   markCalendarEventLinkSynced as jest.Mock;
 
+const mockUpdateCalendarEventLinkAllDayMetadata =
+  updateCalendarEventLinkAllDayMetadata as jest.Mock;
+
+const mockUpdateCalendarEventLinkWritability =
+  updateCalendarEventLinkWritability as jest.Mock;
+
 const mockSaveCalendarEventLink =
   saveCalendarEventLink as jest.Mock;
+
+const mockSaveCalendarEventConflict =
+  saveCalendarEventConflict as jest.Mock;
 
 const mockGetGoogleAccessToken =
   getGoogleAccessToken as jest.Mock;
@@ -103,7 +139,14 @@ const mockFetch =
 globalThis.fetch =
   mockFetch as unknown as typeof fetch;
 
-function mockCalendarListResponse() {
+function mockCalendarListResponse(
+  accessRole:
+    | 'freeBusyReader'
+    | 'reader'
+    | 'writer'
+    | 'owner' =
+      'writer',
+) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
 
@@ -118,6 +161,9 @@ function mockCalendarListResponse() {
 
             summary:
               'Primary',
+
+            accessRole:
+              accessRole,
 
             selected:
               true,
@@ -144,6 +190,9 @@ function mockGoogleEventsResponse(
 }
 
 beforeEach(() => {
+    mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+      [],
+    );
   jest.clearAllMocks();
 
   mockGetGoogleAccessToken.mockResolvedValue(
@@ -166,10 +215,16 @@ beforeEach(() => {
     undefined,
   );
 
+  mockSaveCalendarEventConflict.mockResolvedValue(
+    undefined,
+  );
+
   mockUpdateGoogleCalendarEvent.mockResolvedValue({
     updatedAt:
       '2026-11-13T19:05:00.000Z',
   });
+
+
 });
 
 describe(
@@ -294,6 +349,18 @@ describe(
 
             externalUpdatedAt:
               '2026-11-13T17:30:00.000Z',
+
+            isWritable:
+              true,
+
+      isAllDay:
+        false,
+
+      allDayStartDate:
+        undefined,
+
+      allDayEndDate:
+        undefined,
           },
         );
 
@@ -307,6 +374,9 @@ describe(
             0,
 
           failed:
+            0,
+
+          conflicts:
             0,
 
           total:
@@ -444,6 +514,195 @@ describe(
             1,
 
           failed:
+            0,
+
+          conflicts:
+            0,
+
+          total:
+            1,
+        });
+      },
+    );
+
+    it(
+      'pulls a read-only Google event into RISE without writing back to Google',
+      async () => {
+        mockCalendarListResponse(
+          'reader',
+        );
+
+        mockGoogleEventsResponse([
+          {
+            id:
+              'google-event-1',
+
+            summary:
+              'Thanksgiving Day',
+
+            updated:
+              '2026-11-13T18:30:00.000Z',
+
+            start: {
+              date:
+                '2026-11-26',
+            },
+
+            end: {
+              date:
+                '2026-11-27',
+            },
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'link-1',
+
+              calendarEventId:
+                'rise-event-1',
+
+              userId:
+                'user-1',
+
+              provider:
+                'google',
+
+              externalEventId:
+                'google-event-1',
+
+              externalCalendarId:
+                'primary',
+
+              lastSyncedAt:
+                '2026-11-13T18:00:00.000Z',
+
+              externalUpdatedAt:
+                '2026-11-13T17:30:00.000Z',
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-event-1',
+
+              userId:
+                'user-1',
+
+              title:
+                'Changed in RISE',
+
+              startAt:
+                '2026-11-26T01:00:00.000Z',
+
+              endAt:
+                '2026-11-27T01:00:00.000Z',
+
+              source:
+                'google',
+
+              location:
+                'RISE location',
+
+              description:
+                'RISE description',
+
+              updatedAt:
+                '2026-11-13T19:00:00.000Z',
+            },
+          ],
+        );
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              15,
+            ),
+          );
+
+        expect(
+          mockUpdateCalendarEventLinkWritability,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'google',
+          false,
+        );
+
+        expect(
+          mockUpdateCalendarEventLinkAllDayMetadata,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'google',
+          {
+            isAllDay:
+              true,
+
+            allDayStartDate:
+              '2026-11-26',
+
+            allDayEndDate:
+              '2026-11-27',
+          },
+        );
+
+        expect(
+          mockUpdateCalendarEvent,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          {
+            title:
+              'Thanksgiving Day',
+
+            startAt:
+              '2026-11-26T08:00:00.000Z',
+
+            endAt:
+              '2026-11-27T08:00:00.000Z',
+
+            location:
+              undefined,
+
+            description:
+              undefined,
+          },
+        );
+
+        expect(
+          mockUpdateGoogleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockSaveCalendarEventConflict,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockMarkCalendarEventLinkSynced,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'google',
+          '2026-11-13T18:30:00.000Z',
+        );
+
+        expect(
+          result,
+        ).toEqual({
+          imported:
+            0,
+
+          skipped:
+            1,
+
+          failed:
+            0,
+
+          conflicts:
             0,
 
           total:
@@ -632,6 +891,9 @@ describe(
           failed:
             0,
 
+          conflicts:
+            0,
+
           total:
             1,
         });
@@ -796,6 +1058,9 @@ describe(
           failed:
             0,
 
+          conflicts:
+            0,
+
           total:
             1,
         });
@@ -918,7 +1183,137 @@ describe(
             0,
 
           failed:
+            0,
+
+          conflicts:
             1,
+
+          total:
+            1,
+        });
+      },
+    );
+
+    it(
+      'counts a conflict persistence error as a failure',
+      async () => {
+        mockCalendarListResponse();
+
+        mockGoogleEventsResponse([
+          {
+            id:
+              'google-event-1',
+
+            summary:
+              'Google Changed',
+
+            updated:
+              '2026-11-13T19:30:00.000Z',
+
+            start: {
+              dateTime:
+                '2026-11-13T10:00:00-08:00',
+            },
+
+            end: {
+              dateTime:
+                '2026-11-13T11:00:00-08:00',
+            },
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'link-1',
+
+              calendarEventId:
+                'rise-event-1',
+
+              userId:
+                'user-1',
+
+              provider:
+                'google',
+
+              externalEventId:
+                'google-event-1',
+
+              externalCalendarId:
+                'primary',
+
+              isWritable:
+                true,
+
+              isAllDay:
+                false,
+
+              externalUpdatedAt:
+                '2026-11-13T18:00:00.000Z',
+
+              lastSyncedAt:
+                '2026-11-13T18:00:00.000Z',
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-event-1',
+
+              userId:
+                'user-1',
+
+              title:
+                'RISE Changed',
+
+              startAt:
+                '2026-11-13T18:00:00.000Z',
+
+              endAt:
+                '2026-11-13T19:00:00.000Z',
+
+              source:
+                'google',
+
+              updatedAt:
+                '2026-11-13T19:00:00.000Z',
+            },
+          ],
+        );
+
+        mockSaveCalendarEventConflict.mockRejectedValueOnce(
+          new Error(
+            'Conflict persistence failed',
+          ),
+        );
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(
+              2026,
+              10,
+              13,
+            ),
+          );
+
+        expect(
+          result,
+        ).toEqual({
+          imported:
+            0,
+
+          skipped:
+            0,
+
+          failed:
+            1,
+
+          conflicts:
+            0,
 
           total:
             1,
@@ -1031,6 +1426,12 @@ describe(
 
         expect(
           result.failed,
+        ).toBe(
+          0,
+        );
+
+        expect(
+          result.conflicts,
         ).toBe(
           1,
         );
@@ -1212,6 +1613,9 @@ describe(
           failed:
             0,
 
+          conflicts:
+            0,
+
           total:
             0,
         });
@@ -1307,6 +1711,468 @@ describe(
           ).getDate(),
         ).toBe(
           13,
+        );
+
+        expect(
+          result.imported,
+        ).toBe(
+          1,
+        );
+      },
+    );
+
+    it(
+      'reuses an Apple-linked RISE event for the same all-day Google holiday',
+      async () => {
+        mockCalendarListResponse(
+          'reader',
+        );
+
+        mockGoogleEventsResponse([
+          {
+            id:
+              'google-columbus-day',
+
+            summary:
+              'Columbus Day',
+
+            updated:
+              '2026-10-01T12:00:00.000Z',
+
+            start: {
+              date:
+                '2026-10-12',
+            },
+
+            end: {
+              date:
+                '2026-10-13',
+            },
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [],
+        );
+
+        mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'apple-link-1',
+
+              calendarEventId:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              provider:
+                'apple',
+
+              externalEventId:
+                'apple-columbus-day',
+
+              externalCalendarId:
+                'apple-holidays',
+
+              isWritable:
+                false,
+
+              isAllDay:
+                true,
+
+              allDayStartDate:
+                '2026-10-12',
+
+              allDayEndDate:
+                '2026-10-13',
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              title:
+                'Columbus Day',
+
+              startAt:
+                '2026-10-12T07:00:00.000Z',
+
+              endAt:
+                '2026-10-13T07:00:00.000Z',
+
+              source:
+                'apple',
+
+              location:
+                undefined,
+
+              description:
+                undefined,
+            },
+          ],
+        );
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              12,
+            ),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledWith(
+          {
+            calendarEventId:
+              'rise-columbus-day',
+
+            userId:
+              'user-1',
+
+            provider:
+              'google',
+
+            externalEventId:
+              'google-columbus-day',
+
+            externalCalendarId:
+              'primary',
+
+            externalUpdatedAt:
+              '2026-10-01T12:00:00.000Z',
+
+            isWritable:
+              false,
+
+            isAllDay:
+              true,
+
+            allDayStartDate:
+              '2026-10-12',
+
+            allDayEndDate:
+              '2026-10-13',
+          },
+        );
+
+        expect(
+          result,
+        ).toEqual({
+          imported:
+            0,
+
+          skipped:
+            1,
+
+          failed:
+            0,
+
+          conflicts:
+            0,
+
+          total:
+            1,
+        });
+      },
+    );
+
+    it(
+      'does not dedupe all-day events on the same dates when their titles differ',
+      async () => {
+        mockCalendarListResponse(
+          'reader',
+        );
+
+        mockGoogleEventsResponse([
+          {
+            id:
+              'google-founders-day',
+
+            summary:
+              'Founders Day',
+
+            updated:
+              '2026-10-01T12:00:00.000Z',
+
+            start: {
+              date:
+                '2026-10-12',
+            },
+
+            end: {
+              date:
+                '2026-10-13',
+            },
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [],
+        );
+
+        mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'apple-link-1',
+
+              calendarEventId:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              provider:
+                'apple',
+
+              externalEventId:
+                'apple-columbus-day',
+
+              externalCalendarId:
+                'apple-holidays',
+
+              isWritable:
+                false,
+
+              isAllDay:
+                true,
+
+              allDayStartDate:
+                '2026-10-12',
+
+              allDayEndDate:
+                '2026-10-13',
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              title:
+                'Columbus Day',
+
+              startAt:
+                '2026-10-12T07:00:00.000Z',
+
+              endAt:
+                '2026-10-13T07:00:00.000Z',
+
+              source:
+                'apple',
+            },
+          ],
+        );
+
+        mockCreateImportedCalendarEvent.mockImplementation(
+          async (
+            input,
+          ) => ({
+            id:
+              'rise-founders-day',
+
+            userId:
+              'user-1',
+
+            ...input,
+          }),
+        );
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              12,
+            ),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            calendarEventId:
+              'rise-founders-day',
+
+            provider:
+              'google',
+
+            externalEventId:
+              'google-founders-day',
+          }),
+        );
+
+        expect(
+          result.imported,
+        ).toBe(
+          1,
+        );
+      },
+    );
+
+    it(
+      'does not dedupe all-day events with matching titles when their semantic dates differ',
+      async () => {
+        mockCalendarListResponse(
+          'reader',
+        );
+
+        mockGoogleEventsResponse([
+          {
+            id:
+              'google-columbus-day',
+
+            summary:
+              'Columbus Day',
+
+            updated:
+              '2026-10-01T12:00:00.000Z',
+
+            start: {
+              date:
+                '2026-10-13',
+            },
+
+            end: {
+              date:
+                '2026-10-14',
+            },
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [],
+        );
+
+        mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'apple-link-1',
+
+              calendarEventId:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              provider:
+                'apple',
+
+              externalEventId:
+                'apple-columbus-day',
+
+              externalCalendarId:
+                'apple-holidays',
+
+              isWritable:
+                false,
+
+              isAllDay:
+                true,
+
+              allDayStartDate:
+                '2026-10-12',
+
+              allDayEndDate:
+                '2026-10-13',
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              title:
+                'Columbus Day',
+
+              startAt:
+                '2026-10-12T07:00:00.000Z',
+
+              endAt:
+                '2026-10-13T07:00:00.000Z',
+
+              source:
+                'apple',
+            },
+          ],
+        );
+
+        mockCreateImportedCalendarEvent.mockImplementation(
+          async (
+            input,
+          ) => ({
+            id:
+              'rise-second-columbus-day',
+
+            userId:
+              'user-1',
+
+            ...input,
+          }),
+        );
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              13,
+            ),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            calendarEventId:
+              'rise-second-columbus-day',
+
+            provider:
+              'google',
+
+            externalEventId:
+              'google-columbus-day',
+          }),
         );
 
         expect(

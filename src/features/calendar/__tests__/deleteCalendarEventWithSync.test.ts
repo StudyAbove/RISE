@@ -56,6 +56,8 @@ const googleLink: CalendarEventLink = {
   provider: 'google',
   externalEventId: 'google-event-1',
   externalCalendarId: 'student@example.com',
+  isWritable: true,
+  isAllDay: false,
 };
 
 const appleLink: CalendarEventLink = {
@@ -64,6 +66,8 @@ const appleLink: CalendarEventLink = {
   userId: 'user-1',
   provider: 'apple',
   externalEventId: 'apple-event-1',
+  isWritable: true,
+  isAllDay: false,
 };
 
 beforeEach(() => {

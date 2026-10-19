@@ -6,6 +6,7 @@ import {
 } from 'react';
 
 import {
+  Alert,
   AppState,
   Platform,
   Pressable,
@@ -28,7 +29,20 @@ import type {
   CalendarEvent,
 } from '../../../models/CalendarEvent';
 
+import type {
+  CalendarEventConflict,
+} from '../../../models/CalendarEventConflict';
+
 import {
+  getUnresolvedCalendarEventConflicts,
+} from '../../../repositories/calendarEventConflictsRepository';
+
+import {
+  getCalendarEventsByIdsForSync,
+} from '../../../repositories/calendarEventsRepository';
+
+import {
+  getCalendarEventLinks,
   getLatestCalendarEventLinkSyncTime,
 } from '../../../repositories/calendarEventLinksRepository';
 
@@ -37,6 +51,10 @@ import { AddEventSyncNotice } from '../components/AddEventSyncNotice';
 import { CalendarEventsStatus } from '../components/CalendarEventsStatus';
 import { CalendarHeader } from '../components/CalendarHeader';
 import { CalendarViewSwitcher } from '../components/CalendarViewSwitcher';
+import {
+  CalendarConflictPickerModal,
+  type CalendarConflictPickerItem,
+} from '../components/CalendarConflictPickerModal';
 import { EditCalendarEventModal } from '../components/EditCalendarEventModal';
 import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { MonthGrid } from '../components/MonthGrid';
@@ -48,6 +66,7 @@ import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import {
   getCalendarBackgroundSyncSnapshot,
   isCalendarBackgroundSyncRunning,
+  markCalendarBackgroundSyncFailed,
   markCalendarBackgroundSyncSuccessful,
   startAppleCalendarBackgroundSync,
   startGoogleCalendarBackgroundSync,
@@ -149,6 +168,32 @@ export function CalendarScreen() {
     useRef(false);
 
   const [
+    selectedEventReadOnly,
+    setSelectedEventReadOnly,
+  ] =
+    useState(false);
+
+  /*
+   * Imported Apple/Google events can represent the same external event
+   * after cross-provider deduplication, such as a holiday that exists in
+   * both calendars.
+   *
+   * RISE-created events still display "From RISE" even when #123 created
+   * provider copies for them.
+   */
+  const [
+    selectedEventProviders,
+    setSelectedEventProviders,
+  ] =
+    useState<Array<'apple' | 'google'>>([]);
+
+  const [
+    startEditModalInConflictReview,
+    setStartEditModalInConflictReview,
+  ] =
+    useState(false);
+
+  const [
     isAddingEvent,
     setIsAddingEvent,
   ] =
@@ -237,6 +282,30 @@ export function CalendarScreen() {
         null,
     );
 
+  const [
+    unresolvedConflicts,
+    setUnresolvedConflicts,
+  ] =
+    useState<
+      CalendarEventConflict[]
+    >([]);
+
+  const [
+    conflictPickerItems,
+    setConflictPickerItems,
+  ] =
+    useState<
+      CalendarConflictPickerItem[]
+    >([]);
+
+  const [
+    conflictPickerVisible,
+    setConflictPickerVisible,
+  ] =
+    useState(
+      false,
+    );
+
   /*
    * This tells us why CalendarScreen itself requested the
    * currently running shared job.
@@ -272,15 +341,42 @@ export function CalendarScreen() {
       visibleRange.end,
     );
 
+  const refreshConflicts =
+    useCallback(
+      async () => {
+        try {
+          const conflicts =
+            await getUnresolvedCalendarEventConflicts();
+
+          setUnresolvedConflicts(
+            conflicts,
+          );
+        } catch (error) {
+          /*
+           * Keep any conflict warnings already on screen if
+           * Supabase temporarily fails to refresh them.
+           */
+          console.log(
+            'Could not load calendar event conflicts:',
+            error,
+          );
+        }
+      },
+      [],
+    );
+
   const refreshCalendar =
     useCallback(() => {
       retry();
+
+      void refreshConflicts();
 
       setTodayCardRefreshKey(
         (current) =>
           current + 1,
       );
     }, [
+      refreshConflicts,
       retry,
     ]);
 
@@ -345,10 +441,24 @@ export function CalendarScreen() {
             'idle' &&
           snapshot.provider
         ) {
+          const syncedProvider =
+            snapshot.provider;
+
           setLastSyncedProviders(
-            [
-              snapshot.provider,
-            ],
+            (current) => {
+              if (
+                current.includes(
+                  syncedProvider,
+                )
+              ) {
+                return current;
+              }
+
+              return [
+                ...current,
+                syncedProvider,
+              ];
+            },
           );
         }
       }
@@ -471,17 +581,18 @@ export function CalendarScreen() {
               latestTimestamp,
             );
 
+          /*
+           * Apple and Google sync sequentially, so their stored successful
+           * timestamps normally differ by a few milliseconds or seconds.
+           *
+           * Keep every provider with a valid successful sync represented in
+           * the label, while the newest timestamp remains the displayed time.
+           */
           const latestProviders =
-            providerDates
-              .filter(
-                (entry) =>
-                  entry.date.getTime() ===
-                  latestTimestamp,
-              )
-              .map(
-                (entry) =>
-                  entry.provider,
-              );
+            providerDates.map(
+              (entry) =>
+                entry.provider,
+            );
 
           latestSuccessfulSyncRef.current =
             latestTimestamp;
@@ -582,10 +693,29 @@ export function CalendarScreen() {
             connectedProviders.length ===
             0
           ) {
+            const existingSnapshot =
+              getCalendarBackgroundSyncSnapshot();
+
             if (
               trigger ===
               'manual'
             ) {
+              markCalendarBackgroundSyncFailed(
+                'No connected calendar is currently available.',
+              );
+
+              setCalendarSyncState(
+                'error',
+              );
+            } else if (
+              existingSnapshot.status ===
+              'error'
+            ) {
+              /*
+               * Preserve a newer failed attempt while the provider
+               * remains unavailable. Do not let an automatic check
+               * make the UI fall back to an older successful sync.
+               */
               setCalendarSyncState(
                 'error',
               );
@@ -839,6 +969,59 @@ export function CalendarScreen() {
           return;
         }
 
+        /*
+         * A provider may have been unavailable earlier and left the
+         * Calendar screen/background snapshot in an error state.
+         *
+         * When the student reconnects Apple or Google and returns to
+         * Calendar, retry immediately instead of waiting for the normal
+         * 30-minute automatic-sync interval.
+         */
+        if (
+          backgroundSnapshot.status ===
+          'error'
+        ) {
+          const connectedProviders =
+            await getConnectedCalendarProviders();
+
+          if (!active) {
+            return;
+          }
+
+          if (
+            connectedProviders.length >
+            0
+          ) {
+            void runCalendarSync(
+              'automatic',
+            );
+
+            return;
+          }
+
+          setCalendarSyncState(
+            'error',
+          );
+
+          setActiveSyncProvider(
+            null,
+          );
+
+          return;
+        }
+
+        /*
+         * The shared background state is healthy. Clear any stale local
+         * error before an early return caused by the normal sync throttle.
+         */
+        setCalendarSyncState(
+          'idle',
+        );
+
+        setActiveSyncProvider(
+          null,
+        );
+
         if (
           latestSync &&
           Date.now() -
@@ -858,9 +1041,11 @@ export function CalendarScreen() {
           false;
       };
     }, [
+      getConnectedCalendarProviders,
       loadLatestSuccessfulSync,
       refreshCalendar,
       runAutomaticSyncIfDue,
+      runCalendarSync,
     ]),
   );
 
@@ -984,11 +1169,112 @@ export function CalendarScreen() {
         ),
     );
 
-  function handleEventPress(
+  /*
+   * Load provider-link information before showing Event Details.
+   *
+   * This prevents Edit/Delete from briefly appearing for a read-only event
+   * while permissions are still being checked.
+   */
+  async function openEventDetails(
     event: CalendarEvent,
   ) {
+    let readOnly = false;
+    let providers: Array<'apple' | 'google'> =
+      [];
+
+    try {
+      const links =
+        await getCalendarEventLinks(
+          event.id,
+        );
+
+      readOnly =
+        links.some(
+          (link) =>
+            link.isWritable ===
+            false,
+        );
+
+      /*
+       * Only imported provider events use their links to determine the
+       * displayed source. A RISE event can have Apple/Google links simply
+       * because RISE synchronized copies outward, so it must remain
+       * "From RISE".
+       */
+      if (
+        event.source === 'apple' ||
+        event.source === 'google'
+      ) {
+        const linkedProviders =
+          new Set(
+            links.map(
+              (link) =>
+                link.provider,
+            ),
+          );
+
+        // Keep the combined holiday label deterministic.
+        providers = (
+          [
+            'apple',
+            'google',
+          ] as const
+        ).filter(
+          (provider) =>
+            linkedProviders.has(
+              provider,
+            ),
+        );
+
+        /*
+         * Older/imported data may temporarily have no stored link.
+         * Fall back to CalendarEvent.source instead of losing its source.
+         */
+        if (
+          providers.length ===
+          0
+        ) {
+          providers = [
+            event.source,
+          ];
+        }
+      }
+    } catch (error) {
+      /*
+       * Fail closed for editing if link permissions cannot be verified.
+       * The event can still be viewed in Details.
+       */
+      console.log(
+        'Could not load calendar event links:',
+        error,
+      );
+
+      readOnly = true;
+
+      if (
+        event.source === 'apple' ||
+        event.source === 'google'
+      ) {
+        providers = [
+          event.source,
+        ];
+      }
+    }
+
     openEditAfterDetailsRef.current =
       false;
+
+    setSelectedEventReadOnly(
+      readOnly,
+    );
+
+    setSelectedEventProviders(
+      providers,
+    );
+
+    setStartEditModalInConflictReview(
+      false,
+    );
 
     setSelectedEvent(
       event,
@@ -1000,8 +1286,19 @@ export function CalendarScreen() {
   }
 
   /*
-   * Keeps selectedEvent until the sheet finishes sliding away, so its
-   * details don't disappear mid-animation.
+   * Tapping any event opens Event Details first (#34).
+   */
+  function handleEventPress(
+    event: CalendarEvent,
+  ) {
+    void openEventDetails(
+      event,
+    );
+  }
+
+  /*
+   * Keeps selectedEvent until the sheet finishes sliding away so its
+   * details do not disappear during the closing animation.
    */
   function handleCloseDetails() {
     setDetailsVisible(
@@ -1009,9 +1306,199 @@ export function CalendarScreen() {
     );
   }
 
+  async function openConflictEventById(
+    calendarEventId: string,
+  ) {
+    const visibleEvent =
+      events.find(
+        (event) =>
+          event.id ===
+          calendarEventId,
+      );
+
+    if (visibleEvent) {
+      handleEventPress(
+        visibleEvent,
+      );
+
+      return;
+    }
+
+    try {
+      const [
+        event,
+      ] =
+        await getCalendarEventsByIdsForSync(
+          [
+            calendarEventId,
+          ],
+        );
+
+      if (!event) {
+        Alert.alert(
+          'Calendar Conflict',
+          'This conflicted event could not be loaded.',
+        );
+
+        return;
+      }
+
+      handleEventPress(
+        event,
+      );
+    } catch (error) {
+      console.log(
+        'Could not load conflicted calendar event:',
+        error,
+      );
+
+      Alert.alert(
+        'Calendar Conflict',
+        'This conflicted event could not be loaded. Please try again.',
+      );
+    }
+  }
+
+  function handleConflictEventsPress(
+    conflictedEvents: CalendarEvent[],
+  ) {
+    const uniqueEvents =
+      Array.from(
+        new Map(
+          conflictedEvents.map(
+            (event) => [
+              event.id,
+              event,
+            ],
+          ),
+        ).values(),
+      );
+
+    if (
+      uniqueEvents.length ===
+      0
+    ) {
+      return;
+    }
+
+    if (
+      uniqueEvents.length ===
+      1
+    ) {
+      handleEventPress(
+        uniqueEvents[0],
+      );
+
+      return;
+    }
+
+    setConflictPickerItems(
+      uniqueEvents.map(
+        (event) => ({
+          calendarEventId:
+            event.id,
+
+          title:
+            event.title,
+
+          startAt:
+            event.startAt,
+        }),
+      ),
+    );
+
+    setConflictPickerVisible(
+      true,
+    );
+  }
+
+  function handleGlobalConflictPress() {
+    const conflictsByEvent =
+      Array.from(
+        new Map(
+          unresolvedConflicts.map(
+            (conflict) => [
+              conflict.calendarEventId,
+              conflict,
+            ],
+          ),
+        ).values(),
+      );
+
+    if (
+      conflictsByEvent.length ===
+      0
+    ) {
+      return;
+    }
+
+    if (
+      conflictsByEvent.length ===
+      1
+    ) {
+      void openConflictEventById(
+        conflictsByEvent[0]
+          .calendarEventId,
+      );
+
+      return;
+    }
+
+    setConflictPickerItems(
+      conflictsByEvent
+        .map(
+          (conflict) => ({
+            calendarEventId:
+              conflict.calendarEventId,
+
+            title:
+              conflict.riseVersion.title,
+
+            startAt:
+              conflict.riseVersion.startAt,
+          }),
+        )
+        .sort(
+          (left, right) =>
+            left.startAt.localeCompare(
+              right.startAt,
+            ) ||
+            left.title.localeCompare(
+              right.title,
+            ),
+        ),
+    );
+
+    setConflictPickerVisible(
+      true,
+    );
+  }
+
+  function handleCloseConflictPicker() {
+    setConflictPickerVisible(
+      false,
+    );
+
+    setConflictPickerItems(
+      [],
+    );
+  }
+
+  function handleConflictPickerSelect(
+    item:
+      CalendarConflictPickerItem,
+  ) {
+    handleCloseConflictPicker();
+
+    void openConflictEventById(
+      item.calendarEventId,
+    );
+  }
+
   /*
-   * iOS can't show a new modal while another is still closing, so the
-   * edit modal opens only after the details sheet is gone.
+   * iOS cannot show a new modal while the details sheet is still closing.
+   * When Edit or Review Conflict requests the edit modal, wait for the
+   * details sheet to finish dismissing first.
    */
   function handleDetailsDismissed() {
     if (
@@ -1030,15 +1517,36 @@ export function CalendarScreen() {
     setSelectedEvent(
       null,
     );
+
+    setSelectedEventReadOnly(
+      false,
+    );
+
+    setSelectedEventProviders(
+      [],
+    );
+
+    setStartEditModalInConflictReview(
+      false,
+    );
   }
 
-  /*
-   * Runs after the student confirms in the details sheet (#80). Errors
-   * go back to the sheet, which explains them and keeps the event.
-   */
   async function handleDeleteEvent(
     event: CalendarEvent,
   ) {
+    /*
+     * Conflict and read-only events are intentionally not deletable.
+     * EventDetailsSheet hides Delete in both cases, but keep the rule
+     * enforced here too in case the UI changes later.
+     */
+    if (
+      selectedEventConflicts.length >
+        0 ||
+      selectedEventReadOnly
+    ) {
+      return;
+    }
+
     await deleteCalendarEventWithSync(
       event,
     );
@@ -1051,6 +1559,26 @@ export function CalendarScreen() {
   }
 
   function handleEditFromDetails() {
+    if (!selectedEvent) {
+      return;
+    }
+
+    /*
+     * A conflicted event must be resolved before normal editing.
+     * The Details UI hides Edit too, but keep this guard here so
+     * the rule is enforced even if the UI changes later.
+     */
+    if (
+      selectedEventConflicts.length >
+      0
+    ) {
+      return;
+    }
+
+    setStartEditModalInConflictReview(
+      false,
+    );
+
     openEditAfterDetailsRef.current =
       true;
 
@@ -1058,7 +1586,36 @@ export function CalendarScreen() {
       false,
     );
 
-    // onDismiss only fires on iOS, so open the edit modal right away elsewhere.
+    // onDismiss only fires on iOS.
+    if (
+      Platform.OS !==
+      'ios'
+    ) {
+      handleDetailsDismissed();
+    }
+  }
+
+  async function handleReviewConflictFromDetails() {
+    if (
+      !selectedEvent ||
+      selectedEventConflicts.length ===
+        0
+    ) {
+      return;
+    }
+
+    setStartEditModalInConflictReview(
+      true,
+    );
+
+    openEditAfterDetailsRef.current =
+      true;
+
+    setDetailsVisible(
+      false,
+    );
+
+    // onDismiss only fires on iOS.
     if (
       Platform.OS !==
       'ios'
@@ -1074,6 +1631,18 @@ export function CalendarScreen() {
 
     setSelectedEvent(
       null,
+    );
+
+    setSelectedEventReadOnly(
+      false,
+    );
+
+    setSelectedEventProviders(
+      [],
+    );
+
+    setStartEditModalInConflictReview(
+      false,
     );
   }
 
@@ -1191,6 +1760,14 @@ export function CalendarScreen() {
           ? 'Google'
           : null;
 
+  const unresolvedConflictCount =
+    new Set(
+      unresolvedConflicts.map(
+        (conflict) =>
+          conflict.calendarEventId,
+      ),
+    ).size;
+
   const syncStatusLabel =
     calendarSyncState ===
     'syncing'
@@ -1216,6 +1793,16 @@ export function CalendarScreen() {
               )}`
           : 'Last synced: Not yet';
 
+  const conflictStatusLabel =
+    unresolvedConflictCount > 0
+      ? `⚠ ${unresolvedConflictCount} calendar ${
+          unresolvedConflictCount ===
+          1
+            ? 'conflict'
+            : 'conflicts'
+        }`
+      : null;
+
   const syncButtonLabel =
     calendarSyncState ===
     'syncing'
@@ -1229,6 +1816,23 @@ export function CalendarScreen() {
     calendarSyncState ===
       'syncing' ||
     isCalendarBackgroundSyncRunning();
+
+  const selectedEventConflicts =
+    selectedEvent
+      ? unresolvedConflicts.filter(
+          (conflict) =>
+            conflict.calendarEventId ===
+            selectedEvent.id,
+        )
+      : [];
+
+  const conflictEventIds =
+    new Set(
+      unresolvedConflicts.map(
+        (conflict) =>
+          conflict.calendarEventId,
+      ),
+    );
 
   return (
     <View
@@ -1268,18 +1872,51 @@ export function CalendarScreen() {
           styles.syncRow
         }
       >
-        <Text
-          style={[
-            styles.syncStatusText,
-
-            calendarSyncState ===
-              'error' &&
-              styles.syncStatusError,
-          ]}
-          accessibilityLiveRegion="polite"
+        <View
+          style={
+            styles.syncStatusContainer
+          }
         >
-          {syncStatusLabel}
-        </Text>
+          <Text
+            style={[
+              styles.syncStatusText,
+
+              calendarSyncState ===
+                'error' &&
+                styles.syncStatusError,
+            ]}
+            accessibilityLiveRegion="polite"
+          >
+            {syncStatusLabel}
+          </Text>
+
+          {conflictStatusLabel && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${conflictStatusLabel}. Review calendar conflicts.`}
+              hitSlop={6}
+              onPress={
+                handleGlobalConflictPress
+              }
+              style={({
+                pressed,
+              }) =>
+                pressed
+                  ? styles.conflictStatusPressed
+                  : undefined
+              }
+            >
+              <Text
+                style={
+                  styles.conflictStatusText
+                }
+                accessibilityLiveRegion="polite"
+              >
+                {conflictStatusLabel}
+              </Text>
+            </Pressable>
+          )}
+        </View>
 
         <Pressable
           accessibilityRole="button"
@@ -1343,6 +1980,12 @@ export function CalendarScreen() {
               events={
                 events
               }
+              conflictEventIds={
+                conflictEventIds
+              }
+              onConflictPress={
+                handleConflictEventsPress
+              }
               onEventPress={
                 handleEventPress
               }
@@ -1399,6 +2042,21 @@ export function CalendarScreen() {
         )}
       </View>
 
+      <CalendarConflictPickerModal
+        visible={
+          conflictPickerVisible
+        }
+        items={
+          conflictPickerItems
+        }
+        onSelect={
+          handleConflictPickerSelect
+        }
+        onClose={
+          handleCloseConflictPicker
+        }
+      />
+
       <EventDetailsSheet
         visible={
           detailsVisible
@@ -1406,11 +2064,24 @@ export function CalendarScreen() {
         event={
           selectedEvent
         }
+        hasUnresolvedConflict={
+          selectedEventConflicts.length >
+          0
+        }
+        readOnly={
+          selectedEventReadOnly
+        }
+        providerSources={
+          selectedEventProviders
+        }
         onClose={
           handleCloseDetails
         }
         onEdit={
           handleEditFromDetails
+        }
+        onReviewConflict={
+          handleReviewConflictFromDetails
         }
         onDelete={
           handleDeleteEvent
@@ -1427,11 +2098,24 @@ export function CalendarScreen() {
         event={
           selectedEvent
         }
+        conflicts={
+          selectedEventConflicts
+        }
+        readOnly={
+          selectedEventReadOnly
+        }
+        startInConflictReview={
+          startEditModalInConflictReview
+        }
         onClose={
           handleCloseEditModal
         }
         onSaved={
           handleEventSaved
+        }
+
+        onConflictResolved={
+          refreshCalendar
         }
       />
 

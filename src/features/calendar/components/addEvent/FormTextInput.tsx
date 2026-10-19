@@ -11,10 +11,18 @@ interface FormTextInputProps {
   value: string;
   onChangeText: (text: string) => void;
   hasError?: boolean;
+  disabled?: boolean;
 }
 
 /** The Title and Location boxes. The border darkens while typing and turns red on an error. */
-export function FormTextInput({ label, placeholder, value, onChangeText, hasError = false }: FormTextInputProps) {
+export function FormTextInput({
+  label,
+  placeholder,
+  value,
+  onChangeText,
+  hasError = false,
+  disabled = false,
+}: FormTextInputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
@@ -24,6 +32,10 @@ export function FormTextInput({ label, placeholder, value, onChangeText, hasErro
       placeholderTextColor={colors.mutedGrayGreen}
       value={value}
       onChangeText={onChangeText}
+      editable={!disabled}
+      accessibilityState={{
+        disabled,
+      }}
       onFocus={() => setIsFocused(true)}
       onBlur={() => setIsFocused(false)}
       returnKeyType="done"

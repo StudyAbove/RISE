@@ -1,4 +1,8 @@
-import { Text, View } from 'react-native';
+import {
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
 import {
   format,
   isSameMonth,
@@ -33,6 +37,14 @@ interface MonthGridProps {
   /** Events for the visible weeks; each is listed on the day(s) it falls on. */
   events: CalendarEvent[];
 
+  /** IDs of events that currently have unresolved calendar conflicts. */
+  conflictEventIds?: ReadonlySet<string>;
+
+  /** Called when a date's conflict marker is selected. */
+  onConflictPress?: (
+    events: CalendarEvent[],
+  ) => void;
+
   /** Called when the student selects an event. */
   onEventPress?: (
     event: CalendarEvent,
@@ -46,6 +58,8 @@ interface MonthGridProps {
 export function MonthGrid({
   month,
   events,
+  conflictEventIds,
+  onConflictPress,
   onEventPress,
 }: MonthGridProps) {
   const days =
@@ -138,6 +152,17 @@ export function MonthGrid({
                     segment.event,
                 );
 
+              const conflictedDayEvents =
+                dayEvents.filter(
+                  (event) =>
+                    conflictEventIds?.has(
+                      event.id,
+                    ) ?? false,
+                );
+
+              const conflictCount =
+                conflictedDayEvents.length;
+
               const hiddenCount =
                 dayEvents.length -
                 MAX_CHIPS_PER_DAY;
@@ -148,7 +173,7 @@ export function MonthGrid({
                   'EEEE, MMMM d',
                 )}`;
 
-              const label =
+              const eventLabel =
                 dayEvents.length ===
                 0
                   ? dateLabel
@@ -158,6 +183,15 @@ export function MonthGrid({
                         ? 'event'
                         : 'events'
                     }`;
+
+              const label =
+                conflictCount > 0
+                  ? `${eventLabel}, ${conflictCount} calendar ${
+                      conflictCount === 1
+                        ? 'conflict'
+                        : 'conflicts'
+                    }`
+                  : eventLabel;
 
               return (
                 <View
@@ -174,24 +208,63 @@ export function MonthGrid({
                   ]}
                 >
                   <View
-                    style={[
-                      styles.dayNumberBox,
-                      today &&
-                        styles.todayCircle,
-                    ]}
+                    style={
+                      styles.dayNumberArea
+                    }
                   >
-                    <Text
+                    <View
                       style={[
-                        styles.dayNumber,
+                        styles.dayNumberBox,
                         today &&
-                          styles.todayNumber,
+                          styles.todayCircle,
                       ]}
                     >
-                      {format(
-                        day,
-                        'd',
-                      )}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.dayNumber,
+                          today &&
+                            styles.todayNumber,
+                        ]}
+                      >
+                        {format(
+                          day,
+                          'd',
+                        )}
+                      </Text>
+                    </View>
+
+                    {conflictCount >
+                      0 && (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${conflictCount} calendar ${
+                          conflictCount ===
+                          1
+                            ? 'conflict'
+                            : 'conflicts'
+                        } on ${format(
+                          day,
+                          'MMMM d',
+                        )}`}
+                        hitSlop={8}
+                        onPress={() =>
+                          onConflictPress?.(
+                            conflictedDayEvents,
+                          )
+                        }
+                        style={
+                          styles.conflictMarker
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.conflictMarkerText
+                          }
+                        >
+                          !
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
 
                   <View

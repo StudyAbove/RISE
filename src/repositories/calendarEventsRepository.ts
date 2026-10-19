@@ -53,10 +53,15 @@ export interface UpdateCalendarEventInput {
   endAt: string;
   location?: string;
   description?: string;
+
+  // RISE-only metadata. These values are stored in RISE but are not
+  // synchronized to Apple Calendar or Google Calendar.
+  eventType?: CalendarEventType | null;
+  reminderMinutes?: number | null;
 }
 
 const CALENDAR_EVENT_COLUMNS =
-  'id, user_id, title, start_at, end_at, source, location, description';
+  'id, user_id, title, start_at, end_at, source, location, description, event_type, reminder_minutes';
 
 const CALENDAR_EVENT_SYNC_COLUMNS =
   `${CALENDAR_EVENT_COLUMNS}, updated_at`;
@@ -295,6 +300,30 @@ export async function updateCalendarEvent(
           updates.description?.trim() ||
           null,
 
+        // Only change RISE-only metadata when the caller explicitly
+        // provides it. Conflict resolution and provider-import flows
+        // can therefore update the shared fields without clearing
+        // the student's Type or Reminder selections.
+        ...(
+          'eventType' in updates
+            ? {
+                event_type:
+                  updates.eventType ??
+                  null,
+              }
+            : {}
+        ),
+
+        ...(
+          'reminderMinutes' in updates
+            ? {
+                reminder_minutes:
+                  updates.reminderMinutes ??
+                  null,
+              }
+            : {}
+        ),
+
         updated_at:
           now,
       })
@@ -386,15 +415,14 @@ export async function createCalendarEvent(
 }
 
 /**
- * Permanently deletes one of the student's events (#80). Its
- * calendar_event_links rows are deleted with it by the database.
+ * Permanently deletes one RISE calendar event.
  *
- * Row-level security only lets students delete their own events, so
- * a row that isn't theirs (or doesn't exist) deletes nothing; that
- * counts as a failure instead of passing silently.
+ * Provider copies in Apple or Google Calendar must be handled before this
+ * function runs. Database foreign keys then cascade the RISE deletion to its
+ * calendar links and conflict records.
  *
- * Copies in Apple or Google Calendar are handled separately, before
- * this runs.
+ * Row-level security only lets students delete their own events, so a row
+ * that does not exist or cannot be deleted counts as a failure.
  */
 export async function deleteCalendarEvent(
   eventId: string,

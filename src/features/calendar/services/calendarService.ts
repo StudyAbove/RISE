@@ -307,6 +307,48 @@ export async function createAppleCalendarEvent(
  * Only the one occurrence on startAt is removed, never a whole
  * repeating series. An event that is already gone counts as deleted.
  */
+/**
+ * Checks whether a linked Apple Calendar event still exists.
+ *
+ * This lookup is by EventKit ID instead of by the academic-term date range.
+ * That matters during deletion detection because an event moved outside the
+ * term should not be mistaken for a deleted event.
+ */
+export async function appleCalendarEventExists(
+  externalEventId: string,
+): Promise<boolean> {
+  const access =
+    await getAppleCalendarAccess();
+
+  if (
+    access !==
+    'full'
+  ) {
+    throw new Error(
+      'APPLE_CALENDAR_NOT_CONNECTED',
+    );
+  }
+
+  if (
+    !externalEventId
+  ) {
+    throw new Error(
+      'APPLE_EVENT_ID_MISSING',
+    );
+  }
+
+  try {
+    await ExpoCalendarEvent.get(
+      externalEventId,
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
 export async function deleteAppleCalendarEvent(
   externalEventId: string,
   startAt: string,

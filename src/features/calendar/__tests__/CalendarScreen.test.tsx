@@ -26,13 +26,19 @@ const mockGetCalendarEventsInRange =
 const mockCreateCalendarEvent =
   jest.fn();
 
+const mockGetCalendarEventsByIdsForSync =
+  jest.fn();
+
 const mockDeleteCalendarEvent =
+  jest.fn();
+
+const mockGetLatestCalendarEventLinkSyncTime =
   jest.fn();
 
 const mockGetCalendarEventLinks =
   jest.fn();
 
-const mockGetLatestCalendarEventLinkSyncTime =
+const mockGetUnresolvedCalendarEventConflicts =
   jest.fn();
 
 const mockStartAppleCalendarBackgroundSync =
@@ -108,6 +114,12 @@ jest.mock(
         mockCreateCalendarEvent(
           ...args,
         ),
+    getCalendarEventsByIdsForSync:
+      (...args: unknown[]) =>
+        mockGetCalendarEventsByIdsForSync(
+          ...args,
+        ),
+
     deleteCalendarEvent:
       (...args: unknown[]) =>
         mockDeleteCalendarEvent(
@@ -118,19 +130,46 @@ jest.mock(
 
 beforeEach(() => {
   mockCreateCalendarEvent.mockReset();
+
+  mockGetCalendarEventsByIdsForSync.mockReset();
+  mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+    [],
+  );
+
+  mockGetUnresolvedCalendarEventConflicts.mockReset();
+  mockGetUnresolvedCalendarEventConflicts.mockResolvedValue(
+    [],
+  );
+
+  mockGetCalendarEventLinks.mockReset();
+  mockGetCalendarEventLinks.mockResolvedValue(
+    [],
+  );
 });
 
 jest.mock(
   '../../../repositories/calendarEventLinksRepository',
   () => ({
+    getCalendarEventLinks:
+      (...args: unknown[]) =>
+        mockGetCalendarEventLinks(
+          ...args,
+        ),
+
     getLatestCalendarEventLinkSyncTime:
       (...args: unknown[]) =>
         mockGetLatestCalendarEventLinkSyncTime(
           ...args,
         ),
-    getCalendarEventLinks:
+  }),
+);
+
+jest.mock(
+  '../../../repositories/calendarEventConflictsRepository',
+  () => ({
+    getUnresolvedCalendarEventConflicts:
       (...args: unknown[]) =>
-        mockGetCalendarEventLinks(
+        mockGetUnresolvedCalendarEventConflicts(
           ...args,
         ),
   }),
@@ -1662,6 +1701,55 @@ describe(
         }
 
         it(
+          'keeps Apple and Google in Last synced when their successful times differ',
+          async () => {
+            mockGetLatestCalendarEventLinkSyncTime.mockImplementation(
+              async (
+                provider: string,
+              ) => {
+                if (
+                  provider ===
+                  'apple'
+                ) {
+                  return new Date(
+                    2026,
+                    10,
+                    13,
+                    9,
+                    24,
+                  ).toISOString();
+                }
+
+                if (
+                  provider ===
+                  'google'
+                ) {
+                  return new Date(
+                    2026,
+                    10,
+                    13,
+                    9,
+                    25,
+                  ).toISOString();
+                }
+
+                return null;
+              },
+            );
+
+            await render(
+              <CalendarScreen />,
+            );
+
+            expect(
+              await screen.findByText(
+                'Last synced: Apple + Google • 9:25 AM',
+              ),
+            ).toBeOnTheScreen();
+          },
+        );
+
+        it(
           'manually syncs Apple when only Apple Calendar is connected',
           async () => {
             mockGetCalendarConnection.mockImplementation(
@@ -2008,6 +2096,151 @@ describe(
   },
 );
 
+describe(
+  'CalendarScreen: read-only provider events',
+  () => {
+    it(
+      'shows a read-only event in Details without Edit or Delete',
+      async () => {
+        const readOnlyEvent =
+          makeEvent(
+            'Thanksgiving',
+            new Date(
+              2026,
+              10,
+              26,
+              0,
+              0,
+            ),
+            new Date(
+              2026,
+              10,
+              27,
+              0,
+              0,
+            ),
+          );
+
+        readOnlyEvent.source =
+          'apple';
+
+        mockGetCalendarEventsInRange.mockResolvedValue(
+          [
+            readOnlyEvent,
+          ],
+        );
+
+        mockGetCalendarEventLinks.mockResolvedValue(
+          [
+            {
+              id:
+                'link-read-only',
+
+              calendarEventId:
+                readOnlyEvent.id,
+
+              userId:
+                'user-1',
+
+              provider:
+                'apple',
+
+              externalEventId:
+                'apple-thanksgiving',
+
+              externalCalendarId:
+                'holidays',
+
+              isWritable:
+                false,
+
+              isAllDay:
+                true,
+
+              allDayStartDate:
+                '2026-11-26',
+
+              allDayEndDate:
+                '2026-11-27',
+
+              createdAt:
+                '2026-11-01T00:00:00.000Z',
+
+              updatedAt:
+                '2026-11-01T00:00:00.000Z',
+            },
+          ],
+        );
+
+        await render(
+          <CalendarScreen />,
+        );
+
+        const day =
+          await screen.findByLabelText(
+            'Thursday, November 26, 1 event',
+          );
+
+        await fireEvent.press(
+          within(
+            day,
+          ).getByText(
+            'Thanksgiving',
+          ),
+        );
+
+        expect(
+          await screen.findByRole(
+            'header',
+            {
+              name:
+                'Read-only calendar event',
+            },
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          screen.getByText(
+            'This event is controlled by a connected calendar and cannot be edited or deleted in RISE.',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          mockGetCalendarEventLinks,
+        ).toHaveBeenCalledWith(
+          readOnlyEvent.id,
+        );
+
+        expect(
+          screen.queryByRole(
+            'button',
+            {
+              name:
+                'Edit',
+            },
+          ),
+        ).toBeNull();
+
+        expect(
+          screen.queryByRole(
+            'button',
+            {
+              name:
+                'Delete',
+            },
+          ),
+        ).toBeNull();
+
+        expect(
+          screen.queryByLabelText(
+            'Close edit event',
+          ),
+        ).toBeNull();
+      },
+    );
+  },
+);
+
 describe('CalendarScreen: adding an event (#31)', () => {
   // Pretends to be the database: events saved through the form are returned
   // by later loads, the way Supabase would.
@@ -2191,13 +2424,380 @@ describe('CalendarScreen: opening an event (#34)', () => {
   it('opens the edit form from Edit once the details have closed', async () => {
     await openTodayEvent();
 
-    const finishClosingDetails = captureDetailsDismiss();
-    await fireEvent.press(screen.getByRole('button', { name: 'Edit' }));
-    expect(screen.queryByLabelText('Close edit event')).not.toBeOnTheScreen();
+    const finishClosingDetails =
+      captureDetailsDismiss();
+
+    await fireEvent.press(
+      screen.getByRole(
+        'button',
+        {
+          name:
+            'Edit',
+        },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(
+        mockGetCalendarEventLinks,
+      ).toHaveBeenCalledWith(
+        todayEvent.id,
+      );
+    });
+
+    expect(
+      screen.queryByLabelText(
+        'Close edit event',
+      ),
+    ).not.toBeOnTheScreen();
+
     await finishClosingDetails();
 
-    expect(screen.getByLabelText('Close edit event')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Event title')).toHaveDisplayValue('Bio Lab');
+    expect(
+      screen.getByLabelText(
+        'Close edit event',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByLabelText(
+        'Title',
+      ),
+    ).toHaveDisplayValue(
+      'Bio Lab',
+    );
+  });
+
+  it('shows both Apple and Google for a deduplicated provider event', async () => {
+    const holidayEvent: CalendarEvent = {
+      id: 'holiday-event',
+      userId: 'user-1',
+      title: 'Thanksgiving',
+      startAt: new Date(
+        2026,
+        10,
+        26,
+        0,
+      ).toISOString(),
+      endAt: new Date(
+        2026,
+        10,
+        27,
+        0,
+      ).toISOString(),
+      source: 'google',
+    };
+
+    mockGetCalendarEventsInRange.mockResolvedValue(
+      [
+        holidayEvent,
+      ],
+    );
+
+    mockGetCalendarEventLinks.mockResolvedValue(
+      [
+        {
+          id: 'apple-link',
+          calendarEventId:
+            holidayEvent.id,
+          userId: 'user-1',
+          provider: 'apple',
+          externalEventId:
+            'apple-thanksgiving',
+          externalCalendarId:
+            'apple-holidays',
+          isWritable: false,
+          isAllDay: true,
+          allDayStartDate:
+            '2026-11-26',
+          allDayEndDate:
+            '2026-11-27',
+          createdAt:
+            '2026-11-01T00:00:00.000Z',
+          updatedAt:
+            '2026-11-01T00:00:00.000Z',
+        },
+        {
+          id: 'google-link',
+          calendarEventId:
+            holidayEvent.id,
+          userId: 'user-1',
+          provider: 'google',
+          externalEventId:
+            'google-thanksgiving',
+          externalCalendarId:
+            'google-holidays',
+          isWritable: false,
+          isAllDay: true,
+          allDayStartDate:
+            '2026-11-26',
+          allDayEndDate:
+            '2026-11-27',
+          createdAt:
+            '2026-11-01T00:00:00.000Z',
+          updatedAt:
+            '2026-11-01T00:00:00.000Z',
+        },
+      ],
+    );
+
+    await render(
+      <CalendarScreen />,
+    );
+
+    const day =
+      await screen.findByLabelText(
+        'Thursday, November 26, 1 event',
+      );
+
+    await fireEvent.press(
+      within(
+        day,
+      ).getByText(
+        'Thanksgiving',
+      ),
+    );
+
+    expect(
+      await screen.findByText(
+        'From Apple Calendar + Google Calendar',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByTestId(
+        'event-source-logo-apple',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByTestId(
+        'event-source-logo-google',
+      ),
+    ).toBeOnTheScreen();
+  });
+
+  it('opens conflict review from Details instead of exposing Edit or Delete', async () => {
+    const conflictEvent: CalendarEvent = {
+      id: 'conflict-event',
+      userId: 'user-1',
+      title: 'Study for Exam',
+      startAt: new Date(
+        2026,
+        10,
+        13,
+        11,
+      ).toISOString(),
+      endAt: new Date(
+        2026,
+        10,
+        13,
+        12,
+      ).toISOString(),
+      source: 'google',
+    };
+
+    mockGetCalendarEventsInRange.mockResolvedValue(
+      [
+        conflictEvent,
+      ],
+    );
+
+    mockGetCalendarEventLinks.mockResolvedValue(
+      [
+        {
+          id: 'google-conflict-link',
+          calendarEventId:
+            conflictEvent.id,
+          userId: 'user-1',
+          provider: 'google',
+          externalEventId:
+            'google-study-event',
+          externalCalendarId:
+            'primary',
+          isWritable: true,
+          isAllDay: false,
+          createdAt:
+            '2026-11-01T00:00:00.000Z',
+          updatedAt:
+            '2026-11-01T00:00:00.000Z',
+        },
+      ],
+    );
+
+    mockGetUnresolvedCalendarEventConflicts.mockResolvedValue(
+      [
+        {
+          id: 'conflict-1',
+          calendarEventId:
+            conflictEvent.id,
+          calendarEventLinkId:
+            'google-conflict-link',
+          userId: 'user-1',
+          provider: 'google',
+          riseVersion: {
+            title:
+              'Study for Exam',
+            startAt:
+              conflictEvent.startAt,
+            endAt:
+              conflictEvent.endAt,
+            location:
+              'Library',
+            description:
+              'Review chapters 4 and 5.',
+            updatedAt:
+              '2026-11-13T18:00:00.000Z',
+          },
+          providerVersion: {
+            title:
+              'Exam Review Group',
+            startAt:
+              new Date(
+                2026,
+                10,
+                13,
+                11,
+                30,
+              ).toISOString(),
+            endAt:
+              new Date(
+                2026,
+                10,
+                13,
+                12,
+                30,
+              ).toISOString(),
+            location:
+              'Library Room 305',
+            description:
+              'Review chapters 4 through 6.',
+            updatedAt:
+              '2026-11-13T18:05:00.000Z',
+          },
+          status:
+            'unresolved',
+          createdAt:
+            '2026-11-13T18:06:00.000Z',
+        },
+      ],
+    );
+
+    await render(
+      <CalendarScreen />,
+    );
+
+    const [eventButton] =
+      await screen.findAllByRole(
+        'button',
+        {
+          name:
+            /^Study for Exam,/,
+        },
+      );
+
+    await fireEvent.press(
+      eventButton,
+    );
+
+    expect(
+      await screen.findByRole(
+        'header',
+        {
+          name:
+            'Calendar conflict',
+        },
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.queryByRole(
+        'button',
+        {
+          name:
+            'Edit',
+        },
+      ),
+    ).toBeNull();
+
+    expect(
+      screen.queryByRole(
+        'button',
+        {
+          name:
+            'Delete',
+        },
+      ),
+    ).toBeNull();
+
+    const finishClosingDetails =
+      captureDetailsDismiss();
+
+    await fireEvent.press(
+      screen.getByRole(
+        'button',
+        {
+          name:
+            'Review Conflict',
+        },
+      ),
+    );
+
+    await finishClosingDetails();
+
+    expect(
+      screen.getByLabelText(
+        'Close edit event',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByRole(
+        'header',
+        {
+          name:
+            'Review Conflict',
+        },
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByText(
+        'This event was changed or deleted in more than one place. Compare each version and choose the result you want RISE and your connected calendars to keep.',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByText(
+        'RISE',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByText(
+        'Google Calendar',
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByRole(
+        'button',
+        {
+          name:
+            'Keep RISE version',
+        },
+      ),
+    ).toBeOnTheScreen();
+
+    expect(
+      screen.getByRole(
+        'button',
+        {
+          name:
+            'Keep Google Calendar version',
+        },
+      ),
+    ).toBeOnTheScreen();
   });
 });
 

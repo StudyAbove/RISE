@@ -337,6 +337,78 @@ export async function createGoogleCalendarEvent(
  *
  * An event that is already gone from Google counts as deleted.
  */
+/**
+ * Checks whether a linked Google Calendar event still exists.
+ *
+ * This lookup is by calendar ID + event ID instead of by the academic-term
+ * date range. That prevents an event moved outside the term from being
+ * mistaken for a deletion.
+ */
+export async function googleCalendarEventExists(
+  externalEventId: string,
+  externalCalendarId: string,
+): Promise<boolean> {
+  if (!externalEventId) {
+    throw new Error(
+      'GOOGLE_EVENT_ID_MISSING',
+    );
+  }
+
+  if (!externalCalendarId) {
+    throw new Error(
+      'GOOGLE_CALENDAR_ID_MISSING',
+    );
+  }
+
+  const accessToken =
+    await getGoogleAccessToken();
+
+  if (!accessToken) {
+    throw new Error(
+      'GOOGLE_CALENDAR_RECONNECT_REQUIRED',
+    );
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      externalCalendarId,
+    )}/events/${encodeURIComponent(
+      externalEventId,
+    )}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (response.status === 401) {
+    await clearGoogleAccessToken();
+
+    throw new Error(
+      'GOOGLE_CALENDAR_RECONNECT_REQUIRED',
+    );
+  }
+
+  if (
+    response.status === 404 ||
+    response.status === 410
+  ) {
+    return false;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      'GOOGLE_CALENDAR_SYNC_FAILED',
+    );
+  }
+
+  const event = await response.json();
+
+  return event.status !== 'cancelled';
+}
+
+
 export async function deleteGoogleCalendarEvent(
   externalEventId: string,
   externalCalendarId: string,

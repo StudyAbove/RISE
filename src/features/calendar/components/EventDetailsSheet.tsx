@@ -43,8 +43,16 @@ interface EventDetailsSheetProps {
   visible: boolean;
   /** The event to show; nothing renders without one. */
   event: CalendarEvent | null;
+  /** An unresolved provider conflict must be resolved before editing/deleting. */
+  hasUnresolvedConflict: boolean;
+  /** Provider permissions do not allow this event to be changed in RISE. */
+  readOnly: boolean;
+  /** Provider sources for an imported Apple/Google event after deduplication. */
+  providerSources: Array<'apple' | 'google'>;
   onClose: () => void;
   onEdit: (event: CalendarEvent) => void;
+  onReviewConflict: (event: CalendarEvent) => void;
+
   /**
    * Deletes the event after the student confirms (#80). Resolves once it's
    * gone, so the calendar can close the sheet; a rejection shows the error
@@ -60,9 +68,21 @@ interface EventDetailsSheetProps {
  * sheet when an event is tapped. Date, time, and where it came from always
  * show; type, location, reminder, and notes only when the event has them.
  */
-export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, onDismiss }: EventDetailsSheetProps) {
+export function EventDetailsSheet({
+  visible,
+  event,
+  hasUnresolvedConflict,
+  readOnly,
+  providerSources,
+  onClose,
+  onEdit,
+  onReviewConflict,
+  onDelete,
+  onDismiss,
+}: EventDetailsSheetProps) {
   const [isDeleting, setIsDeleting] = useState(false);
-  // True while checking which calendars the event is in, before the confirmation.
+
+  // True while checking which calendars the event is in, before confirmation.
   const [isCheckingLinks, setIsCheckingLinks] = useState(false);
 
   // Each time the sheet opens, it starts ready to delete again.
@@ -73,36 +93,68 @@ export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, o
     }
   }, [visible]);
 
-  // Asks first (AC2), naming each calendar the event will also be deleted from;
-  // Cancel leaves everything as it was (AC4).
-  async function confirmDelete(eventToDelete: CalendarEvent) {
+  // Name every linked provider in the confirmation before deleting.
+  async function confirmDelete(
+    eventToDelete: CalendarEvent,
+  ) {
     setIsCheckingLinks(true);
-    let linkedProviders: Awaited<ReturnType<typeof getLinkedCalendarProviders>> | null;
+
+    let linkedProviders:
+      Awaited<ReturnType<typeof getLinkedCalendarProviders>> | null;
+
     try {
-      linkedProviders = await getLinkedCalendarProviders(eventToDelete.id);
+      linkedProviders =
+        await getLinkedCalendarProviders(
+          eventToDelete.id,
+        );
     } catch {
       linkedProviders = null;
     } finally {
       setIsCheckingLinks(false);
     }
 
-    Alert.alert(`Delete "${eventToDelete.title}"?`, getDeleteConfirmMessage(linkedProviders), [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => void deleteEvent(eventToDelete) },
-    ]);
+    Alert.alert(
+      `Delete "${eventToDelete.title}"?`,
+      getDeleteConfirmMessage(
+        linkedProviders,
+      ),
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            void deleteEvent(
+              eventToDelete,
+            ),
+        },
+      ],
+    );
   }
 
-  async function deleteEvent(eventToDelete: CalendarEvent) {
+  async function deleteEvent(
+    eventToDelete: CalendarEvent,
+  ) {
     setIsDeleting(true);
+
     try {
-      await onDelete(eventToDelete);
+      await onDelete(
+        eventToDelete,
+      );
     } catch (error) {
-      Alert.alert("Couldn't delete event", getDeleteErrorMessage(error));
+      Alert.alert(
+        "Couldn't delete event",
+        getDeleteErrorMessage(
+          error,
+        ),
+      );
     } finally {
       setIsDeleting(false);
     }
   }
-
   return (
     <Modal
       testID="event-details-sheet"
@@ -136,16 +188,62 @@ export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, o
 
               <DetailRow
                 icon={
-                  <Image
-                    testID="event-source-logo"
-                    source={SOURCE_LOGOS[event.source]}
-                    // The Apple logo is white (made for the dark Apple button), so it's darkened here to show on the card.
-                    style={[styles.sourceLogo, event.source === 'apple' && styles.appleLogo]}
-                    accessibilityIgnoresInvertColors
-                  />
+                  event.source !== 'rise' &&
+                  event.source !== 'canvas' &&
+                  providerSources.length > 1 ? (
+                    <View style={styles.multipleSourceLogos}>
+                      {providerSources.map(
+                        (provider) => (
+                          <Image
+                            key={provider}
+                            testID={`event-source-logo-${provider}`}
+                            source={SOURCE_LOGOS[provider]}
+                            style={[
+                              styles.multipleSourceLogo,
+                              provider === 'apple' &&
+                                styles.appleLogo,
+                            ]}
+                            accessibilityIgnoresInvertColors
+                          />
+                        ),
+                      )}
+                    </View>
+                  ) : (
+                    <Image
+                      testID="event-source-logo"
+                      source={
+                        SOURCE_LOGOS[
+                          event.source
+                        ]
+                      }
+                      // The Apple logo is white (made for the dark Apple button), so it's darkened here to show on the card.
+                      style={[
+                        styles.sourceLogo,
+                        event.source ===
+                          'apple' &&
+                          styles.appleLogo,
+                      ]}
+                      accessibilityIgnoresInvertColors
+                    />
+                  )
                 }
               >
-                From {EVENT_SOURCE_LABELS[event.source]}
+                {event.source !== 'rise' &&
+                event.source !== 'canvas' &&
+                providerSources.length > 1
+                  ? `From ${providerSources
+                      .map(
+                        (provider) =>
+                          EVENT_SOURCE_LABELS[
+                            provider
+                          ],
+                      )
+                      .join(' + ')}`
+                  : `From ${
+                      EVENT_SOURCE_LABELS[
+                        event.source
+                      ]
+                    }`}
               </DetailRow>
 
               {event.eventType && (
@@ -174,36 +272,122 @@ export function EventDetailsSheet({ visible, event, onClose, onEdit, onDelete, o
               </View>
             ) : null}
 
-            <View style={styles.buttons}>
-              {/* Both wait while a delete is running, so nothing else can change the event. */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Edit"
-                accessibilityState={{ disabled: isDeleting }}
-                disabled={isDeleting}
-                onPress={() => onEdit(event)}
-                style={[styles.button, styles.editButton, isDeleting && styles.disabledButton]}
-              >
-                <Text style={styles.editLabel}>Edit</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isDeleting ? 'Deleting' : 'Delete'}
-                accessibilityState={{ disabled: isDeleting || isCheckingLinks, busy: isDeleting }}
-                disabled={isDeleting || isCheckingLinks}
-                onPress={() => void confirmDelete(event)}
-                style={[styles.button, styles.deleteButton, isDeleting && styles.disabledButton]}
-              >
-                {isDeleting ? (
-                  <View style={styles.deletingRow}>
-                    <ActivityIndicator size="small" color={colors.softWhite} />
-                    <Text style={styles.deleteLabel}>Deleting…</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.deleteLabel}>Delete</Text>
-                )}
-              </Pressable>
-            </View>
+            {hasUnresolvedConflict ? (
+              <View style={[styles.card, styles.conflictCard]}>
+                <Text
+                  accessibilityRole="header"
+                  style={styles.conflictTitle}
+                >
+                  Calendar conflict
+                </Text>
+
+                <Text style={styles.conflictText}>
+                  This event was changed or deleted in more than one calendar. Review the differences before editing or deleting it.
+                </Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Review Conflict"
+                  onPress={() =>
+                    onReviewConflict(
+                      event,
+                    )
+                  }
+                  style={styles.reviewConflictButton}
+                >
+                  <Text style={styles.reviewConflictLabel}>
+                    Review Conflict
+                  </Text>
+                </Pressable>
+              </View>
+            ) : readOnly ? (
+              <View style={[styles.card, styles.readOnlyCard]}>
+                <Text
+                  accessibilityRole="header"
+                  style={styles.readOnlyTitle}
+                >
+                  Read-only calendar event
+                </Text>
+
+                <Text style={styles.readOnlyText}>
+                  This event is controlled by a connected calendar and cannot be edited or deleted in RISE.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.buttons}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit"
+                  accessibilityState={{
+                    disabled:
+                      isDeleting,
+                  }}
+                  disabled={isDeleting}
+                  onPress={() =>
+                    onEdit(
+                      event,
+                    )
+                  }
+                  style={[
+                    styles.button,
+                    styles.editButton,
+                    isDeleting &&
+                      styles.disabledButton,
+                  ]}
+                >
+                  <Text style={styles.editLabel}>
+                    Edit
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isDeleting
+                      ? 'Deleting'
+                      : 'Delete'
+                  }
+                  accessibilityState={{
+                    disabled:
+                      isDeleting ||
+                      isCheckingLinks,
+                    busy:
+                      isDeleting,
+                  }}
+                  disabled={
+                    isDeleting ||
+                    isCheckingLinks
+                  }
+                  onPress={() =>
+                    void confirmDelete(
+                      event,
+                    )
+                  }
+                  style={[
+                    styles.button,
+                    styles.deleteButton,
+                    isDeleting &&
+                      styles.disabledButton,
+                  ]}
+                >
+                  {isDeleting ? (
+                    <View style={styles.deletingRow}>
+                      <ActivityIndicator
+                        size="small"
+                        color={colors.softWhite}
+                      />
+                      <Text style={styles.deleteLabel}>
+                        Deleting…
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.deleteLabel}>
+                      Delete
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            )}
           </ScrollView>
         )}
       </View>

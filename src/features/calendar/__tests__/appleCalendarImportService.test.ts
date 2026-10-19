@@ -8,10 +8,17 @@ import {
 
 import {
   getCalendarEventLinkByExternalEvent,
+  getAllDayCalendarEventLinksByProvider,
   getCalendarEventLinksByProvider,
   markCalendarEventLinkSynced,
   saveCalendarEventLink,
+  updateCalendarEventLinkAllDayMetadata,
+  updateCalendarEventLinkWritability,
 } from '../../../repositories/calendarEventLinksRepository';
+
+import {
+  saveCalendarEventConflict,
+} from '../../../repositories/calendarEventConflictsRepository';
 
 import {
   getAppleCalendarAccess,
@@ -71,13 +78,30 @@ jest.mock(
     getCalendarEventLinkByExternalEvent:
       jest.fn(),
 
+    getAllDayCalendarEventLinksByProvider:
+      jest.fn(),
+
     getCalendarEventLinksByProvider:
       jest.fn(),
 
     markCalendarEventLinkSynced:
       jest.fn(),
 
+    updateCalendarEventLinkAllDayMetadata:
+      jest.fn(),
+
+    updateCalendarEventLinkWritability:
+      jest.fn(),
+
     saveCalendarEventLink:
+      jest.fn(),
+  }),
+);
+
+jest.mock(
+  '../../../repositories/calendarEventConflictsRepository',
+  () => ({
+    saveCalendarEventConflict:
       jest.fn(),
   }),
 );
@@ -106,16 +130,31 @@ const mockUpdateCalendarEvent =
 const mockGetCalendarEventLinkByExternalEvent =
   getCalendarEventLinkByExternalEvent as jest.Mock;
 
+const mockGetAllDayCalendarEventLinksByProvider =
+  getAllDayCalendarEventLinksByProvider as jest.Mock;
+
 const mockGetCalendarEventLinksByProvider =
   getCalendarEventLinksByProvider as jest.Mock;
 
 const mockMarkCalendarEventLinkSynced =
   markCalendarEventLinkSynced as jest.Mock;
 
+const mockUpdateCalendarEventLinkAllDayMetadata =
+  updateCalendarEventLinkAllDayMetadata as jest.Mock;
+
+const mockUpdateCalendarEventLinkWritability =
+  updateCalendarEventLinkWritability as jest.Mock;
+
 const mockSaveCalendarEventLink =
   saveCalendarEventLink as jest.Mock;
 
+const mockSaveCalendarEventConflict =
+  saveCalendarEventConflict as jest.Mock;
+
 beforeEach(() => {
+    mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+      [],
+    );
   jest.clearAllMocks();
 
   mockGetAppleCalendarAccess.mockResolvedValue(
@@ -144,6 +183,10 @@ beforeEach(() => {
   });
 
   mockSaveCalendarEventLink.mockResolvedValue(
+    undefined,
+  );
+
+  mockSaveCalendarEventConflict.mockResolvedValue(
     undefined,
   );
 });
@@ -229,6 +272,9 @@ describe(
 
             allDay:
               false,
+
+            isWritable:
+              true,
           },
         ]);
 
@@ -295,6 +341,9 @@ describe(
 
             allDay:
               false,
+
+            isWritable:
+              true,
           },
 
           {
@@ -324,6 +373,9 @@ describe(
 
             allDay:
               false,
+
+            isWritable:
+              true,
           },
         ]);
       },
@@ -421,6 +473,9 @@ describe(
       allDay:
         false,
 
+      isWritable:
+        true,
+
       updatedAt:
         '2026-10-18T16:30:00.000Z',
     };
@@ -510,6 +565,18 @@ describe(
 
           externalUpdatedAt:
             '2026-10-18T16:30:00.000Z',
+
+          isWritable:
+            true,
+
+      isAllDay:
+        false,
+
+      allDayStartDate:
+        undefined,
+
+      allDayEndDate:
+        undefined,
         });
 
         expect(
@@ -737,9 +804,10 @@ describe(
           skipped:
             1,
 
-          failed:
-            0,
+          failed: 0,
 
+
+          conflicts: 0,
           total:
             2,
         });
@@ -766,6 +834,553 @@ describe(
           'rise-existing',
           'apple',
         );
+      },
+    );
+
+    it(
+      'normalizes an Apple end-of-day all-day event to an exclusive semantic end date',
+      async () => {
+        mockGetCalendarsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-holidays',
+
+            title:
+              'Holidays',
+
+            allowsModifications:
+              false,
+          },
+        ]);
+
+        mockGetEventsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-columbus-day',
+
+            calendarId:
+              'apple-holidays',
+
+            title:
+              'Columbus Day',
+
+            startDate:
+              new Date(
+                2026,
+                9,
+                12,
+                0,
+                0,
+                0,
+                0,
+              ),
+
+            endDate:
+              new Date(
+                2026,
+                9,
+                12,
+                23,
+                59,
+                59,
+                0,
+              ),
+
+            location:
+              null,
+
+            notes:
+              '',
+
+            allDay:
+              true,
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'apple-link-1',
+
+              calendarEventId:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              provider:
+                'apple',
+
+              externalEventId:
+                'apple-columbus-day',
+
+              externalCalendarId:
+                'apple-holidays',
+
+              isWritable:
+                false,
+
+              isAllDay:
+                false,
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              title:
+                'Columbus Day',
+
+              startAt:
+                new Date(
+                  2026,
+                  9,
+                  12,
+                  0,
+                  0,
+                  0,
+                  0,
+                ).toISOString(),
+
+              endAt:
+                new Date(
+                  2026,
+                  9,
+                  12,
+                  23,
+                  59,
+                  59,
+                  0,
+                ).toISOString(),
+
+              source:
+                'apple',
+            },
+          ],
+        );
+
+        await syncAppleCalendarEvents(
+          new Date(
+            2026,
+            9,
+            12,
+          ),
+        );
+
+        expect(
+          mockUpdateCalendarEventLinkAllDayMetadata,
+        ).toHaveBeenCalledWith(
+          'rise-columbus-day',
+          'apple',
+          {
+            isAllDay:
+              true,
+
+            allDayStartDate:
+              '2026-10-12',
+
+            allDayEndDate:
+              '2026-10-13',
+          },
+        );
+      },
+    );
+
+    it(
+      'reuses a Google-linked RISE event for the same all-day Apple holiday',
+      async () => {
+        mockGetCalendarsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-holidays',
+
+            title:
+              'Holidays',
+
+            allowsModifications:
+              false,
+          },
+        ]);
+
+        mockGetEventsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-columbus-day',
+
+            calendarId:
+              'apple-holidays',
+
+            title:
+              'Columbus Day',
+
+            startDate:
+              new Date(
+                2026,
+                9,
+                12,
+              ),
+
+            endDate:
+              new Date(
+                2026,
+                9,
+                13,
+              ),
+
+            location:
+              null,
+
+            notes:
+              '',
+
+            allDay:
+              true,
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue(
+          [],
+        );
+
+        mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+          [
+            {
+              id:
+                'google-link-1',
+
+              calendarEventId:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              provider:
+                'google',
+
+              externalEventId:
+                'google-columbus-day',
+
+              externalCalendarId:
+                'google-holidays',
+
+              isWritable:
+                false,
+
+              isAllDay:
+                true,
+
+              allDayStartDate:
+                '2026-10-12',
+
+              allDayEndDate:
+                '2026-10-13',
+            },
+          ],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue(
+          [
+            {
+              id:
+                'rise-columbus-day',
+
+              userId:
+                'user-1',
+
+              title:
+                'Columbus Day',
+
+              startAt:
+                new Date(
+                  2026,
+                  9,
+                  12,
+                ).toISOString(),
+
+              endAt:
+                new Date(
+                  2026,
+                  9,
+                  13,
+                ).toISOString(),
+
+              source:
+                'google',
+
+              location:
+                undefined,
+
+              description:
+                undefined,
+            },
+          ],
+        );
+
+        const result =
+          await syncAppleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              12,
+            ),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledWith({
+          calendarEventId:
+            'rise-columbus-day',
+
+          userId:
+            'user-1',
+
+          provider:
+            'apple',
+
+          externalEventId:
+            'apple-columbus-day',
+
+          externalCalendarId:
+            'apple-holidays',
+
+          externalUpdatedAt:
+            undefined,
+
+          isWritable:
+            false,
+
+          isAllDay:
+            true,
+
+          allDayStartDate:
+            '2026-10-12',
+
+          allDayEndDate:
+            '2026-10-13',
+        });
+
+        expect(
+          result,
+        ).toEqual({
+          imported:
+            0,
+
+          skipped:
+            1,
+
+          failed:
+            0,
+
+          conflicts:
+            0,
+
+          total:
+            1,
+        });
+      },
+    );
+
+    it(
+      'pulls a read-only Apple event into RISE without writing back to Apple',
+      async () => {
+        mockGetCalendarsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-calendar-1',
+
+            title:
+              'Holidays',
+
+            allowsModifications:
+              false,
+          },
+        ]);
+
+        mockGetEventsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-event-1',
+
+            calendarId:
+              'apple-calendar-1',
+
+            title:
+              'Thanksgiving Day',
+
+            startDate:
+              '2026-11-26T08:00:00.000Z',
+
+            endDate:
+              '2026-11-27T08:00:00.000Z',
+
+            location:
+              null,
+
+            notes:
+              '',
+
+            allDay:
+              true,
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue([
+          {
+            id:
+              'link-1',
+
+            calendarEventId:
+              'rise-event-1',
+
+            userId:
+              'user-1',
+
+            provider:
+              'apple',
+
+            externalEventId:
+              'apple-event-1',
+
+            externalCalendarId:
+              'apple-calendar-1',
+
+            lastSyncedAt:
+              '2026-10-15T15:00:00.000Z',
+          },
+        ]);
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue([
+          {
+            id:
+              'rise-event-1',
+
+            userId:
+              'user-1',
+
+            title:
+              'Changed in RISE',
+
+            startAt:
+              '2026-11-26T09:00:00.000Z',
+
+            endAt:
+              '2026-11-27T09:00:00.000Z',
+
+            source:
+              'apple',
+
+            location:
+              'RISE location',
+
+            description:
+              'RISE description',
+
+            updatedAt:
+              '2026-10-18T20:00:00.000Z',
+          },
+        ]);
+
+        const result =
+          await syncAppleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              15,
+            ),
+          );
+
+        expect(
+          mockUpdateCalendarEventLinkWritability,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'apple',
+          false,
+        );
+
+        expect(
+          mockUpdateCalendarEventLinkAllDayMetadata,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'apple',
+          {
+            isAllDay:
+              true,
+
+            allDayStartDate:
+              '2026-11-26',
+
+            allDayEndDate:
+              '2026-11-27',
+          },
+        );
+
+        expect(
+          mockUpdateCalendarEvent,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          {
+            title:
+              'Thanksgiving Day',
+
+            startAt:
+              '2026-11-26T08:00:00.000Z',
+
+            endAt:
+              '2026-11-27T08:00:00.000Z',
+
+            location:
+              undefined,
+
+            description:
+              undefined,
+          },
+        );
+
+        expect(
+          mockUpdateAppleCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockSaveCalendarEventConflict,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockMarkCalendarEventLinkSynced,
+        ).toHaveBeenCalledWith(
+          'rise-event-1',
+          'apple',
+        );
+
+        expect(
+          result,
+        ).toEqual({
+          imported:
+            0,
+
+          skipped:
+            1,
+
+          failed:
+            0,
+
+          conflicts:
+            0,
+
+          total:
+            1,
+        });
       },
     );
 
@@ -931,9 +1546,10 @@ describe(
           skipped:
             1,
 
-          failed:
-            0,
+          failed: 0,
 
+
+          conflicts: 0,
           total:
             1,
         });
@@ -1043,9 +1659,10 @@ describe(
           skipped:
             0,
 
-          failed:
-            1,
+          failed: 0,
 
+
+          conflicts: 1,
           total:
             1,
         });
@@ -1206,9 +1823,10 @@ describe(
           skipped:
             1,
 
-          failed:
-            0,
+          failed: 0,
 
+
+          conflicts: 0,
           total:
             1,
         });
@@ -1318,9 +1936,10 @@ describe(
           skipped:
             0,
 
-          failed:
-            1,
+          failed: 1,
 
+
+          conflicts: 0,
           total:
             2,
         });
