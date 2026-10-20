@@ -33,7 +33,7 @@ const RiseModal = (() => {
           </div>
 
           <div class="planner-card">
-            <img src="${asset('images/rise-sun.svg')}" alt="">
+            <img src="${asset('images/rise-logo.png')}" alt="">
             <div>
               <p class="planner-name">Rise Planner</p>
               <div class="stars">${STARS}</div>
