@@ -20,7 +20,7 @@ const RiseModal = (() => {
   const screens = {
     note: () => `
       <div class="dialog dialog--note" role="dialog" aria-modal="true" aria-labelledby="rise-title">
-        <div class="brand"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <div class="brand"><img src="${asset('images/rise-logo.png')}" alt="">Rise</div>
         <h2 class="title title--note" id="rise-title">A note from the Rise team</h2>
 
         <div class="note-grid">
@@ -33,7 +33,7 @@ const RiseModal = (() => {
           </div>
 
           <div class="planner-card">
-            <img src="${asset('images/rise-sun.svg')}" alt="">
+            <img src="${asset('images/rise-logo.png')}" alt="">
             <div>
               <p class="planner-name">Rise Planner</p>
               <div class="stars">${STARS}</div>
@@ -51,7 +51,7 @@ const RiseModal = (() => {
           <img src="${asset('images/close.svg')}" alt="">
         </button>
 
-        <div class="brand"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <div class="brand"><img src="${asset('images/rise-logo.png')}" alt="">Rise</div>
         <h2 class="title" id="rise-title">Plan your best semester</h2>
         <p class="subtitle">Sign in with the same email you use on the Rise mobile app to keep everything in sync.</p>
 
@@ -82,7 +82,7 @@ const RiseModal = (() => {
           <img src="${asset('images/close.svg')}" alt="">
         </button>
 
-        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.png')}" alt="">Rise</div>
         <h2 class="title title--start" id="rise-title">Enter your email</h2>
         <p class="subtitle subtitle--start">No password needed. Use the same email as your Rise mobile app, plus the code from Settings → Canvas in the app.</p>
 
@@ -113,7 +113,7 @@ const RiseModal = (() => {
           <img src="${asset('images/close.svg')}" alt="">
         </button>`}
 
-        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.png')}" alt="">Rise</div>
         <h2 class="title title--start" id="rise-title">Choose your classes</h2>
         <p class="subtitle subtitle--start">Pick the classes Rise should sync and a color for each. Their assignments show in that color everywhere in Rise.</p>
 
@@ -130,7 +130,7 @@ const RiseModal = (() => {
 
     connected: () => `
       <div class="dialog dialog--centered" role="dialog" aria-modal="true" aria-labelledby="rise-title">
-        <div class="tile"><img src="${asset('images/rise-logo.svg')}" alt=""></div>
+        <div class="tile"><img src="${asset('images/rise-logo.png')}" alt=""></div>
         <h2 class="title title--large" id="rise-title">You're connected!</h2>
         <p class="lead">Rise is syncing Canvas for</p>
         <p class="email" data-slot="email"></p>
@@ -434,7 +434,7 @@ const RiseModal = (() => {
     const toast = document.createElement('div');
     toast.className = 'toast';
     toast.setAttribute('role', 'status');
-    toast.innerHTML = `<img src="${asset('images/rise-logo.svg')}" alt=""><span></span>`;
+    toast.innerHTML = `<img src="${asset('images/rise-logo.png')}" alt=""><span></span>`;
     toast.querySelector('span').textContent = message;
     shadow.append(toast);
 
