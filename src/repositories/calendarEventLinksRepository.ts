@@ -132,6 +132,38 @@ export async function getCalendarEventLink(
 }
 
 /**
+ * Removes one provider relationship from a RISE calendar event.
+ *
+ * Conflicts associated with this provider link are removed automatically
+ * through the database foreign-key cascade.
+ */
+export async function deleteCalendarEventLink(
+  calendarEventId: string,
+  provider: ExternalCalendarProvider,
+): Promise<void> {
+  const {
+    error,
+  } =
+    await supabase
+      .from('calendar_event_links')
+      .delete()
+      .eq(
+        'calendar_event_id',
+        calendarEventId,
+      )
+      .eq(
+        'provider',
+        provider,
+      );
+
+  if (error) {
+    throw error;
+  }
+}
+
+
+
+/**
  * Loads all links for one provider.
  *
  * RLS limits the result to links belonging to the signed-in student.

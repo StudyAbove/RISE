@@ -14,10 +14,13 @@ import {
   startGoogleCalendarBackgroundSync,
 } from '../services/calendarBackgroundSyncService';
 import {
-  deleteCalendarConnection,
   getCalendarConnection,
   saveCalendarConnection,
 } from '../services/calendarConnectionService';
+
+import {
+  disconnectGoogleCalendarWithCleanup,
+} from '../services/googleCalendarDisconnectService';
 import {
   getAppleCalendarAccess,
   requestAppleCalendarFullAccess,
@@ -27,7 +30,6 @@ import {
   hasGoogleCalendarAccess,
 } from '../services/googleCalendarService';
 import {
-  clearGoogleAccessToken,
   saveGoogleAccessToken,
 } from '../services/googleTokenService';
 
@@ -431,13 +433,15 @@ export function useCalendarConnection({
 
   async function disconnectGoogle() {
     try {
-      await clearGoogleAccessToken();
-      await deleteCalendarConnection('google');
+      await disconnectGoogleCalendarWithCleanup();
 
       setGoogleConnected(false);
       setGoogleEmail(null);
     } catch (error) {
-      console.log('Google Calendar disconnect failed:', error);
+      console.log(
+        'Google Calendar disconnect failed:',
+        error,
+      );
 
       Alert.alert(
         'Unable to disconnect calendar',

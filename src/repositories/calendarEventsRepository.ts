@@ -261,6 +261,51 @@ export async function getCalendarEventsByIdsForSync(
 }
 
 /**
+ * Changes the provider shown as the source of an existing RISE event.
+ *
+ * This is used when a multi-provider event remains backed by another
+ * calendar after one provider is disconnected.
+ */
+export async function updateCalendarEventSource(
+  eventId: string,
+  source: CalendarSource,
+): Promise<CalendarEvent> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('calendar_events')
+      .update({
+        source,
+      })
+      .eq(
+        'id',
+        eventId,
+      )
+      .select(
+        CALENDAR_EVENT_COLUMNS,
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error(
+      'Calendar event could not be found or updated.',
+    );
+  }
+
+  return toCalendarEvent(
+    data as CalendarEventRow,
+  );
+}
+
+
+
+/**
  * Updates one RISE calendar event.
  *
  * Row-level security ensures that the signed-in student can only update

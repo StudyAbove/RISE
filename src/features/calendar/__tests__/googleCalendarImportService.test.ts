@@ -1722,6 +1722,157 @@ describe(
     );
 
     it(
+      'reuses an Apple-linked RISE event for the same timed Google event',
+      async () => {
+        mockCalendarListResponse(
+          'reader',
+        );
+
+        mockGoogleEventsResponse([
+          {
+            id:
+              'google-study-group',
+
+            summary:
+              'Study Group',
+
+            description:
+              'Library review session',
+
+            location:
+              'Library',
+
+            updated:
+              '2026-10-21T18:00:00.000Z',
+
+            start: {
+              dateTime:
+                '2026-10-22T17:00:00.000Z',
+            },
+
+            end: {
+              dateTime:
+                '2026-10-22T18:00:00.000Z',
+            },
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockImplementation(
+          async (
+            provider: 'apple' | 'google',
+          ) =>
+            provider === 'apple'
+              ? [
+                  {
+                    id:
+                      'apple-link-1',
+
+                    calendarEventId:
+                      'rise-study-group',
+
+                    userId:
+                      'user-1',
+
+                    provider:
+                      'apple',
+
+                    externalEventId:
+                      'apple-study-group',
+
+                    externalCalendarId:
+                      'apple-calendar',
+
+                    isWritable:
+                      false,
+
+                    isAllDay:
+                      false,
+                  },
+                ]
+              : [],
+        );
+
+        mockGetAllDayCalendarEventLinksByProvider.mockResolvedValue(
+          [],
+        );
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue([
+          {
+            id:
+              'rise-study-group',
+
+            userId:
+              'user-1',
+
+            title:
+              'Study Group',
+
+            startAt:
+              '2026-10-22T17:00:00.000Z',
+
+            endAt:
+              '2026-10-22T18:00:00.000Z',
+
+            location:
+              'Library',
+
+            description:
+              'Library review session',
+
+            source:
+              'apple',
+          },
+        ]);
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              22,
+            ),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            calendarEventId:
+              'rise-study-group',
+
+            userId:
+              'user-1',
+
+            provider:
+              'google',
+
+            externalEventId:
+              'google-study-group',
+
+            isAllDay:
+              false,
+          }),
+        );
+
+        expect(
+          result.imported,
+        ).toBe(
+          0,
+        );
+
+        expect(
+          result.skipped,
+        ).toBe(
+          1,
+        );
+      },
+    );
+
+    it(
       'reuses an Apple-linked RISE event for the same all-day Google holiday',
       async () => {
         mockCalendarListResponse(
