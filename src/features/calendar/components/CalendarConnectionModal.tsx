@@ -33,6 +33,7 @@ type CalendarConnectionModalProps = {
   onDismiss?: () => void;
   onConnectApple: () => void;
   onConnectGoogle: () => void;
+  onDisconnectApple?: () => void;
   onDisconnectGoogle?: () => void;
 };
 
@@ -47,6 +48,7 @@ export function CalendarConnectionModal({
   onDismiss,
   onConnectApple,
   onConnectGoogle,
+  onDisconnectApple,
   onDisconnectGoogle,
 }: CalendarConnectionModalProps) {
   const isInitialAppleSyncRunning =
@@ -114,11 +116,39 @@ export function CalendarConnectionModal({
                   </Text>
                 </View>
 
-                <Text style={styles.appleConnectedText}>
+                <Text
+                  style={[
+                    styles.appleConnectedText,
+                    {
+                      flex: 1,
+                    },
+                  ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {isInitialAppleSyncRunning
                     ? 'Syncing Apple Calendar...'
-                    : 'Apple Calendar connected'}
+                    : 'Apple Calendar Connected'}
                 </Text>
+
+                {!isInitialAppleSyncRunning && (
+                  <Pressable
+                    onPress={onDisconnectApple}
+                    disabled={!onDisconnectApple}
+                    style={({ pressed }) => [
+                      styles.trashButton,
+                      pressed && styles.pressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Disconnect Apple Calendar"
+                  >
+                    <Image
+                      source={trashIcon}
+                      style={styles.trashIcon}
+                      resizeMode="contain"
+                    />
+                  </Pressable>
+                )}
               </View>
             ) : (
               <Pressable
@@ -387,7 +417,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
 
   connectedCheckCircle: {
@@ -411,8 +441,8 @@ const styles = StyleSheet.create({
   appleConnectedText: {
     flex: 1,
     fontFamily: fonts.heading.bold,
-    fontSize: 16,
-    lineHeight: 19,
+    fontSize: 13,
+    lineHeight: 16,
     color: '#16A34A',
   },
 

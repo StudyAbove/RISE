@@ -34,6 +34,12 @@ import {
 } from '../../calendar/services/appleCalendarConnectionStateService';
 
 import {
+  disconnectAppleCalendarWithCleanup,
+} from '../../calendar/services/appleCalendarDisconnectService';
+import {
+  notifyCalendarRefresh,
+} from '../../calendar/services/calendarRefreshService';
+import {
   startAppleCalendarBackgroundSync,
 } from '../../calendar/services/calendarBackgroundSyncService';
 
@@ -282,7 +288,6 @@ export function RootNavigator({
         currentAccess,
         previousAccess,
         pendingConnection,
-        appleConnection,
       ] =
         await Promise.all([
           getAppleCalendarAccess(),
@@ -290,10 +295,6 @@ export function RootNavigator({
           getLastAppleCalendarAccess(),
 
           isAppleCalendarConnectionPending(),
-
-          getCalendarConnection(
-            'apple',
-          ),
         ]);
 
       /*
@@ -366,44 +367,82 @@ export function RootNavigator({
       }
 
       /*
-       * EXISTING CONNECTION RECONNECTED
+       * APPLE CALENDAR PERMISSION CHANGED
        *
-       * There must already be an Apple connection saved in
-       * Supabase. Full Access by itself never creates a new
-       * Apple connection.
+       * Full Access is the source of truth for whether Apple
+       * Calendar should be connected to RISE.
+       *
+       * FULL -> NOT FULL
+       * Disconnect Apple from RISE and clean up Apple-only
+       * imported events/provider links. Nothing is deleted from
+       * the student's actual Apple Calendar.
+       *
+       * NOT FULL -> FULL
+       * Connect Apple to RISE and immediately start a fresh
+       * background synchronization. This also supports students
+       * who grant Full Access directly from iOS Settings.
        */
-      const wasPreviouslyUnavailable =
-        previousAccess !==
-          null &&
-        previousAccess !==
+
+      const lostFullAccess =
+        previousAccess ===
+          'full' &&
+        currentAccess !==
           'full';
 
-      const isFullAccessNow =
-        currentAccess ===
-        'full';
+      if (lostFullAccess) {
+        await disconnectAppleCalendarWithCleanup();
 
-      const wasAlreadyConnected =
-        appleConnection
-          ?.connected ===
-          true;
+        await clearAppleCalendarConnectionPending();
 
-      if (
-        wasPreviouslyUnavailable &&
-        isFullAccessNow &&
-        wasAlreadyConnected
-      ) {
         /*
-         * Permission was restored for an existing connection.
+         * Remember the permission state only after cleanup succeeds.
          *
-         * Quietly start synchronization. There is intentionally
-         * no "Calendar connected!" popup because this is a
-         * reconnect, not a brand-new connection.
+         * This prevents repeated disconnect cleanup while permission
+         * remains unavailable and allows a later NOT FULL -> FULL
+         * transition to reconnect Apple automatically.
          */
+        await saveLastAppleCalendarAccess(
+          currentAccess,
+        );
+
+        /*
+         * CalendarScreen may have refreshed as soon as the app
+         * became active, before this asynchronous cleanup finished.
+         *
+         * Notify it again now that the Apple rows are actually gone.
+         */
+        notifyCalendarRefresh();
+
+        console.log(
+          'Apple Calendar disconnected because Full Access was removed.',
+        );
+
+        return;
+      }
+
+      const gainedFullAccess =
+        previousAccess !==
+          'full' &&
+        currentAccess ===
+          'full';
+
+      if (gainedFullAccess) {
+        await saveCalendarConnection(
+          'apple',
+          null,
+        );
+
+        await clearAppleCalendarConnectionPending();
+
+        await saveLastAppleCalendarAccess(
+          'full',
+        );
+
         void startAppleCalendarBackgroundSync()
           .then(
             (result) => {
               console.log(
-                'Background Apple Calendar permission-restored sync complete:',
+                'Background Apple Calendar permission-granted sync complete:',
                 result,
               );
             },
@@ -411,7 +450,7 @@ export function RootNavigator({
           .catch(
             (syncError) => {
               console.log(
-                'Background Apple Calendar permission-restored sync failed:',
+                'Background Apple Calendar permission-granted sync failed:',
                 syncError,
               );
             },
