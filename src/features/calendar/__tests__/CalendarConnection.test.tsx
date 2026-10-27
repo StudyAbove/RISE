@@ -56,6 +56,10 @@ const mockHasGoogleCalendarAccess =
 const mockPromptGoogleAsync =
   jest.fn();
 
+
+const mockDisconnectGoogleCalendarWithCleanup =
+  jest.fn();
+
 let mockGoogleResponse: any =
   null;
 
@@ -203,6 +207,17 @@ jest.mock(
 );
 
 jest.mock(
+  '../services/googleCalendarDisconnectService',
+  () => ({
+    disconnectGoogleCalendarWithCleanup:
+      (...args: unknown[]) =>
+        mockDisconnectGoogleCalendarWithCleanup(
+          ...args,
+        ),
+  }),
+);
+
+jest.mock(
   '../services/googleTokenService',
   () => ({
     saveGoogleAccessToken:
@@ -301,6 +316,7 @@ jest.mock(
         googleEmail,
         onConnectApple,
         onConnectGoogle,
+        onDisconnectGoogle,
         onDismiss,
       }: any) => {
         const previousVisibleRef =
@@ -368,6 +384,18 @@ jest.mock(
                     {googleEmail}
                   </Text>
                 ) : null}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Disconnect Google Calendar"
+                  onPress={
+                    onDisconnectGoogle
+                  }
+                >
+                  <Text>
+                    Disconnect Google Calendar
+                  </Text>
+                </Pressable>
               </View>
             ) : (
               <Pressable
@@ -446,6 +474,10 @@ jest.mock(
 );
 
 function setDefaultConnectionMocks() {
+  mockDisconnectGoogleCalendarWithCleanup.mockResolvedValue(
+    undefined,
+  );
+
   mockClearAppleCalendarConnectionPending.mockResolvedValue(
     undefined,
   );
@@ -1512,5 +1544,170 @@ describe(
         ).not.toBeOnTheScreen();
       },
     );
+    it(
+      'keeps Google Calendar connected when disconnect is canceled',
+      async () => {
+        mockGetCalendarConnection.mockImplementation(
+          async (
+            provider: string,
+          ) =>
+            provider ===
+            'google'
+              ? {
+                  provider:
+                    'google',
+
+                  provider_email:
+                    'student@gmail.com',
+
+                  connected:
+                    true,
+                }
+              : null,
+        );
+
+        const utils =
+          await renderSettings();
+
+        await openCalendarSettings(
+          utils,
+        );
+
+        await waitFor(() => {
+          expect(
+            utils.getByText(
+              'Google Calendar connected',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        fireEvent.press(
+          utils.getByRole(
+            'button',
+            {
+              name:
+                'Disconnect Google Calendar',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            utils.getByText(
+              'Disconnect Google Calendar?',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        fireEvent.press(
+          utils.getByRole(
+            'button',
+            {
+              name:
+                'Cancel Google Calendar disconnect',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            utils.getByText(
+              'Google Calendar connected',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        expect(
+          mockDisconnectGoogleCalendarWithCleanup,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it(
+      'disconnects Google Calendar after confirmation and shows the connect option again',
+      async () => {
+        mockGetCalendarConnection.mockImplementation(
+          async (
+            provider: string,
+          ) =>
+            provider ===
+            'google'
+              ? {
+                  provider:
+                    'google',
+
+                  provider_email:
+                    'student@gmail.com',
+
+                  connected:
+                    true,
+                }
+              : null,
+        );
+
+        const utils =
+          await renderSettings();
+
+        await openCalendarSettings(
+          utils,
+        );
+
+        fireEvent.press(
+          utils.getByRole(
+            'button',
+            {
+              name:
+                'Disconnect Google Calendar',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            utils.getByText(
+              'Disconnect Google Calendar?',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        fireEvent.press(
+          utils.getByRole(
+            'button',
+            {
+              name:
+                'Confirm Google Calendar disconnect',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            mockDisconnectGoogleCalendarWithCleanup,
+          ).toHaveBeenCalledTimes(
+            1,
+          );
+        });
+
+        await waitFor(() => {
+          expect(
+            utils.getByRole(
+              'button',
+              {
+                name:
+                  'Connect Google Calendar',
+              },
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        expect(
+          utils.queryByText(
+            'Disconnect Google Calendar?',
+          ),
+        ).not.toBeOnTheScreen();
+      },
+    );
+
+
   },
 );

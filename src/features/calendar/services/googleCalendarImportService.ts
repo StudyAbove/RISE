@@ -186,6 +186,56 @@ function findCrossProviderAllDayMatch(
   return undefined;
 }
 
+function findCrossProviderTimedMatch(
+  candidate: GoogleCalendarCandidate,
+  otherProviderLinks: CalendarEventLink[],
+  riseEventsById: Map<
+    string,
+    {
+      id: string;
+      userId: string;
+      title: string;
+      startAt: string;
+      endAt: string;
+      location?: string;
+      description?: string;
+      updatedAt?: string;
+    }
+  >,
+) {
+  if (candidate.allDay) {
+    return undefined;
+  }
+
+  for (
+    const link
+    of otherProviderLinks
+  ) {
+    if (link.isAllDay) {
+      continue;
+    }
+
+    const riseEvent =
+      riseEventsById.get(
+        link.calendarEventId,
+      );
+
+    if (
+      riseEvent &&
+      sameCalendarEvent(
+        candidate,
+        riseEvent,
+      )
+    ) {
+      return riseEvent;
+    }
+  }
+
+  return undefined;
+}
+
+
+
 function normalizeOptionalText(
   value?: string,
 ) {
@@ -874,7 +924,7 @@ export async function syncGoogleCalendarEvents(
       new Set(
         [
           ...links,
-          ...crossProviderAllDayLinks,
+          ...otherProviderLinks,
         ].map(
           (link) =>
             link.calendarEventId,
@@ -1068,11 +1118,17 @@ export async function syncGoogleCalendarEvents(
     if (!link) {
       try {
         const crossProviderMatch =
-          findCrossProviderAllDayMatch(
-            candidate,
-            crossProviderAllDayLinks,
-            riseEventsById,
-          );
+          candidate.allDay
+            ? findCrossProviderAllDayMatch(
+                candidate,
+                crossProviderAllDayLinks,
+                riseEventsById,
+              )
+            : findCrossProviderTimedMatch(
+                candidate,
+                otherProviderLinks,
+                riseEventsById,
+              );
 
         if (crossProviderMatch) {
           await saveCalendarEventLink(
@@ -1099,7 +1155,7 @@ export async function syncGoogleCalendarEvents(
                 candidate.isWritable,
 
               isAllDay:
-                true,
+                candidate.allDay,
 
               allDayStartDate:
                 candidate.allDayStartDate,

@@ -47,6 +47,11 @@ const logoutIcon =
     '../../../../assets/icons/logout.png',
   );
 
+const trashIcon =
+  require(
+    '../../../../assets/icons/trash.png',
+  );
+
 const calendarIcon =
   require(
     '../../../../assets/icons/calendar.png',
@@ -88,6 +93,27 @@ export function SettingsScreen() {
     useState<
       CalendarProviderName | null
     >(null);
+
+  const [
+    isDisconnectGoogleModalVisible,
+    setIsDisconnectGoogleModalVisible,
+  ] =
+    useState(false);
+
+
+  const [
+    isGoogleDisconnectPending,
+    setIsGoogleDisconnectPending,
+  ] =
+    useState(false);
+
+  const [
+    isDisconnectingGoogle,
+    setIsDisconnectingGoogle,
+  ] =
+    useState(false);
+
+
 
   const [
     isLogoutModalVisible,
@@ -147,6 +173,20 @@ export function SettingsScreen() {
 
   function handleCalendarModalDismiss() {
     if (
+      isGoogleDisconnectPending
+    ) {
+      setIsGoogleDisconnectPending(
+        false,
+      );
+
+      setIsDisconnectGoogleModalVisible(
+        true,
+      );
+
+      return;
+    }
+
+    if (
       !pendingSuccessProvider
     ) {
       return;
@@ -170,6 +210,50 @@ export function SettingsScreen() {
       false,
     );
   }
+
+  function handleDisconnectGooglePress() {
+    setIsGoogleDisconnectPending(
+      true,
+    );
+
+    setIsCalendarModalVisible(
+      false,
+    );
+  }
+
+  function handleCancelDisconnectGoogle() {
+    setIsDisconnectGoogleModalVisible(
+      false,
+    );
+
+    setIsCalendarModalVisible(
+      true,
+    );
+  }
+
+  async function handleConfirmDisconnectGoogle() {
+    setIsDisconnectingGoogle(
+      true,
+    );
+
+    try {
+      await disconnectGoogle();
+
+      setIsDisconnectGoogleModalVisible(
+        false,
+      );
+
+      setIsCalendarModalVisible(
+        true,
+      );
+    } finally {
+      setIsDisconnectingGoogle(
+        false,
+      );
+    }
+  }
+
+
 
   function handleLogoutPress() {
     setIsLogoutModalVisible(
@@ -399,7 +483,7 @@ export function SettingsScreen() {
           connectGoogle
         }
         onDisconnectGoogle={
-          disconnectGoogle
+          handleDisconnectGooglePress
         }
       />
 
@@ -417,6 +501,135 @@ export function SettingsScreen() {
 
       <Modal
         visible={
+          isDisconnectGoogleModalVisible
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={
+          handleCancelDisconnectGoogle
+        }
+      >
+        <View
+          style={
+            styles.overlay
+          }
+        >
+          <View
+            style={[
+              styles.modalCard,
+              styles.disconnectModalCard,
+            ]}
+          >
+            <View
+              style={
+                styles.disconnectIconOuter
+              }
+            >
+              <View
+                style={
+                  styles.disconnectIconInner
+                }
+              >
+                <Image
+                  source={
+                    trashIcon
+                  }
+                  style={
+                    styles.disconnectTrashIcon
+                  }
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+
+            <Text
+              style={
+                styles.modalTitle
+              }
+            >
+              Disconnect Google Calendar?
+            </Text>
+
+            <Text
+              style={
+                styles.modalMessage
+              }
+            >
+              Google-only events will be removed from RISE. Other events will stop syncing with Google.
+            </Text>
+
+            <View
+              style={[
+                styles.modalActions,
+                styles.disconnectModalActions,
+              ]}
+            >
+              <Pressable
+                style={({
+                  pressed,
+                }) => [
+                  styles.modalButton,
+                  styles.modalCancelButton,
+                  pressed &&
+                    styles.pressed,
+                ]}
+                onPress={
+                  handleCancelDisconnectGoogle
+                }
+                disabled={
+                  isDisconnectingGoogle
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Cancel Google Calendar disconnect"
+              >
+                <Text
+                  style={
+                    styles.modalCancelButtonText
+                  }
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={({
+                  pressed,
+                }) => [
+                  styles.modalButton,
+                  styles.disconnectConfirmButton,
+                  pressed &&
+                    styles.pressed,
+                  isDisconnectingGoogle &&
+                    styles.disabledButton,
+                ]}
+                onPress={
+                  handleConfirmDisconnectGoogle
+                }
+                disabled={
+                  isDisconnectingGoogle
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Confirm Google Calendar disconnect"
+              >
+                <Text
+                  style={
+                    styles.disconnectConfirmButtonText
+                  }
+                >
+                  {isDisconnectingGoogle
+                    ? 'Disconnecting...'
+                    : 'Disconnect'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+
+
+      <Modal
+        visible={
           isLogoutModalVisible
         }
         transparent
@@ -431,9 +644,10 @@ export function SettingsScreen() {
           }
         >
           <View
-            style={
-              styles.modalCard
-            }
+            style={[
+              styles.modalCard,
+              styles.logoutModalCard,
+            ]}
           >
             <View
               style={
