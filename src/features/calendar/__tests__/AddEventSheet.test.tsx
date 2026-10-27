@@ -140,6 +140,20 @@ describe('AddEventSheet', () => {
       expect(saved).toMatchObject({ eventType: 'class', location: 'Room 204', reminderMinutes: 1440 });
     });
 
+    // #37 AC3: Location is optional, and a blank one isn't saved.
+    it('saves without a location when Location is only spaces', async () => {
+      mockCreateCalendarEvent.mockResolvedValue(savedEvent);
+      const { onSaved } = await renderSheet();
+      await fillRequiredFields();
+      await fireEvent.changeText(screen.getByLabelText('Location'), '   ');
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Add Event' }));
+
+      const saved = mockCreateCalendarEvent.mock.calls[0][0];
+      expect(saved.location).toBeUndefined();
+      expect(onSaved).toHaveBeenCalled();
+    });
+
     it('keeps a chosen end when a new start is still before it', async () => {
       await renderSheet();
       await fillRequiredFields();
