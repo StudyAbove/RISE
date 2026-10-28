@@ -32,6 +32,10 @@ export const calendarColors = {
   todayCardBand: '#EFEEE9',
   // warmCream family: background of the event details sheet (#34)
   detailsBackground: '#F4F3F0',
+  // The red of a switched-off toggle on the filter sheet (#79). The palette
+  // has no red; this follows the Figma "Toggle" component, an exception to
+  // the family rule like Google's blue below.
+  toggleOff: '#D36062',
 } as const;
 
 /**
