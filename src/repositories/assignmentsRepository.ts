@@ -100,3 +100,53 @@ export async function fetchAssignments(): Promise<Assignment[]> {
       };
     });
 }
+
+/**
+ * Load one assignment for the shared assignment-details screen.
+ * Supabase's row-level security limits access to the student's own records.
+ */
+export async function fetchAssignmentById(
+  assignmentId: string,
+): Promise<Assignment | null> {
+  const { data, error } = await supabase
+    .from('assignments')
+    .select(
+      'id, title, description, due_at, completed, source, points_possible, html_url, courses(name, code, color, sync_enabled)',
+    )
+    .eq('id', assignmentId)
+    .is('removed_at', null)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  const row = data as unknown as AssignmentRow | null;
+
+  // Removed, unavailable, or disabled-course assignments are not displayed.
+  if (!row || row.courses?.sync_enabled === false) {
+    return null;
+  }
+
+  const { color, tint } = getCourseColor(row.courses?.color);
+  const parsedDate = row.due_at ? new Date(row.due_at) : null;
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description?.trim() || null,
+    // Keep missing or invalid dates as null.
+    dueAt:
+      parsedDate && Number.isFinite(parsedDate.getTime())
+        ? parsedDate
+        : null,
+    completed: row.completed,
+    source: row.source,
+    courseName: row.courses?.name ?? null,
+    courseCode: row.courses?.code ?? null,
+    courseColor: color,
+    courseTint: tint,
+    pointsPossible: row.points_possible,
+    htmlUrl: row.html_url,
+  };
+}
