@@ -20,6 +20,18 @@ import {
 
 import * as googleTokenService from '../services/googleTokenService';
 
+// The phone's key-value store for saved filters (#79), kept in memory.
+const mockKeyValueStore = new Map<string, string>();
+jest.mock('expo-sqlite/kv-store', () => ({
+  __esModule: true,
+  default: {
+    getItemSync: (key: string) => mockKeyValueStore.get(key) ?? null,
+    setItemSync: (key: string, value: string) => {
+      mockKeyValueStore.set(key, value);
+    },
+  },
+}));
+
 const mockGetCalendarEventsInRange =
   jest.fn();
 
@@ -129,6 +141,7 @@ jest.mock(
 );
 
 beforeEach(() => {
+  mockKeyValueStore.clear();
   mockCreateCalendarEvent.mockReset();
 
   mockGetCalendarEventsByIdsForSync.mockReset();
@@ -2070,27 +2083,29 @@ describe(
     );
 
     it(
-      'shows the search and menu actions as not yet available',
+      'shows search as not yet available, and the ••• filters as available (#79)',
       async () => {
         await render(
           <CalendarScreen />,
         );
 
-        for (
-          const name of [
-            'Search',
-            'More options',
-          ]
-        ) {
-          expect(
-            screen.getByRole(
-              'button',
-              {
-                name,
-              },
-            ),
-          ).toBeDisabled();
-        }
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name: 'Search',
+            },
+          ),
+        ).toBeDisabled();
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name: 'Show on calendar',
+            },
+          ),
+        ).toBeEnabled();
       },
     );
   },
@@ -3052,5 +3067,114 @@ describe('CalendarScreen: "+N more" on Month', () => {
     for (const title of ['Lab', 'Lecture', 'Club']) {
       expect(await screen.findByLabelText(new RegExp(`^${title}, RISE, `))).toBeOnTheScreen();
     }
+  });
+});
+
+describe('CalendarScreen: filters (#79)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const at = (hour: number) => new Date(2026, 10, 13, hour).toISOString();
+  const events: CalendarEvent[] = [
+    { id: 'chem', userId: 'user-1', title: 'Chem Lab', startAt: at(9), endAt: at(10), source: 'rise', eventType: 'class' },
+    { id: 'dentist', userId: 'user-1', title: 'Dentist', startAt: at(11), endAt: at(12), source: 'google' },
+    { id: 'gym', userId: 'user-1', title: 'Gym', startAt: at(13), endAt: at(14), source: 'apple', eventType: 'wellness' },
+  ];
+
+  // The Month chips; today's card names events with "–" instead of "to".
+  const chip = (title: string) => screen.queryByLabelText(new RegExp(`^${title}, .*, \\d+:\\d+ [AP]M to `));
+
+  async function openFilters() {
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    expect(screen.getByRole('header', { name: 'Show on calendar' })).toBeOnTheScreen();
+  }
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue(events);
+  });
+
+  it('hides a type that is turned off, says so, and remembers it (AC1, AC2, AC6)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Chem Lab')).not.toBeOnTheScreen();
+    expect(chip('Dentist')).toBeOnTheScreen();
+    expect(chip('Gym')).toBeOnTheScreen();
+    expect(screen.getByText('Some events are hidden')).toBeOnTheScreen();
+    expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
+      hiddenTypes: ['class'],
+      hiddenSources: [],
+    });
+  });
+
+  it('hides events with no type, and a source, together (AC5)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('switch', { name: 'No type' }));
+    await fireEvent.press(screen.getByRole('switch', { name: 'Apple Calendar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Chem Lab')).toBeOnTheScreen();
+    expect(chip('Dentist')).not.toBeOnTheScreen();
+    expect(chip('Gym')).not.toBeOnTheScreen();
+  });
+
+  it('changes nothing when the sheet is closed with ✕', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+
+    expect(chip('Chem Lab')).toBeOnTheScreen();
+    expect(screen.queryByText('Some events are hidden')).not.toBeOnTheScreen();
+  });
+
+  it('shows only events within the chosen dates (AC4)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('button', { name: 'From, Any date' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Saturday, November 14' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Chem Lab')).not.toBeOnTheScreen();
+    expect(screen.getByText('No events match your filters')).toBeOnTheScreen();
+  });
+
+  it('says when nothing matches, in the calendar and today\'s card (AC8)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+
+    await openFilters();
+    for (const name of ['RISE', 'Google Calendar', 'Apple Calendar']) {
+      await fireEvent.press(screen.getByRole('switch', { name }));
+    }
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(screen.getByText('No events match your filters')).toBeOnTheScreen();
+    expect(screen.getByText('No events today match your filters.')).toBeOnTheScreen();
+  });
+
+  it('shows everything again with Show all, and forgets the saved filters (AC7)', async () => {
+    mockKeyValueStore.set('rise.calendarFilters', JSON.stringify({ hiddenTypes: ['class'], hiddenSources: [] }));
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Dentist, Google Calendar, 11:00 AM to /);
+    expect(chip('Chem Lab')).not.toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show all events' }));
+
+    expect(chip('Chem Lab')).toBeOnTheScreen();
+    expect(screen.queryByText('Some events are hidden')).not.toBeOnTheScreen();
+    expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
+      hiddenTypes: [],
+      hiddenSources: [],
+    });
   });
 });
