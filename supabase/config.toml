@@ -431,3 +431,11 @@ entrypoint = "./functions/check-email-exists/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/canvas-extension/index.ts"
+
+# Deletes only the currently authenticated RISE account.
+# The function also validates the caller's JWT before using
+# the service role to perform the hard Auth-user deletion.
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"

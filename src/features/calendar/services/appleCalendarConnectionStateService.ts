@@ -87,3 +87,21 @@ export async function getLastAppleCalendarAccess():
 
   return null;
 }
+
+/**
+ * Clears Apple Calendar state stored locally by RISE.
+ *
+ * Account deletion removes RISE's remembered connection
+ * state only. It does not change the device's actual
+ * Calendar permission or delete anything from Apple Calendar.
+ */
+export async function clearAppleCalendarConnectionState() {
+  await Promise.all([
+    Storage.removeItem(
+      PENDING_APPLE_CONNECTION_KEY,
+    ),
+    Storage.removeItem(
+      LAST_APPLE_ACCESS_KEY,
+    ),
+  ]);
+}

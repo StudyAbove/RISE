@@ -40,6 +40,10 @@ import {
 } from '../../../lib/supabase';
 
 import {
+  deleteCurrentAccount,
+} from '../services/accountDeletionService';
+
+import {
   styles,
 } from './SettingsScreen.styles';
 
@@ -51,6 +55,16 @@ const logoutIcon =
 const trashIcon =
   require(
     '../../../../assets/icons/trash.png',
+  );
+
+const deleteAccountIcon =
+  require(
+    '../../../../assets/icons/settings-delete-account.png',
+  );
+
+const deleteAccountWarningIcon =
+  require(
+    '../../../../assets/icons/delete-account-warning.png',
   );
 
 const calendarIcon =
@@ -137,6 +151,18 @@ export function SettingsScreen() {
   const [
     isLoggingOut,
     setIsLoggingOut,
+  ] =
+    useState(false);
+
+  const [
+    isDeleteAccountModalVisible,
+    setIsDeleteAccountModalVisible,
+  ] =
+    useState(false);
+
+  const [
+    isDeletingAccount,
+    setIsDeletingAccount,
   ] =
     useState(false);
 
@@ -361,6 +387,54 @@ export function SettingsScreen() {
     );
   }
 
+  function handleDeleteAccountPress() {
+    setIsDeleteAccountModalVisible(
+      true,
+    );
+  }
+
+  function handleCancelDeleteAccount() {
+    if (isDeletingAccount) {
+      return;
+    }
+
+    setIsDeleteAccountModalVisible(
+      false,
+    );
+  }
+
+  async function handleConfirmDeleteAccount() {
+    if (isDeletingAccount) {
+      return;
+    }
+
+    setIsDeletingAccount(
+      true,
+    );
+
+    try {
+      await deleteCurrentAccount();
+
+      /*
+       * Successful deletion signs the local Supabase session out.
+       * Root-level authentication navigation handles returning the
+       * student to the unauthenticated account-entry screen.
+       */
+      setIsDeleteAccountModalVisible(
+        false,
+      );
+    } catch (error) {
+      console.log(
+        'Delete account failed:',
+        error,
+      );
+    } finally {
+      setIsDeletingAccount(
+        false,
+      );
+    }
+  }
+
   return (
     <View
       style={[
@@ -402,6 +476,59 @@ export function SettingsScreen() {
           styles.content
         }
       >
+        <Pressable
+          style={({
+            pressed,
+          }) => [
+            styles.logoutCard,
+            styles.deleteAccountCard,
+
+            pressed &&
+              styles.pressed,
+          ]}
+          onPress={
+            handleDeleteAccountPress
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Delete Account"
+        >
+          <Image
+            source={
+              deleteAccountIcon
+            }
+            style={
+              styles.logoutIcon
+            }
+          />
+
+          <Text
+            style={[
+              styles.logoutText,
+              {
+                flex:
+                  1,
+              },
+            ]}
+          >
+            Delete Account
+          </Text>
+
+          <View
+            style={
+              styles.settingsChevronContainer
+            }
+          >
+            <Image
+              source={
+                chevronRightIcon
+              }
+              style={
+                styles.settingsChevron
+              }
+            />
+          </View>
+        </Pressable>
+
         <View
           style={[
             styles.logoutCard,
@@ -809,6 +936,136 @@ export function SettingsScreen() {
       </Modal>
 
 
+
+      <Modal
+        visible={
+          isDeleteAccountModalVisible
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={
+          handleCancelDeleteAccount
+        }
+      >
+        <View
+          style={
+            styles.overlay
+          }
+        >
+          <View
+            style={[
+              styles.modalCard,
+              styles.logoutModalCard,
+            ]}
+          >
+            <View
+              style={
+                styles.deleteAccountWarningOuter
+              }
+            >
+              <View
+                style={
+                  styles.deleteAccountWarningInner
+                }
+              >
+                <Image
+                  source={
+                    deleteAccountWarningIcon
+                  }
+                  style={
+                    styles.deleteAccountWarningIcon
+                  }
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+
+            <Text
+              style={
+                styles.modalTitle
+              }
+            >
+              Delete Account?
+            </Text>
+
+            <Text
+              style={
+                styles.modalMessage
+              }
+            >
+              This will permanently delete your account and all associated data. This action cannot be undone.
+            </Text>
+
+            <View
+              style={
+                styles.modalActions
+              }
+            >
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalCancelButton,
+
+                  pressed &&
+                    !isDeletingAccount &&
+                    styles.pressed,
+
+                  isDeletingAccount &&
+                    styles.disabledButton,
+                ]}
+                onPress={
+                  handleCancelDeleteAccount
+                }
+                disabled={
+                  isDeletingAccount
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Cancel account deletion"
+              >
+                <Text
+                  style={
+                    styles.modalCancelButtonText
+                  }
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.deleteAccountConfirmButton,
+
+                  pressed &&
+                    !isDeletingAccount &&
+                    styles.pressed,
+
+                  isDeletingAccount &&
+                    styles.disabledButton,
+                ]}
+                onPress={
+                  handleConfirmDeleteAccount
+                }
+                disabled={
+                  isDeletingAccount
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Confirm account deletion"
+              >
+                <Text
+                  style={
+                    styles.deleteAccountConfirmButtonText
+                  }
+                >
+                  {isDeletingAccount
+                    ? 'Deleting...'
+                    : 'Confirm'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={
