@@ -14,6 +14,7 @@ import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
 
+import { AssignmentDetailsScreen } from '../../assignments/screens/AssignmentDetailsScreen';
 import CheckInboxScreen from '../../auth/screens/CheckInboxScreen';
 import CreateAccountScreen from '../../auth/screens/CreateAccountScreen';
 import LoginScreen from '../../auth/screens/LoginScreen';
@@ -672,6 +673,10 @@ export function RootNavigator({
               component={
                 SettingsScreen
               }
+            />
+            <Stack.Screen
+              name="AssignmentDetails"
+              component={AssignmentDetailsScreen}
             />
           </>
         )}

@@ -1,30 +1,61 @@
-import { fetchAssignments } from '../assignmentsRepository';
+import {
+  fetchAssignmentById,
+  fetchAssignments,
+} from '../assignmentsRepository';
 
 const mockRows = jest.fn();
 const mockError = jest.fn();
+const mockEq = jest.fn();
+const mockIs = jest.fn();
 
 // Pretend to be Supabase so these tests don't access real student data.
 jest.mock('../../lib/supabase', () => {
-  let first = 0;
-  let last = 499;
+  return {
+    supabase: {
+      from: () => {
+        let first = 0;
+        let last = 499;
+        let selectedId: string | undefined;
 
-  const query = {
-    select: () => query,
-    is: () => query,
-    order: () => query,
-    range: (from: number, to: number) => {
-      first = from;
-      last = to;
-      return query;
+        const query = {
+          select: () => query,
+          is: (column: string, value: unknown) => {
+            mockIs(column, value);
+            return query;
+          },
+          eq: (column: string, value: string) => {
+            mockEq(column, value);
+
+            if (column === 'id') {
+              selectedId = value;
+            }
+
+            return query;
+          },
+          order: () => query,
+          range: (from: number, to: number) => {
+            first = from;
+            last = to;
+            return query;
+          },
+          maybeSingle: async () => ({
+            data:
+              (mockRows() ?? []).find(
+                (row: { id: string }) => row.id === selectedId,
+              ) ?? null,
+            error: mockError(),
+          }),
+          then: (resolve: (value: unknown) => void) =>
+            resolve({
+              data: (mockRows() ?? []).slice(first, last + 1),
+              error: mockError(),
+            }),
+        };
+
+        return query;
+      },
     },
-    then: (resolve: (value: unknown) => void) =>
-      resolve({
-        data: (mockRows() ?? []).slice(first, last + 1),
-        error: mockError(),
-      }),
   };
-
-  return { supabase: { from: () => query } };
 });
 
 // Sample records are used only by the tests.
@@ -47,14 +78,16 @@ function assignmentRow(id = 'a1') {
   };
 }
 
-describe('fetchAssignments', () => {
-  beforeEach(() => {
-    mockRows.mockReset();
-    mockError.mockReset();
-    mockRows.mockReturnValue([]);
-    mockError.mockReturnValue(null);
-  });
+beforeEach(() => {
+  mockRows.mockReset();
+  mockError.mockReset();
+  mockEq.mockReset();
+  mockIs.mockReset();
+  mockRows.mockReturnValue([]);
+  mockError.mockReturnValue(null);
+});
 
+describe('fetchAssignments', () => {
   it("includes descriptions and class colors, and skips classes that don't sync", async () => {
     const hiddenAssignment = assignmentRow('a2');
     hiddenAssignment.courses.sync_enabled = false;
@@ -122,5 +155,103 @@ describe('fetchAssignments', () => {
     mockError.mockReturnValue(error);
 
     await expect(fetchAssignments()).rejects.toBe(error);
+  });
+});
+
+describe('fetchAssignmentById', () => {
+  it('loads the selected assignment with its own description, course, and date', async () => {
+    const selectedAssignment = {
+      ...assignmentRow('a2'),
+      title: 'History Essay',
+      description: 'Compare two historical sources.',
+      due_at: '2026-11-20T18:00:00Z',
+      courses: {
+        name: 'World History',
+        code: 'HIST 101',
+        color: 'sage',
+        sync_enabled: true,
+      },
+    };
+
+    mockRows.mockReturnValue([
+      assignmentRow('a1'),
+      selectedAssignment,
+    ]);
+
+    const assignment = await fetchAssignmentById('a2');
+
+    expect(mockEq).toHaveBeenCalledWith('id', 'a2');
+    expect(mockIs).toHaveBeenCalledWith('removed_at', null);
+
+    expect(assignment).toMatchObject({
+      id: 'a2',
+      title: 'History Essay',
+      description: 'Compare two historical sources.',
+      courseName: 'World History',
+      courseCode: 'HIST 101',
+      courseColor: '#A8BEA3',
+      dueAt: new Date('2026-11-20T18:00:00Z'),
+    });
+  });
+
+  it('returns null when the selected assignment is unavailable', async () => {
+    mockRows.mockReturnValue([assignmentRow('a1')]);
+
+    await expect(fetchAssignmentById('missing')).resolves.toBeNull();
+  });
+
+  it('does not display assignments from a disabled course', async () => {
+    const hiddenAssignment = assignmentRow('a1');
+    hiddenAssignment.courses.sync_enabled = false;
+
+    mockRows.mockReturnValue([hiddenAssignment]);
+
+    await expect(fetchAssignmentById('a1')).resolves.toBeNull();
+  });
+
+  it('handles missing descriptions, dates, and courses', async () => {
+    mockRows.mockReturnValue([
+      {
+        ...assignmentRow('a1'),
+        description: null,
+        due_at: null,
+        courses: null,
+      },
+    ]);
+
+    const assignment = await fetchAssignmentById('a1');
+
+    expect(assignment).toMatchObject({
+      id: 'a1',
+      description: null,
+      dueAt: null,
+      courseName: null,
+      courseCode: null,
+      courseColor: '#A8BEA3',
+    });
+  });
+
+  it('normalizes blank descriptions and invalid dates to null', async () => {
+    mockRows.mockReturnValue([
+      {
+        ...assignmentRow('a1'),
+        description: '   ',
+        due_at: 'invalid-date',
+      },
+    ]);
+
+    const assignment = await fetchAssignmentById('a1');
+
+    expect(assignment).toMatchObject({
+      description: null,
+      dueAt: null,
+    });
+  });
+
+  it('reports database errors so the screen can offer a retry', async () => {
+    const error = new Error('Could not load assignment');
+    mockError.mockReturnValue(error);
+
+    await expect(fetchAssignmentById('a1')).rejects.toBe(error);
   });
 });
