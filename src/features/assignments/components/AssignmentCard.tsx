@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { endOfDay, format, isSameYear } from 'date-fns';
+import { format, isSameYear } from 'date-fns';
+import { isAssignmentUrgent } from '../utils/isAssignmentUrgent';
 import Svg, { Path, Rect } from 'react-native-svg';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
@@ -50,10 +51,12 @@ export function AssignmentCard({
   // This is assignment completion, not microtask progress.
   const completionPercent = assignment.completed ? 100 : 0;
 
-  const needsAttention =
-    !assignment.completed &&
-    assignment.dueAt !== null &&
-    assignment.dueAt.getTime() <= endOfDay(today).getTime();
+  // Highlight incomplete assignments due within 24 hours or already overdue.
+  const needsAttention = isAssignmentUrgent(
+    assignment.dueAt,
+    assignment.completed,
+    today,
+  );
 
   const dueColor = needsAttention
     ? statusColors.urgentRed
