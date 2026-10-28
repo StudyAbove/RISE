@@ -53,6 +53,12 @@ const mockSaveCalendarConnection =
 const mockStartAppleCalendarBackgroundSync =
   jest.fn();
 
+const mockDisconnectAppleCalendarWithCleanup =
+  jest.fn();
+
+const mockNotifyCalendarRefresh =
+  jest.fn();
+
 let mockAppStateChangeHandler:
   | ((
       state: string,
@@ -170,6 +176,28 @@ jest.mock(
     startAppleCalendarBackgroundSync:
       (...args: unknown[]) =>
         mockStartAppleCalendarBackgroundSync(
+          ...args,
+        ),
+  }),
+);
+
+jest.mock(
+  '../../calendar/services/appleCalendarDisconnectService',
+  () => ({
+    disconnectAppleCalendarWithCleanup:
+      (...args: unknown[]) =>
+        mockDisconnectAppleCalendarWithCleanup(
+          ...args,
+        ),
+  }),
+);
+
+jest.mock(
+  '../../calendar/services/calendarRefreshService',
+  () => ({
+    notifyCalendarRefresh:
+      (...args: unknown[]) =>
+        mockNotifyCalendarRefresh(
           ...args,
         ),
   }),
@@ -302,6 +330,14 @@ describe(
       | undefined;
 
     beforeEach(() => {
+  mockDisconnectAppleCalendarWithCleanup.mockResolvedValue(
+    undefined,
+  );
+
+  mockNotifyCalendarRefresh.mockReturnValue(
+    undefined,
+  );
+
       jest.clearAllMocks();
 
       authStateCallback =
@@ -636,7 +672,237 @@ describe(
     );
 
     it(
-      'starts Apple background sync when an existing connection regains Full Access',
+      'disconnects Apple and refreshes Calendar when Full Access is removed',
+      async () => {
+        setSignedInMocks();
+
+        let appleAccess:
+          'denied' | 'full' =
+          'full';
+
+        let lastAppleAccess:
+          'denied' | 'full' =
+          'full';
+
+        mockGetAppleCalendarAccess.mockImplementation(
+          async () =>
+            appleAccess,
+        );
+
+        mockGetLastAppleCalendarAccess.mockImplementation(
+          async () =>
+            lastAppleAccess,
+        );
+
+        mockSaveLastAppleCalendarAccess.mockImplementation(
+          async (
+            access:
+              'denied' | 'full',
+          ) => {
+            lastAppleAccess =
+              access;
+          },
+        );
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'RISE',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        expect(
+          mockDisconnectAppleCalendarWithCleanup,
+        ).not.toHaveBeenCalled();
+
+        appleAccess =
+          'denied';
+
+        expect(
+          mockAppStateChangeHandler,
+        ).not.toBeNull();
+
+        await act(
+          async () => {
+            mockAppStateChangeHandler?.(
+              'active',
+            );
+          },
+        );
+
+        await waitFor(() => {
+          expect(
+            mockDisconnectAppleCalendarWithCleanup,
+          ).toHaveBeenCalledTimes(
+            1,
+          );
+        });
+
+        expect(
+          mockClearAppleCalendarConnectionPending,
+        ).toHaveBeenCalled();
+
+        expect(
+          mockNotifyCalendarRefresh,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(
+          mockStartAppleCalendarBackgroundSync,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it(
+      'reconnects Apple after Full Access is removed and later granted again',
+      async () => {
+        setSignedInMocks();
+
+        let appleAccess:
+          'denied' | 'full' =
+          'full';
+
+        let lastAppleAccess:
+          'denied' | 'full' =
+          'full';
+
+        mockGetAppleCalendarAccess.mockImplementation(
+          async () =>
+            appleAccess,
+        );
+
+        mockGetLastAppleCalendarAccess.mockImplementation(
+          async () =>
+            lastAppleAccess,
+        );
+
+        mockSaveLastAppleCalendarAccess.mockImplementation(
+          async (
+            access:
+              'denied' | 'full',
+          ) => {
+            lastAppleAccess =
+              access;
+          },
+        );
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'RISE',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        /*
+         * First transition:
+         * Full Access -> denied.
+         *
+         * Apple should be disconnected and the denied state should
+         * become the new saved permission baseline.
+         */
+        appleAccess =
+          'denied';
+
+        await act(
+          async () => {
+            mockAppStateChangeHandler?.(
+              'active',
+            );
+          },
+        );
+
+        await waitFor(() => {
+          expect(
+            mockDisconnectAppleCalendarWithCleanup,
+          ).toHaveBeenCalledTimes(
+            1,
+          );
+        });
+
+        expect(
+          mockSaveLastAppleCalendarAccess,
+        ).toHaveBeenCalledWith(
+          'denied',
+        );
+
+        expect(
+          lastAppleAccess,
+        ).toBe(
+          'denied',
+        );
+
+        expect(
+          mockStartAppleCalendarBackgroundSync,
+        ).not.toHaveBeenCalled();
+
+        /*
+         * Second transition:
+         * denied -> Full Access.
+         *
+         * Because the denied state was saved above, RISE should now
+         * recognize this as a fresh permission gain and reconnect.
+         */
+        appleAccess =
+          'full';
+
+        await act(
+          async () => {
+            mockAppStateChangeHandler?.(
+              'active',
+            );
+          },
+        );
+
+        await waitFor(() => {
+          expect(
+            mockSaveCalendarConnection,
+          ).toHaveBeenCalledWith(
+            'apple',
+            null,
+          );
+        });
+
+        expect(
+          mockSaveLastAppleCalendarAccess,
+        ).toHaveBeenCalledWith(
+          'full',
+        );
+
+        expect(
+          lastAppleAccess,
+        ).toBe(
+          'full',
+        );
+
+        expect(
+          mockStartAppleCalendarBackgroundSync,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(
+          mockDisconnectAppleCalendarWithCleanup,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(
+          mockNotifyCalendarRefresh,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+      },
+    );
+
+    it(
+      'connects Apple and starts background sync when Full Access is granted outside RISE',
       async () => {
         setSignedInMocks();
 
@@ -668,30 +934,6 @@ describe(
           },
         );
 
-        mockGetCalendarConnection.mockImplementation(
-          async (
-            provider: string,
-          ) => {
-            if (
-              provider ===
-              'apple'
-            ) {
-              return {
-                provider:
-                  'apple',
-
-                provider_email:
-                  null,
-
-                connected:
-                  true,
-              };
-            }
-
-            return null;
-          },
-        );
-
         await renderNavigator();
 
         await waitFor(() => {
@@ -702,17 +944,12 @@ describe(
           ).toBeOnTheScreen();
         });
 
-        await waitFor(() => {
-          expect(
-            mockSaveLastAppleCalendarAccess,
-          ).toHaveBeenCalledWith(
-            'denied',
-          );
-        });
-
         expect(
-          mockStartAppleCalendarBackgroundSync,
-        ).not.toHaveBeenCalled();
+          mockSaveCalendarConnection,
+        ).not.toHaveBeenCalledWith(
+          'apple',
+          null,
+        );
 
         appleAccess =
           'full';
@@ -731,11 +968,32 @@ describe(
 
         await waitFor(() => {
           expect(
-            mockStartAppleCalendarBackgroundSync,
-          ).toHaveBeenCalledTimes(
-            1,
+            mockSaveCalendarConnection,
+          ).toHaveBeenCalledWith(
+            'apple',
+            null,
           );
         });
+
+        expect(
+          mockClearAppleCalendarConnectionPending,
+        ).toHaveBeenCalled();
+
+        expect(
+          mockSaveLastAppleCalendarAccess,
+        ).toHaveBeenCalledWith(
+          'full',
+        );
+
+        expect(
+          mockStartAppleCalendarBackgroundSync,
+        ).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(
+          mockDisconnectAppleCalendarWithCleanup,
+        ).not.toHaveBeenCalled();
 
         expect(
           screen.queryByText(
@@ -823,7 +1081,7 @@ describe(
     );
 
     it(
-      'does not silently create an Apple connection when Full Access is restored but Apple was never connected in RISE',
+      'connects Apple when Full Access is granted even if Apple was not previously connected in RISE',
       async () => {
         setSignedInMocks();
 
@@ -894,11 +1152,16 @@ describe(
 
         expect(
           mockSaveCalendarConnection,
-        ).not.toHaveBeenCalled();
+        ).toHaveBeenCalledWith(
+          'apple',
+          null,
+        );
 
         expect(
           mockStartAppleCalendarBackgroundSync,
-        ).not.toHaveBeenCalled();
+        ).toHaveBeenCalledTimes(
+          1,
+        );
 
         expect(
           screen.queryByText(

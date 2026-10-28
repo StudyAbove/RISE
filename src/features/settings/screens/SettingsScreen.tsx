@@ -1,5 +1,6 @@
 import {
   Image,
+  Linking,
   Modal,
   Pressable,
   Text,
@@ -95,6 +96,18 @@ export function SettingsScreen() {
     >(null);
 
   const [
+    isDisconnectAppleModalVisible,
+    setIsDisconnectAppleModalVisible,
+  ] =
+    useState(false);
+
+  const [
+    isAppleDisconnectPending,
+    setIsAppleDisconnectPending,
+  ] =
+    useState(false);
+
+  const [
     isDisconnectGoogleModalVisible,
     setIsDisconnectGoogleModalVisible,
   ] =
@@ -173,6 +186,20 @@ export function SettingsScreen() {
 
   function handleCalendarModalDismiss() {
     if (
+      isAppleDisconnectPending
+    ) {
+      setIsAppleDisconnectPending(
+        false,
+      );
+
+      setIsDisconnectAppleModalVisible(
+        true,
+      );
+
+      return;
+    }
+
+    if (
       isGoogleDisconnectPending
     ) {
       setIsGoogleDisconnectPending(
@@ -209,6 +236,41 @@ export function SettingsScreen() {
     setIsSuccessModalVisible(
       false,
     );
+  }
+
+  function handleDisconnectApplePress() {
+    setIsAppleDisconnectPending(
+      true,
+    );
+
+    setIsCalendarModalVisible(
+      false,
+    );
+  }
+
+  function handleCancelDisconnectApple() {
+    setIsDisconnectAppleModalVisible(
+      false,
+    );
+
+    setIsCalendarModalVisible(
+      true,
+    );
+  }
+
+  function handleConfirmDisconnectApple() {
+    setIsDisconnectAppleModalVisible(
+      false,
+    );
+
+    /*
+     * Apple Calendar remains connected in RISE until the student
+     * actually removes Full Access in iOS Settings.
+     *
+     * RootNavigator detects that permission change when the app
+     * becomes active again and performs the real cleanup.
+     */
+    void Linking.openSettings();
   }
 
   function handleDisconnectGooglePress() {
@@ -482,6 +544,9 @@ export function SettingsScreen() {
         onConnectGoogle={
           connectGoogle
         }
+        onDisconnectApple={
+          handleDisconnectApplePress
+        }
         onDisconnectGoogle={
           handleDisconnectGooglePress
         }
@@ -498,6 +563,123 @@ export function SettingsScreen() {
           handleSuccessDone
         }
       />
+
+      <Modal
+        visible={
+          isDisconnectAppleModalVisible
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={
+          handleCancelDisconnectApple
+        }
+      >
+        <View
+          style={
+            styles.overlay
+          }
+        >
+          <View
+            style={[
+              styles.modalCard,
+              styles.disconnectModalCard,
+            ]}
+          >
+            <View
+              style={
+                styles.disconnectIconOuter
+              }
+            >
+              <View
+                style={
+                  styles.disconnectIconInner
+                }
+              >
+                <Image
+                  source={
+                    trashIcon
+                  }
+                  style={
+                    styles.disconnectTrashIcon
+                  }
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+
+            <Text
+              style={
+                styles.modalTitle
+              }
+            >
+              Disconnect Apple Calendar?
+            </Text>
+
+            <Text
+              style={
+                styles.modalMessage
+              }
+            >
+              To disconnect, turn off Full Access for RISE in iOS Settings.
+            </Text>
+
+            <View
+              style={[
+                styles.modalActions,
+                styles.disconnectModalActions,
+              ]}
+            >
+              <Pressable
+                style={({
+                  pressed,
+                }) => [
+                  styles.modalButton,
+                  styles.modalCancelButton,
+                  pressed &&
+                    styles.pressed,
+                ]}
+                onPress={
+                  handleCancelDisconnectApple
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Cancel Apple Calendar disconnect"
+              >
+                <Text
+                  style={
+                    styles.modalCancelButtonText
+                  }
+                >
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={({
+                  pressed,
+                }) => [
+                  styles.modalButton,
+                  styles.disconnectConfirmButton,
+                  pressed &&
+                    styles.pressed,
+                ]}
+                onPress={
+                  handleConfirmDisconnectApple
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Open iOS Settings for Apple Calendar"
+              >
+                <Text
+                  style={
+                    styles.disconnectConfirmButtonText
+                  }
+                >
+                  Open Settings
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={
