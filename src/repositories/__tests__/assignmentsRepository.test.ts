@@ -69,6 +69,8 @@ function assignmentRow(id = 'a1') {
     source: 'canvas',
     points_possible: 50,
     html_url: 'https://csulb.instructure.com/courses/1/assignments/1',
+    estimated_minutes: 150 as number | null,
+    kind: 'lab' as string | null,
     courses: {
       name: 'BIOL 201: Cell Biology',
       code: 'BIOL 201',
@@ -109,6 +111,18 @@ describe('fetchAssignments', () => {
       dueAt: new Date('2026-11-13T23:59:00Z'),
       completed: false,
     });
+  });
+
+  it('includes the saved time estimate, or null before one is made', async () => {
+    mockRows.mockReturnValue([
+      assignmentRow('a1'),
+      { ...assignmentRow('a2'), estimated_minutes: null, kind: null },
+    ]);
+
+    const assignments = await fetchAssignments();
+
+    expect(assignments[0]).toMatchObject({ estimatedMinutes: 150, kind: 'lab' });
+    expect(assignments[1]).toMatchObject({ estimatedMinutes: null, kind: null });
   });
 
   it('loads assignments beyond the first batch', async () => {

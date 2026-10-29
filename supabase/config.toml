@@ -439,3 +439,9 @@ entrypoint = "./functions/canvas-extension/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/delete-account/index.ts"
+
+# Called by the app with the student's session, so Supabase checks the JWT (#57).
+[functions.estimate-assignments]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/estimate-assignments/index.ts"
