@@ -6,7 +6,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 import { colors, statusColors } from '../../../theme/colors';
-import { textStyles } from '../../../theme/typography';
+import { fonts, textStyles } from '../../../theme/typography';
 
 // Draw the small calendar icon next to each due date.
 function CalendarIcon({ color }: { color: string }) {
@@ -68,11 +68,10 @@ export function AssignmentCard({
     today,
   );
 
-  const dueColor = getAhead
-    ? colors.eucalyptus
-    : needsAttention
-      ? statusColors.urgentRed
-      : colors.deepOlive;
+  // Red when due within 24 hours, even on a get-ahead card.
+  const dueColor = needsAttention
+    ? statusColors.urgentRed
+    : colors.deepOlive;
 
   // Include the year when an assignment belongs to a different year.
   const dueLabel = assignment.dueAt
@@ -83,8 +82,6 @@ export function AssignmentCard({
           : 'EEE, MMM d, yyyy',
       )}`
     : 'No due date';
-
-  const dueText = getAhead ? `Get ahead · ${dueLabel}` : dueLabel;
 
   const courseLabel =
     assignment.courseCode ||
@@ -143,7 +140,8 @@ export function AssignmentCard({
           <CalendarIcon color={dueColor} />
 
           <Text style={[styles.dueDate, { color: dueColor }]}>
-            {dueText}
+            {getAhead && <Text style={styles.getAheadLabel}>Get ahead · </Text>}
+            {dueLabel}
           </Text>
         </View>
 
@@ -233,6 +231,10 @@ const styles = StyleSheet.create({
   dueDate: {
     ...textStyles.tinyLabel,
     flexShrink: 1,
+  },
+  getAheadLabel: {
+    fontFamily: fonts.body.bold,
+    color: colors.eucalyptus,
   },
   progressRow: {
     flexDirection: 'row',

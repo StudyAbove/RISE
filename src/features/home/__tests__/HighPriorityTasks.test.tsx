@@ -58,7 +58,8 @@ describe('HighPriorityTasks', () => {
     expect(screen.getByText('Problem Set #5')).toBeOnTheScreen();
     expect(screen.getByText('EE 381')).toBeOnTheScreen();
     expect(screen.getByText('Due Mon, Nov 9')).toBeOnTheScreen();
-    expect(screen.getByText('Get ahead · Due Sat, Nov 14')).toBeOnTheScreen();
+    expect(screen.getByText('Get ahead ·', { exact: false })).toBeOnTheScreen();
+    expect(screen.getByText('Due Sat, Nov 14', { exact: false })).toBeOnTheScreen();
     expect(screen.queryByText('Solve problems 1-10.')).not.toBeOnTheScreen();
     expect(screen.queryByText('0%')).not.toBeOnTheScreen();
   });

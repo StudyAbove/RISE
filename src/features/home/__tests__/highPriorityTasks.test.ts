@@ -62,17 +62,43 @@ describe('getHighPriorityTasks', () => {
     ).toEqual([]);
   });
 
-  it('suggests getting ahead on big work that needs to start today', () => {
+  it('suggests big work that has to be started within the next 2 days', () => {
     expect(
       summarize([
         // 10 hours at about 2 a day: due in 5 days, so start today.
-        assignment({ title: 'Big project', dueAt: new Date(2026, 10, 14, 9, 0), estimatedMinutes: 600, kind: 'project' }),
-        // Also big, but due in 2 weeks, so there's still time.
-        assignment({ title: 'Later project', dueAt: new Date(2026, 10, 23, 9, 0), estimatedMinutes: 600, kind: 'project' }),
-        // Due in 2 days but small, so it can wait.
+        assignment({ title: 'Start today', dueAt: new Date(2026, 10, 14, 9, 0), estimatedMinutes: 600, kind: 'project' }),
+        // 8 hours, due in 6 days: start in 2 days, so it's a heads-up now.
+        assignment({ title: 'Start in 2 days', dueAt: new Date(2026, 10, 15, 9, 0), estimatedMinutes: 480, kind: 'project' }),
+        // Due in 2 days but small, so it's never a get-ahead suggestion.
         assignment({ title: 'Small homework', dueAt: new Date(2026, 10, 11, 9, 0), estimatedMinutes: 60 }),
       ]),
-    ).toEqual(['Big project (getAhead)']);
+    ).toEqual(['Start today (getAhead)', 'Start in 2 days (getAhead)']);
+  });
+
+  it('fills open cards with the next big work, even if it can wait', () => {
+    expect(
+      summarize([
+        assignment({ title: 'Tonight', dueAt: new Date(2026, 10, 9, 23, 59) }),
+        // Start by Nov 18 and Nov 19: no rush, but there's room for both.
+        assignment({ title: 'Later project', dueAt: new Date(2026, 10, 23, 9, 0), estimatedMinutes: 600, kind: 'project' }),
+        assignment({ title: 'Even later paper', dueAt: new Date(2026, 10, 21, 9, 0), estimatedMinutes: 240, kind: 'paper' }),
+        // Due after 14 days, so not suggested yet.
+        assignment({ title: 'Next month', dueAt: new Date(2026, 11, 10, 9, 0), estimatedMinutes: 600, kind: 'project' }),
+      ]),
+    ).toEqual(['Tonight (dueSoon)', 'Later project (getAhead)', 'Even later paper (getAhead)']);
+  });
+
+  it('only fills up to 3 cards, but keeps all work that needs starting soon', () => {
+    const urgentBigWork = [1, 2, 3].map((day) =>
+      assignment({ title: `Urgent ${day}`, dueAt: new Date(2026, 10, 12 + day, 9, 0), estimatedMinutes: 600, kind: 'project' }),
+    );
+
+    expect(
+      summarize([
+        ...urgentBigWork,
+        assignment({ title: 'Later project', dueAt: new Date(2026, 10, 23, 9, 0), estimatedMinutes: 600, kind: 'project' }),
+      ]),
+    ).toEqual(['Urgent 1 (getAhead)', 'Urgent 2 (getAhead)', 'Urgent 3 (getAhead)']);
   });
 
   it('counts an exam as big work even with a short estimate', () => {

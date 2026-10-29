@@ -25,6 +25,9 @@ const DUE_SOON_HOURS = 24;
 const BIG_WORK_MINUTES = 3 * 60;
 const GET_AHEAD_DAYS = 14;
 
+// Suggest big work this many days before it has to be started, as a heads-up.
+const HEADS_UP_DAYS = 2;
+
 /** Unfinished work due any time today, or within the next 24 hours. */
 function isDueSoon(dueAt: Date, now: Date) {
   const dueSoonEnd = now.getTime() + DUE_SOON_HOURS * 60 * 60 * 1000;
@@ -33,17 +36,12 @@ function isDueSoon(dueAt: Date, now: Date) {
   return time >= startOfDay(now).getTime() && time <= dueSoonEnd;
 }
 
-/**
- * Due later, big (3+ hours, or an exam), and has to be started today to be
- * finished on time.
- */
-function shouldGetAhead(assignment: Assignment, dueAt: Date, now: Date) {
+/** Big (3+ hours, or an exam) and due within the next 14 days. */
+function isUpcomingBigWork(assignment: Assignment, dueAt: Date, now: Date) {
   if (dueAt.getTime() > addDays(now, GET_AHEAD_DAYS).getTime()) return false;
 
   const { minutes, kind } = getAssignmentEstimate(assignment);
-  const isBig = minutes >= BIG_WORK_MINUTES || kind === 'exam';
-
-  return isBig && getStartBy(dueAt, minutes).getTime() <= endOfDay(now).getTime();
+  return minutes >= BIG_WORK_MINUTES || kind === 'exam';
 }
 
 function startByTime(assignment: Assignment & { dueAt: Date }) {
@@ -52,7 +50,10 @@ function startByTime(assignment: Assignment & { dueAt: Date }) {
 
 /**
  * Due-soon work first (soonest due first), then get-ahead suggestions
- * (whichever needs starting first). Not capped; Home shows the first few.
+ * (whichever needs starting first):
+ * - all big work that has to be started within the next 2 days, and
+ * - if there are still fewer than 3 tasks, the next big work after that,
+ *   even if it doesn't need starting yet.
  *
  * Until microtasks exist (#42), a get-ahead suggestion is the whole
  * assignment. Once they do, show the assignment's next microtask instead.
@@ -62,7 +63,7 @@ export function getHighPriorityTasks(
   now: Date,
 ): HighPriorityTask[] {
   const dueSoon: (Assignment & { dueAt: Date })[] = [];
-  const getAhead: (Assignment & { dueAt: Date })[] = [];
+  const bigWork: (Assignment & { dueAt: Date })[] = [];
 
   for (const assignment of assignments) {
     const { dueAt } = assignment;
@@ -71,13 +72,20 @@ export function getHighPriorityTasks(
 
     if (isDueSoon(dueAt, now)) {
       dueSoon.push({ ...assignment, dueAt });
-    } else if (dueAt.getTime() > now.getTime() && shouldGetAhead(assignment, dueAt, now)) {
-      getAhead.push({ ...assignment, dueAt });
+    } else if (dueAt.getTime() > now.getTime() && isUpcomingBigWork(assignment, dueAt, now)) {
+      bigWork.push({ ...assignment, dueAt });
     }
   }
 
   dueSoon.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
-  getAhead.sort((a, b) => startByTime(a) - startByTime(b));
+  bigWork.sort((a, b) => startByTime(a) - startByTime(b));
+
+  const headsUpEnd = endOfDay(addDays(now, HEADS_UP_DAYS)).getTime();
+  const getAhead = bigWork.filter(
+    (assignment, index) =>
+      startByTime(assignment) <= headsUpEnd ||
+      dueSoon.length + index < MAX_HIGH_PRIORITY_TASKS,
+  );
 
   return [
     ...dueSoon.map((assignment) => ({ assignment, reason: 'dueSoon' as const })),
