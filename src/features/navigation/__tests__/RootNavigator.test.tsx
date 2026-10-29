@@ -480,6 +480,41 @@ describe(
     );
 
     it(
+      'opens the main tabs instead of onboarding when the profile cannot be loaded',
+      async () => {
+        setSignedInMocks();
+
+        mockMaybeSingle.mockResolvedValue({
+          data:
+            null,
+
+          error: {
+            message:
+              'Network request failed',
+          },
+        });
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getAllByRole(
+              'tab',
+            ),
+          ).toHaveLength(
+            5,
+          );
+        });
+
+        expect(
+          screen.queryByText(
+            'Connect your classes',
+          ),
+        ).not.toBeOnTheScreen();
+      },
+    );
+
+    it(
       'restores an existing session and opens the main app without showing login',
       async () => {
         setSignedInMocks();

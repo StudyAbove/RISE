@@ -238,10 +238,17 @@ export function RootNavigator({
       );
     }
 
+    /*
+     * If the profile couldn't be read (e.g. a network hiccup), don't send a
+     * returning student back through onboarding (#25 AC4). Its steps are
+     * optional and can all be done later in Settings.
+     */
     setHasCompletedOnboarding(
-      profile
-        ?.onboarding_completed ??
-        false,
+      error
+        ? true
+        : profile
+          ?.onboarding_completed ??
+          false,
     );
 
     setIsSignedIn(
