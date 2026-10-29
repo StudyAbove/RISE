@@ -21,7 +21,6 @@ export type AssignmentToEstimate = {
   id: string;
   title: string;
   description: string | null;
-  pointsPossible: number | null;
   courseName: string | null;
   courseCode: string | null;
 };
@@ -36,8 +35,9 @@ export type SavedEstimate = {
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 6000;
 
-// Enough of the instructions to judge the size; keeps requests small.
-const MAX_DESCRIPTION_LENGTH = 1500;
+// The instructions are what Claude sizes the work from, so send most of them
+// (Canvas sync keeps up to 5,000 characters).
+const MAX_DESCRIPTION_LENGTH = 4000;
 
 export const ESTIMATE_SYSTEM_PROMPT = `You estimate how long college assignments take, for a student planner app.
 
@@ -45,7 +45,9 @@ For each assignment, give:
 - minutes: the total time a typical college student needs to finish it, start to submit. For exams and quizzes, the time to study for them.
 - kind: one of ${ASSIGNMENT_KINDS.join(', ')}.
 
-Use the title, class, points, and instructions. More points and longer instructions usually mean more work. Be realistic, not optimistic: a short discussion post is often 20-30 minutes, a problem set 1-3 hours, a lab report 2-4 hours, a midterm 4-8 hours of studying, a final project 8+ hours.
+Base the time on what the assignment asks the student to do: read the instructions for the deliverables and their size, like the number of problems, pages or word count, sources to cite, parts or steps to complete, code to write, or material an exam covers. Use the title and class to fill in what the instructions leave out. Points are not given, because classes grade on very different scales.
+
+Be realistic, not optimistic: a short discussion post is often 20-30 minutes, a problem set 1-3 hours, a lab report 2-4 hours, a midterm 4-8 hours of studying, a final project 8+ hours.
 
 Return one estimate for every assignment id you're given.`;
 
@@ -56,8 +58,6 @@ export function buildEstimatePrompt(assignments: AssignmentToEstimate[]): string
 
     const course = [assignment.courseCode, assignment.courseName].filter(Boolean).join(' - ');
     if (course) lines.push(`class: ${course}`);
-
-    if (assignment.pointsPossible !== null) lines.push(`points: ${assignment.pointsPossible}`);
 
     const description = assignment.description?.trim();
     if (description) {

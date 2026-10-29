@@ -56,7 +56,6 @@ type AssignmentRow = {
   id: string;
   title: string;
   description: string | null;
-  points_possible: number | null;
   courses: { name: string; code: string | null } | null;
 };
 
@@ -110,7 +109,7 @@ Deno.serve(async (req) => {
     // Soonest due first, so what's coming up gets a real estimate first.
     const { data, error } = await supabase
       .from('assignments')
-      .select('id, title, description, points_possible, courses(name, code)')
+      .select('id, title, description, courses(name, code)')
       .is('estimated_minutes', null)
       .is('removed_at', null)
       .eq('completed', false)
@@ -133,7 +132,6 @@ Deno.serve(async (req) => {
           id: row.id,
           title: row.title,
           description: row.description,
-          pointsPossible: row.points_possible,
           courseName: row.courses?.name ?? null,
           courseCode: row.courses?.code ?? null,
         })),

@@ -2,7 +2,6 @@ import {
   formatEstimate,
   getAssignmentEstimate,
   guessAssignmentKind,
-  guessAssignmentMinutes,
 } from '../assignmentEstimate';
 
 describe('guessAssignmentKind', () => {
@@ -23,15 +22,13 @@ describe('guessAssignmentKind', () => {
   });
 });
 
-describe('guessAssignmentMinutes', () => {
-  it('gives each kind a typical time', () => {
-    expect(guessAssignmentMinutes('exam', null)).toBe(240);
-    expect(guessAssignmentMinutes('discussion', null)).toBe(30);
+describe('guessAssignmentKind with instructions', () => {
+  it('reads the instructions when the title does not say', () => {
+    expect(guessAssignmentKind('Week 6', 'Write a 3-page essay on osmosis.')).toBe('paper');
   });
 
-  it('takes longer for high-point work and less for low-point work', () => {
-    expect(guessAssignmentMinutes('homework', 100)).toBe(135);
-    expect(guessAssignmentMinutes('homework', 5)).toBe(45);
+  it('goes by the title when it does say', () => {
+    expect(guessAssignmentKind('Quiz 2', 'Read chapter 4 first.')).toBe('quiz');
   });
 });
 
@@ -40,22 +37,22 @@ describe('getAssignmentEstimate', () => {
     expect(
       getAssignmentEstimate({
         title: 'Problem Set #5',
-        pointsPossible: 20,
+        description: null,
         estimatedMinutes: 45,
         kind: 'homework',
       }),
     ).toEqual({ minutes: 45, kind: 'homework', isGuess: false });
   });
 
-  it('guesses from the title and points until one is saved', () => {
+  it('guesses a typical time for its kind until one is saved', () => {
     expect(
       getAssignmentEstimate({
         title: 'Midterm Exam',
-        pointsPossible: 100,
+        description: null,
         estimatedMinutes: null,
         kind: null,
       }),
-    ).toEqual({ minutes: 360, kind: 'exam', isGuess: true });
+    ).toEqual({ minutes: 240, kind: 'exam', isGuess: true });
   });
 });
 

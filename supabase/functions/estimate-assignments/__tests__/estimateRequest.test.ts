@@ -14,7 +14,6 @@ describe('buildEstimatePrompt', () => {
         id: 'a1',
         title: 'Osmosis Lab Report',
         description: 'Write up your results.',
-        pointsPossible: 50,
         courseName: 'Cell Biology',
         courseCode: 'BIO 200',
       },
@@ -22,16 +21,16 @@ describe('buildEstimatePrompt', () => {
         id: 'a2',
         title: 'Quiz 3',
         description: null,
-        pointsPossible: null,
         courseName: null,
         courseCode: null,
       },
     ]);
 
-    expect(prompt).toContain('id: a1\ntitle: Osmosis Lab Report\nclass: BIO 200 - Cell Biology\npoints: 50');
-    expect(prompt).toContain('instructions: Write up your results.');
+    expect(prompt).toContain(
+      'id: a1\ntitle: Osmosis Lab Report\nclass: BIO 200 - Cell Biology\ninstructions: Write up your results.',
+    );
     expect(prompt).toContain('id: a2\ntitle: Quiz 3');
-    expect(prompt).not.toContain('points: null');
+    expect(prompt).not.toContain('points');
   });
 
   it('shortens very long instructions', () => {
@@ -40,13 +39,12 @@ describe('buildEstimatePrompt', () => {
         id: 'a1',
         title: 'Essay',
         description: 'x'.repeat(5000),
-        pointsPossible: null,
         courseName: null,
         courseCode: null,
       },
     ]);
 
-    expect(prompt.length).toBeLessThan(1700);
+    expect(prompt.length).toBeLessThan(4200);
   });
 });
 

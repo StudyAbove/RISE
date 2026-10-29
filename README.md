@@ -137,7 +137,7 @@ The extension talks to the `canvas-extension` Supabase Edge Function. After chan
 
 ### Assignment Time Estimates
 
-Home's Weekly Forecast shows how long each assignment will take. The `estimate-assignments` Edge Function asks Claude (Haiku) for each assignment's time and saves it on the assignment, so Home, List, and Study all use the same number. Until an estimate is saved, or if the function isn't set up, the app shows its own guess from the title and points.
+Home's Weekly Forecast shows how long each assignment will take. The `estimate-assignments` Edge Function asks Claude (Haiku) for each assignment's time and saves it on the assignment, so Home, List, and Study all use the same number. Until an estimate is saved, or if the function isn't set up, the app shows its own guess from the title and instructions. Points are never used, since classes grade on different scales.
 
 To set it up (once per Supabase project):
 

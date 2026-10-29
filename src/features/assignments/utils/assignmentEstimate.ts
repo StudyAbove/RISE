@@ -2,8 +2,11 @@
  * How long an assignment will take, shared by Home, List, and Study.
  *
  * The estimate-assignments Edge Function asks Claude for each assignment's
- * time and kind and saves them on the assignment. Until it has (or if AI is
- * unavailable), RISE makes its own guess from the title and points.
+ * time and kind, based on what the assignment asks for, and saves them on
+ * the assignment. Until it has (or if AI is unavailable), RISE makes its own
+ * guess from the title and instructions.
+ *
+ * Points aren't used: classes grade on very different scales.
  */
 
 // Keep in sync with supabase/functions/estimate-assignments/estimateRequest.ts
@@ -54,45 +57,36 @@ const GUESS_MINUTES: Record<AssignmentKind, number> = {
   other: 60,
 };
 
-export function guessAssignmentKind(title: string): AssignmentKind {
-  const match = KIND_KEYWORDS.find(([, pattern]) => pattern.test(title));
-  return match ? match[0] : 'other';
+function findKind(text: string): AssignmentKind | null {
+  const match = KIND_KEYWORDS.find(([, pattern]) => pattern.test(text));
+  return match ? match[0] : null;
 }
 
-/** Big assignments take longer than small ones of the same kind. */
-export function guessAssignmentMinutes(
-  kind: AssignmentKind,
-  pointsPossible: number | null,
-): number {
-  let minutes = GUESS_MINUTES[kind];
-
-  if (pointsPossible !== null && pointsPossible >= 100) {
-    minutes *= 1.5;
-  } else if (pointsPossible !== null && pointsPossible <= 10) {
-    minutes *= 0.5;
-  }
-
-  // Round to 5 minutes so guesses don't look falsely precise.
-  return Math.max(5, Math.round(minutes / 5) * 5);
+/**
+ * What the assignment is, from its title, or from its instructions when the
+ * title doesn't say (e.g. "Week 6" with "Write a 3-page essay...").
+ */
+export function guessAssignmentKind(
+  title: string,
+  description: string | null = null,
+): AssignmentKind {
+  return findKind(title) ?? (description ? findKind(description) : null) ?? 'other';
 }
 
 export function getAssignmentEstimate(assignment: {
   title: string;
-  pointsPossible: number | null;
+  description: string | null;
   estimatedMinutes: number | null;
   kind: AssignmentKind | null;
 }): AssignmentEstimate {
-  const kind = assignment.kind ?? guessAssignmentKind(assignment.title);
+  const kind =
+    assignment.kind ?? guessAssignmentKind(assignment.title, assignment.description);
 
   if (assignment.estimatedMinutes !== null) {
     return { minutes: assignment.estimatedMinutes, kind, isGuess: false };
   }
 
-  return {
-    minutes: guessAssignmentMinutes(kind, assignment.pointsPossible),
-    kind,
-    isGuess: true,
-  };
+  return { minutes: GUESS_MINUTES[kind], kind, isGuess: true };
 }
 
 /** "45m", "2h", or "1h 20m". */
