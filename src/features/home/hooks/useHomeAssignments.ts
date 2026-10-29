@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { supabase } from '../../../lib/supabase';
@@ -7,19 +7,20 @@ import {
   requestAssignmentEstimates,
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
-import type { WeeklyForecastStatus } from '../components/WeeklyForecastCard';
-import { buildWeeklyForecast } from '../utils/weeklyForecast';
+
+export type HomeAssignmentsStatus = 'loading' | 'ready' | 'error' | 'signedOut';
 
 /**
- * Loads the student's assignments for the Weekly Forecast card, then asks for
- * time estimates on any that don't have one and reloads with them. RISE's own
- * guesses show until the estimates arrive, or if they can't be made.
+ * Loads the student's assignments for Home's Weekly Forecast and High
+ * Priority Tasks, then asks for time estimates on any that don't have one
+ * and reloads with them. RISE's own guesses show until the estimates
+ * arrive, or if they can't be made.
  *
- * `signedOut` hides the card, e.g. when skipping login in development.
+ * `signedOut` hides those sections, e.g. when skipping login in development.
  */
-export function useWeeklyForecast(now: Date) {
+export function useHomeAssignments() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [status, setStatus] = useState<WeeklyForecastStatus | 'signedOut'>('loading');
+  const [status, setStatus] = useState<HomeAssignmentsStatus>('loading');
 
   // Reload whenever the student comes back to Home.
   useFocusEffect(
@@ -76,10 +77,5 @@ export function useWeeklyForecast(now: Date) {
     }, []),
   );
 
-  const forecast = useMemo(
-    () => (status === 'ready' ? buildWeeklyForecast(assignments, now) : null),
-    [assignments, now, status],
-  );
-
-  return { status, forecast };
+  return { status, assignments };
 }

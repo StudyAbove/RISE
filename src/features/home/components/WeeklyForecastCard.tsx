@@ -11,10 +11,8 @@ import {
 } from '../utils/weeklyForecast';
 import { styles } from './WeeklyForecastCard.styles';
 
-export type WeeklyForecastStatus = 'loading' | 'ready' | 'error';
-
 interface WeeklyForecastCardProps {
-  status: WeeklyForecastStatus;
+  status: 'loading' | 'ready' | 'error';
   forecast: WeeklyForecast | null;
   now: Date;
 }

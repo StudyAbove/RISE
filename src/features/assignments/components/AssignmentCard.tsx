@@ -6,7 +6,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 import { colors, statusColors } from '../../../theme/colors';
-import { textStyles } from '../../../theme/typography';
+import { fonts, textStyles } from '../../../theme/typography';
 
 // Draw the small calendar icon next to each due date.
 function CalendarIcon({ color }: { color: string }) {
@@ -38,14 +38,24 @@ function CalendarIcon({ color }: { color: string }) {
 }
 
 // Build one card using a real assignment from Supabase.
-// Study Plan and List reuse this same component.
+// Study Plan, List, and Home reuse this same component.
+//
+// The Home variant (High Priority Tasks, #58) shows the class instead of the
+// description and has no progress bar, per the Figma Home Page. `getAhead`
+// marks big work suggested early, so it looks different from work due soon.
 export function AssignmentCard({
   assignment,
   today,
+  variant = 'list',
+  getAhead = false,
 }: {
   assignment: Assignment;
   today: Date;
+  variant?: 'list' | 'home';
+  getAhead?: boolean;
 }) {
+  const isHome = variant === 'home';
+
   const navigation = useNavigation();
 
   // This is assignment completion, not microtask progress.
@@ -58,6 +68,7 @@ export function AssignmentCard({
     today,
   );
 
+  // Red when due within 24 hours, even on a get-ahead card.
   const dueColor = needsAttention
     ? statusColors.urgentRed
     : colors.deepOlive;
@@ -85,7 +96,11 @@ export function AssignmentCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${assignment.title}. Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`}
+      accessibilityLabel={
+        isHome
+          ? `${assignment.title}. Course: ${courseLabel}. ${getAhead ? 'Get ahead. ' : ''}${dueLabel}.`
+          : `${assignment.title}. Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`
+      }
       accessibilityHint="Opens assignment details"
       onPress={() =>
         navigation.navigate('AssignmentDetails', {
@@ -94,6 +109,7 @@ export function AssignmentCard({
       }
       style={({ pressed }) => [
         styles.card,
+        isHome && styles.homeCard,
         pressed && styles.pressed,
       ]}
     >
@@ -107,7 +123,7 @@ export function AssignmentCard({
       />
 
       <View style={styles.cardContent}>
-        <Text style={styles.assignmentTitle}>
+        <Text style={styles.assignmentTitle} numberOfLines={isHome ? 1 : undefined}>
           {assignment.title}
         </Text>
 
@@ -117,32 +133,35 @@ export function AssignmentCard({
           numberOfLines={1}
           ellipsizeMode="tail"
         >
-          {description}
+          {isHome ? courseLabel : description}
         </Text>
 
         <View style={styles.dueRow}>
           <CalendarIcon color={dueColor} />
 
           <Text style={[styles.dueDate, { color: dueColor }]}>
+            {getAhead && <Text style={styles.getAheadLabel}>Get ahead · </Text>}
             {dueLabel}
           </Text>
         </View>
 
         {/* Until microtasks are available, completion is 0% or 100%. */}
-        <View style={styles.progressRow}>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${completionPercent}%` },
-              ]}
-            />
-          </View>
+        {!isHome && (
+          <View style={styles.progressRow}>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${completionPercent}%` },
+                ]}
+              />
+            </View>
 
-          <Text style={styles.progressText}>
-            {completionPercent}%
-          </Text>
-        </View>
+            <Text style={styles.progressText}>
+              {completionPercent}%
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Decorative icon. Pressing anywhere on the card opens details. */}
@@ -173,6 +192,12 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     paddingVertical: 8,
     paddingHorizontal: 14,
+  },
+  // Figma Home Page task cards: thicker border, a little shorter.
+  homeCard: {
+    minHeight: 74,
+    borderWidth: 2,
+    borderRadius: 14,
   },
   courseDot: {
     width: 11,
@@ -206,6 +231,10 @@ const styles = StyleSheet.create({
   dueDate: {
     ...textStyles.tinyLabel,
     flexShrink: 1,
+  },
+  getAheadLabel: {
+    fontFamily: fonts.body.bold,
+    color: colors.eucalyptus,
   },
   progressRow: {
     flexDirection: 'row',
