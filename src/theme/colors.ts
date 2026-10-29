@@ -40,3 +40,11 @@ export const onboardingColors = {
   iconCircle: '#D2DFCE', // Circles behind feature icons and check marks
   iconGreen: '#537257', // Row icons and the "done" circle on "You're all set"
 } as const;
+
+/**
+ * Colors from the Home Figma screen that aren't part of the final palette.
+ * Confirm with the designer before using them outside Home.
+ */
+export const homeColors = {
+  helpGold: '#F0B626', // "Help" on the Weekly Forecast card
+} as const;

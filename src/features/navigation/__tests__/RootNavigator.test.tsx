@@ -113,6 +113,21 @@ jest.mock(
   }),
 );
 
+// Home's forecast loads assignments on its own; these tests only cover
+// navigation and auth, so leave it out.
+jest.mock(
+  '../../home/hooks/useWeeklyForecast',
+  () => ({
+    useWeeklyForecast:
+      () => ({
+        status:
+          'signedOut',
+        forecast:
+          null,
+      }),
+  }),
+);
+
 jest.mock(
   '../../calendar/services/calendarService',
   () => ({

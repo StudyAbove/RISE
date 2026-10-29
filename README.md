@@ -135,6 +135,16 @@ After changing extension files, click the reload icon on the extension's card in
 
 The extension talks to the `canvas-extension` Supabase Edge Function. After changing it, deploy it with `npx supabase functions deploy canvas-extension`.
 
+### Assignment Time Estimates
+
+Home's Weekly Forecast shows how long each assignment will take. The `estimate-assignments` Edge Function asks Claude (Haiku) for each assignment's time and saves it on the assignment, so Home, List, and Study all use the same number. Until an estimate is saved, or if the function isn't set up, the app shows its own guess from the title and points.
+
+To set it up (once per Supabase project):
+
+1. Create an API key at [platform.claude.com](https://platform.claude.com).
+2. Save it as a Supabase secret (never in `.env` or git): `npx supabase secrets set ANTHROPIC_API_KEY=<your key>`
+3. Deploy the function: `npx supabase functions deploy estimate-assignments`
+
 
 ## Available Scripts
 

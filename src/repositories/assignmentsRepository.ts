@@ -166,3 +166,30 @@ export async function fetchAssignmentById(
     kind: row.kind,
   };
 }
+// Each call estimates up to 25 assignments; stop after this many calls.
+const MAX_ESTIMATE_ROUNDS = 4;
+
+/**
+ * Ask the estimate-assignments Edge Function to estimate how long the
+ * student's unfinished assignments will take. Returns how many it saved.
+ * Reload assignments afterward to see the new times.
+ */
+export async function requestAssignmentEstimates(): Promise<number> {
+  let estimated = 0;
+
+  for (let round = 0; round < MAX_ESTIMATE_ROUNDS; round++) {
+    const { data, error } = await supabase.functions.invoke('estimate-assignments', {
+      method: 'POST',
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    estimated += Number(data?.estimated ?? 0);
+
+    if (!data?.remaining) break;
+  }
+
+  return estimated;
+}
