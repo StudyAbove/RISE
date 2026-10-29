@@ -4,6 +4,7 @@ import {
   getAssignmentEstimate,
   type AssignmentKind,
 } from '../../assignments/utils/assignmentEstimate';
+import { getStartBy } from '../../assignments/utils/startBy';
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 
 /**
@@ -42,10 +43,6 @@ const MAX_RECOMMENDED = 3;
 // Week levels, in hours of work due in the next 7 days.
 const MEDIUM_WEEK_MINUTES = 5 * 60;
 const HEAVY_WEEK_MINUTES = 10 * 60;
-
-// About how much a student gets done on one assignment in a day. Used to
-// tell how many days ahead bigger work needs to start.
-const DAILY_WORK_MINUTES = 2 * 60;
 
 const LEVEL_TITLES: Record<ForecastLevel, string> = {
   clear: 'Your week looks clear',
@@ -101,16 +98,14 @@ export function getForecastLevel(items: ForecastItem[]): ForecastLevel {
   return 'light';
 }
 
-/** The last time to start an assignment and still spread it over enough days. */
-function latestStart(item: ForecastItem): number {
-  const daysOfWork = Math.ceil(item.minutes / DAILY_WORK_MINUTES);
-  return addDays(item.dueAt, -daysOfWork).getTime();
+function startBy(item: ForecastItem): number {
+  return getStartBy(item.dueAt, item.minutes).getTime();
 }
 
 /** What to start first: whatever must be started soonest, then bigger work. */
 export function rankForecastItems(items: ForecastItem[]): ForecastItem[] {
   return [...items].sort(
-    (a, b) => latestStart(a) - latestStart(b) || b.minutes - a.minutes,
+    (a, b) => startBy(a) - startBy(b) || b.minutes - a.minutes,
   );
 }
 
