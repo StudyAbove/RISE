@@ -1,4 +1,8 @@
 import type { AssignmentKind } from '../features/assignments/utils/assignmentEstimate';
+import {
+  removeCourseCodeSection,
+  removeCourseSection,
+} from '../features/canvas/utils/courseNames';
 import { supabase } from '../lib/supabase';
 import { getCourseColor } from '../theme/courseColors';
 
@@ -103,8 +107,9 @@ export async function fetchAssignments(): Promise<Assignment[]> {
             : null,
         completed: row.completed,
         source: row.source,
-        courseName: row.courses?.name ?? null,
-        courseCode: row.courses?.code ?? null,
+        // Without the section, e.g. "SEC 01".
+        courseName: row.courses?.name ? removeCourseSection(row.courses.name) : null,
+        courseCode: row.courses?.code ? removeCourseCodeSection(row.courses.code) : null,
         courseColor: color,
         courseTint: tint,
         pointsPossible: row.points_possible,
@@ -156,8 +161,9 @@ export async function fetchAssignmentById(
         : null,
     completed: row.completed,
     source: row.source,
-    courseName: row.courses?.name ?? null,
-    courseCode: row.courses?.code ?? null,
+    // Without the section, e.g. "SEC 01".
+    courseName: row.courses?.name ? removeCourseSection(row.courses.name) : null,
+    courseCode: row.courses?.code ? removeCourseCodeSection(row.courses.code) : null,
     courseColor: color,
     courseTint: tint,
     pointsPossible: row.points_possible,

@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import type { CourseColorKey } from '../theme/courseColors';
+import {
+  removeCourseCodeSection,
+  removeCourseSection,
+} from '../features/canvas/utils/courseNames';
 
 export type ExtensionPairingCode = {
   code: string;
@@ -79,8 +83,9 @@ export async function fetchCanvasCourses(): Promise<CanvasCourse[]> {
 
   return (data ?? []).map((course) => ({
     id: course.id,
-    name: course.name,
-    code: course.code,
+    // Without the section, e.g. "SEC 01".
+    name: removeCourseSection(course.name),
+    code: course.code ? removeCourseCodeSection(course.code) : null,
     color: (course.color ?? 'sage') as CourseColorKey,
     syncEnabled: course.sync_enabled,
   }));

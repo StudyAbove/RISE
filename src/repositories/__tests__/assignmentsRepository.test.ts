@@ -113,6 +113,20 @@ describe('fetchAssignments', () => {
     });
   });
 
+  it('leaves the section out of class names and codes', async () => {
+    const row = assignmentRow();
+    row.courses.name = 'BIOL 201 SEC 01: Cell Biology';
+    row.courses.code = 'BIOL 201-01';
+    mockRows.mockReturnValue([row]);
+
+    const [assignment] = await fetchAssignments();
+
+    expect(assignment).toMatchObject({
+      courseName: 'BIOL 201: Cell Biology',
+      courseCode: 'BIOL 201',
+    });
+  });
+
   it('includes the saved time estimate, or null before one is made', async () => {
     mockRows.mockReturnValue([
       assignmentRow('a1'),
