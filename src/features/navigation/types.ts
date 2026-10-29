@@ -21,6 +21,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
   AssignmentDetails: { assignmentId: string };
+  TakeABreak: undefined;
 };
 
 // Lets useNavigation() know the app's routes without passing a type each time.
