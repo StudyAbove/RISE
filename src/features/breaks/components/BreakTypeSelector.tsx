@@ -13,6 +13,10 @@ import {
   fonts,
 } from '../../../theme/typography';
 
+import {
+  BREAK_CONTENT_WIDTH,
+} from '../constants';
+
 import type {
   BreakType,
 } from '../types';
@@ -25,7 +29,6 @@ type BreakTypeSelectorProps = {
   ) => void;
 };
 
-const SELECTOR_WIDTH = 337;
 const SELECTOR_BORDER_WIDTH = 2;
 const SELECTOR_HORIZONTAL_PADDING = 3;
 const SELECTED_OPTION_WIDTH = 176;
@@ -36,7 +39,7 @@ export function BreakTypeSelector({
   onSelect,
 }: BreakTypeSelectorProps) {
   const innerWidth =
-    SELECTOR_WIDTH -
+    BREAK_CONTENT_WIDTH -
     SELECTOR_BORDER_WIDTH * 2 -
     SELECTOR_HORIZONTAL_PADDING * 2;
 
@@ -130,7 +133,7 @@ const styles =
   StyleSheet.create({
     container: {
       width:
-        SELECTOR_WIDTH,
+        BREAK_CONTENT_WIDTH,
       height: 39,
       flexDirection: 'row',
       alignItems: 'center',
