@@ -669,7 +669,6 @@ export function RootNavigator({
                 MainTabNavigator
               }
             />
-
             <Stack.Screen
               name="Settings"
               component={
@@ -680,12 +679,13 @@ export function RootNavigator({
               name="AssignmentDetails"
               component={AssignmentDetailsScreen}
             />
-
-
+            <Stack.Screen
+              name="FocusSession"
+              component={FocusSessionScreen}
+            />
             <Stack.Screen
 
               name="TakeABreak"
-
               component={TakeABreakScreen}
 
             />
