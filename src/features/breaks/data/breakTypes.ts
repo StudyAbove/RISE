@@ -11,10 +11,6 @@ import type {
  *
  * The Take a Break screen always receives three recommended
  * options, but this catalog can grow beyond three items later.
- *
- * A future recommendation strategy can choose any three entries
- * based on randomness, break history, mood, study duration,
- * analytics, or another rule without changing the screen layout.
  */
 export const BREAK_CATALOG: BreakType[] = [
   {
@@ -23,12 +19,12 @@ export const BREAK_CATALOG: BreakType[] = [
     icon: StretchIcon,
     iconWidth: 20,
     iconHeight: 22,
-    image: null,
+    image: require('../../../../assets/images/breaks/stretch.png'),
     title: 'Stretching - Helps',
     bestFor:
-      'Choose this when your body has been sitting for a while and a quick physical reset would help.',
-    durationLabel: '5–10 min',
-    durationMinutes: 10,
+      'Choose this when you have been sitting for a while and want a quick physical reset without taking a long break from studying.',
+    durationLabel: '10–15 min',
+    durationMinutes: 15,
     benefit:
       'Gentle stretching gives your body a chance to move and loosen up while giving your mind a short pause before you get back to work.',
   },
@@ -38,7 +34,7 @@ export const BREAK_CATALOG: BreakType[] = [
     icon: HydrateIcon,
     iconWidth: 13.75,
     iconHeight: 21,
-    image: null,
+    image: require('../../../../assets/images/breaks/hydrate.png'),
     title: 'Hydrating - Helps',
     bestFor:
       'Choose this when you want a very quick break between tasks without interrupting your study session for too long.',
@@ -53,7 +49,7 @@ export const BREAK_CATALOG: BreakType[] = [
     icon: WalkIcon,
     iconWidth: 18,
     iconHeight: 21.25,
-    image: null,
+    image: require('../../../../assets/images/breaks/walk.png'),
     title: 'Walking - Helps',
     bestFor:
       'Choose this when you feel restless, stuck on a problem, or need to step away from your study space for a moment.',

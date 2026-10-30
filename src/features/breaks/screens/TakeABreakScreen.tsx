@@ -4,6 +4,7 @@ import {
 } from 'react';
 
 import {
+  Image,
   StyleSheet,
   Text,
   View,
@@ -26,8 +27,20 @@ import {
 } from '../../../theme/typography';
 
 import {
+  BreakDetailsCard,
+} from '../components/BreakDetailsCard';
+
+import {
+  BREAK_CONTENT_WIDTH,
+} from '../constants';
+
+import {
   BreakTypeSelector,
 } from '../components/BreakTypeSelector';
+
+import {
+  StartSessionSlider,
+} from '../components/StartSessionSlider';
 
 import {
   getRecommendedBreaks,
@@ -90,14 +103,32 @@ export function TakeABreakScreen() {
           }
         />
 
-        {/*
-         * Issue #12 ends with selecting and visually
-         * highlighting the active break.
-         *
-         * Issue #18 will render the selected break's
-         * image, information card, and Start Session
-         * slider below this selector.
-         */}
+        {selectedBreak.image && (
+          <Image
+            source={
+              selectedBreak.image
+            }
+            accessibilityLabel={
+              `${selectedBreak.label} break illustration`
+            }
+            resizeMode="cover"
+            style={styles.breakImage}
+          />
+        )}
+
+        <BreakDetailsCard
+          breakType={
+            selectedBreak
+          }
+        />
+
+        <View
+          style={
+            styles.sliderContainer
+          }
+        >
+          <StartSessionSlider />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -126,7 +157,7 @@ const styles =
         colors.deepOlive,
       textAlign: 'center',
       fontSize: 20,
-      lineHeight: 20,
+      lineHeight: 24,
       letterSpacing: 0.1,
     },
 
@@ -138,6 +169,21 @@ const styles =
     content: {
       alignItems: 'center',
       paddingTop: 0,
+    },
+
+    breakImage: {
+      width:
+        BREAK_CONTENT_WIDTH,
+      height:
+        BREAK_CONTENT_WIDTH,
+      marginTop: 14,
+      marginBottom: 14,
+      borderRadius: 20,
+    },
+
+    sliderContainer: {
+      marginTop: 14,
+      alignItems: 'center',
     },
 
   });

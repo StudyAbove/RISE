@@ -253,6 +253,143 @@ describe(
     );
 
     it(
+      'shows the selected break details and illustration',
+      async () => {
+        const {
+          getByLabelText,
+          getByText,
+          getByRole,
+        } = await render(
+          <TakeABreakScreen />,
+        );
+
+        expect(
+          getByLabelText(
+            'Stretch break illustration',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          getByText(
+            'Stretching - Helps',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          getByLabelText(
+            'Time: 10–15 min',
+          ),
+        ).toBeOnTheScreen();
+
+        expect(
+          getByLabelText(
+            'Start break session',
+          ),
+        ).toBeOnTheScreen();
+      },
+    );
+
+    it(
+      'updates the break details when Hydrate is selected',
+      async () => {
+        const {
+          getByLabelText,
+          getByRole,
+          getByText,
+          queryByText,
+        } = await render(
+          <TakeABreakScreen />,
+        );
+
+        fireEvent.press(
+          getByRole(
+            'tab',
+            {
+              name:
+                'Hydrate break',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            getByLabelText(
+              'Hydrate break illustration',
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            getByText(
+              'Hydrating - Helps',
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            getByLabelText(
+              'Time: 2–5 min',
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            queryByText(
+              'Stretching - Helps',
+            ),
+          ).not.toBeOnTheScreen();
+        });
+      },
+    );
+
+    it(
+      'updates the break details when Walk is selected',
+      async () => {
+        const {
+          getByLabelText,
+          getByRole,
+          getByText,
+          queryByText,
+        } = await render(
+          <TakeABreakScreen />,
+        );
+
+        fireEvent.press(
+          getByRole(
+            'tab',
+            {
+              name:
+                'Walk break',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            getByLabelText(
+              'Walk break illustration',
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            getByText(
+              'Walking - Helps',
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            getByLabelText(
+              'Time: 10–15 min',
+            ),
+          ).toBeOnTheScreen();
+
+          expect(
+            queryByText(
+              'Stretching - Helps',
+            ),
+          ).not.toBeOnTheScreen();
+        });
+      },
+    );
+
+    it(
       'goes back when the back button is pressed',
       async () => {
         const {
