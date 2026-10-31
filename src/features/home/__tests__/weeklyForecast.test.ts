@@ -171,6 +171,48 @@ describe('buildWeeklyForecast', () => {
   });
 });
 
+describe('buildWeeklyForecast with the calendar (#67)', () => {
+  const midnight = (date: number) => new Date(2026, 10, date).getTime();
+
+  it('moves work up when the days before it are booked', () => {
+    const assignments = [
+      assignment({ title: 'Lab due Wed', dueAt: new Date(2026, 10, 11, 9, 0), estimatedMinutes: 120 }),
+      assignment({ title: 'Paper due Fri', dueAt: new Date(2026, 10, 13, 9, 0), estimatedMinutes: 240 }),
+    ];
+
+    expect(
+      buildWeeklyForecast(assignments, now).recommended.map((entry) => entry.title),
+    ).toEqual(['Lab due Wed', 'Paper due Fri']);
+
+    // Wednesday and Thursday are full of events, so the paper has to start
+    // before the lab does.
+    const busyWeek = new Map([
+      [midnight(11), 10 * 60],
+      [midnight(12), 10 * 60],
+    ]);
+
+    expect(
+      buildWeeklyForecast(assignments, now, busyWeek).recommended.map((entry) => entry.title),
+    ).toEqual(['Paper due Fri', 'Lab due Wed']);
+  });
+
+  it('counts calendar events toward the busiest day', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({ dueAt: new Date(2026, 10, 10, 23, 59), estimatedMinutes: 90 }),
+        assignment({ dueAt: new Date(2026, 10, 12, 23, 59), estimatedMinutes: 30 }),
+      ],
+      now,
+      // A full Thursday outweighs the bigger assignment due Tuesday.
+      new Map([[midnight(12), 8 * 60]]),
+    );
+
+    expect(forecast.summary).toBe(
+      'You have 2 assignments due. Thursday is your busiest day.',
+    );
+  });
+});
+
 describe('formatForecastDue', () => {
   it('shows the weekday and time, or Today', () => {
     expect(formatForecastDue(new Date(2026, 10, 13, 23, 59), now)).toBe('Fri 11:59 PM');

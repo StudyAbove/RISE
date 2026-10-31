@@ -1,8 +1,9 @@
 import { addDays, endOfDay, startOfDay } from 'date-fns';
 
 import { getAssignmentEstimate } from '../../assignments/utils/assignmentEstimate';
-import { getStartBy } from '../../assignments/utils/startBy';
+import { getStartBy, type StudyMinutesOn } from '../../assignments/utils/startBy';
 import type { Assignment } from '../../../repositories/assignmentsRepository';
+import { getStudyMinutesOn } from './dailyStudyTime';
 
 /**
  * High Priority Tasks on Home (#58): what's due soon, then big work that
@@ -44,8 +45,12 @@ function isUpcomingBigWork(assignment: Assignment, dueAt: Date, now: Date) {
   return minutes >= BIG_WORK_MINUTES || kind === 'exam';
 }
 
-function startByTime(assignment: Assignment & { dueAt: Date }) {
-  return getStartBy(assignment.dueAt, getAssignmentEstimate(assignment).minutes).getTime();
+function startByTime(
+  assignment: Assignment & { dueAt: Date },
+  studyMinutesOn: StudyMinutesOn,
+) {
+  const { minutes } = getAssignmentEstimate(assignment);
+  return getStartBy(assignment.dueAt, minutes, studyMinutesOn).getTime();
 }
 
 /**
@@ -55,13 +60,21 @@ function startByTime(assignment: Assignment & { dueAt: Date }) {
  * - if there are still fewer than 3 tasks, the next big work after that,
  *   even if it doesn't need starting yet.
  *
+ * Busy days on the calendar (`eventMinutesByDay`, see getEventMinutesByDay)
+ * give less study time, so big work due after them is suggested sooner.
+ *
  * Until microtasks exist (#42), a get-ahead suggestion is the whole
  * assignment. Once they do, show the assignment's next microtask instead.
  */
 export function getHighPriorityTasks(
   assignments: Assignment[],
   now: Date,
+  eventMinutesByDay: Map<number, number> = new Map(),
 ): HighPriorityTask[] {
+  const studyMinutesOn = getStudyMinutesOn(eventMinutesByDay);
+  const startBy = (assignment: Assignment & { dueAt: Date }) =>
+    startByTime(assignment, studyMinutesOn);
+
   const dueSoon: (Assignment & { dueAt: Date })[] = [];
   const bigWork: (Assignment & { dueAt: Date })[] = [];
 
@@ -78,12 +91,12 @@ export function getHighPriorityTasks(
   }
 
   dueSoon.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
-  bigWork.sort((a, b) => startByTime(a) - startByTime(b));
+  bigWork.sort((a, b) => startBy(a) - startBy(b));
 
   const headsUpEnd = endOfDay(addDays(now, HEADS_UP_DAYS)).getTime();
   const getAhead = bigWork.filter(
     (assignment, index) =>
-      startByTime(assignment) <= headsUpEnd ||
+      startBy(assignment) <= headsUpEnd ||
       dueSoon.length + index < MAX_HIGH_PRIORITY_TASKS,
   );
 

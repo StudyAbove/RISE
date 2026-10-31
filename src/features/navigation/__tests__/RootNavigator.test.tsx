@@ -116,14 +116,16 @@ jest.mock(
 // Home loads assignments on its own; these tests only cover navigation and
 // auth, so leave them out.
 jest.mock(
-  '../../home/hooks/useHomeAssignments',
+  '../../home/hooks/useHomeData',
   () => ({
-    useHomeAssignments:
+    useHomeData:
       () => ({
         status:
           'signedOut',
         assignments:
           [],
+        eventMinutesByDay:
+          new Map(),
       }),
   }),
 );

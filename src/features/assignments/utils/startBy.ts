@@ -6,11 +6,33 @@ import { addDays } from 'date-fns';
  * rank work the same way.
  */
 
-// About how much a student gets done on one assignment in a day.
+// About how much a student gets done on one assignment in a normal day.
 export const DAILY_WORK_MINUTES = 2 * 60;
 
-/** The latest time to start: one day back from the due date per 2 hours of work. */
-export function getStartBy(dueAt: Date, minutes: number): Date {
-  const daysOfWork = Math.ceil(minutes / DAILY_WORK_MINUTES);
-  return addDays(dueAt, -daysOfWork);
+/** How much study time a day has; less on days full of events (#67). */
+export type StudyMinutesOn = (day: Date) => number;
+
+const EVERY_DAY_THE_SAME: StudyMinutesOn = () => DAILY_WORK_MINUTES;
+
+// Stop looking back after this many days, e.g. if every day is fully booked.
+const MAX_DAYS_BACK = 60;
+
+/**
+ * The latest time to start: walks back a day at a time from the due date,
+ * using up each day's study time, until the work fits.
+ */
+export function getStartBy(
+  dueAt: Date,
+  minutes: number,
+  studyMinutesOn: StudyMinutesOn = EVERY_DAY_THE_SAME,
+): Date {
+  let remaining = minutes;
+  let daysBack = 0;
+
+  while (remaining > 0 && daysBack < MAX_DAYS_BACK) {
+    daysBack += 1;
+    remaining -= studyMinutesOn(addDays(dueAt, -daysBack));
+  }
+
+  return addDays(dueAt, -daysBack);
 }

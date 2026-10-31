@@ -4,7 +4,8 @@ import {
   getAssignmentEstimate,
   type AssignmentKind,
 } from '../../assignments/utils/assignmentEstimate';
-import { getStartBy } from '../../assignments/utils/startBy';
+import { getStartBy, type StudyMinutesOn } from '../../assignments/utils/startBy';
+import { getStudyMinutesOn } from './dailyStudyTime';
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 
 /**
@@ -98,12 +99,18 @@ export function getForecastLevel(items: ForecastItem[]): ForecastLevel {
   return 'light';
 }
 
-function startBy(item: ForecastItem): number {
-  return getStartBy(item.dueAt, item.minutes).getTime();
-}
+/**
+ * What to start first: whatever must be started soonest, then bigger work.
+ * Busy days on the calendar give less study time, so work due after them
+ * needs to start earlier.
+ */
+export function rankForecastItems(
+  items: ForecastItem[],
+  studyMinutesOn?: StudyMinutesOn,
+): ForecastItem[] {
+  const startBy = (item: ForecastItem) =>
+    getStartBy(item.dueAt, item.minutes, studyMinutesOn).getTime();
 
-/** What to start first: whatever must be started soonest, then bigger work. */
-export function rankForecastItems(items: ForecastItem[]): ForecastItem[] {
   return [...items].sort(
     (a, b) => startBy(a) - startBy(b) || b.minutes - a.minutes,
   );
@@ -120,13 +127,28 @@ function dayName(date: Date, now: Date) {
   return format(date, 'EEEE');
 }
 
-/** The day with the most work due, when the work is spread over several days. */
-function getBusiestDay(items: ForecastItem[]): Date | null {
+/**
+ * The busiest day in the next 7 days, counting both work due and time in
+ * calendar events, when the load is spread over several days.
+ */
+function getBusiestDay(
+  items: ForecastItem[],
+  eventMinutesByDay: Map<number, number>,
+  now: Date,
+): Date | null {
   const minutesByDay = new Map<number, number>();
+  const add = (day: number, minutes: number) =>
+    minutesByDay.set(day, (minutesByDay.get(day) ?? 0) + minutes);
 
   for (const item of items) {
-    const day = startOfDay(item.dueAt).getTime();
-    minutesByDay.set(day, (minutesByDay.get(day) ?? 0) + item.minutes);
+    add(startOfDay(item.dueAt).getTime(), item.minutes);
+  }
+
+  const firstDay = startOfDay(now).getTime();
+  const lastDay = startOfDay(addDays(now, FORECAST_DAYS)).getTime();
+
+  for (const [day, minutes] of eventMinutesByDay) {
+    if (day >= firstDay && day <= lastDay && minutes > 0) add(day, minutes);
   }
 
   if (minutesByDay.size < 2) return null;
@@ -138,7 +160,11 @@ function getBusiestDay(items: ForecastItem[]): Date | null {
   return new Date(busiestDay);
 }
 
-function getSummary(items: ForecastItem[], now: Date) {
+function getSummary(
+  items: ForecastItem[],
+  eventMinutesByDay: Map<number, number>,
+  now: Date,
+) {
   if (items.length === 0) {
     return 'Nothing is due in the next 7 days. Enjoy the breathing room!';
   }
@@ -153,7 +179,7 @@ function getSummary(items: ForecastItem[], now: Date) {
     .filter(Boolean)
     .join(' and ');
 
-  const busiestDay = getBusiestDay(items);
+  const busiestDay = getBusiestDay(items, eventMinutesByDay, now);
   const callout = busiestDay
     ? `${dayName(busiestDay, now)} is your busiest day.`
     : 'Let’s get ahead!';
@@ -161,18 +187,24 @@ function getSummary(items: ForecastItem[], now: Date) {
   return `You have ${counts}. ${callout}`;
 }
 
+/**
+ * `eventMinutesByDay` is how much of each day the student's calendar takes
+ * up (see getEventMinutesByDay), so the plan follows their schedule.
+ */
 export function buildWeeklyForecast(
   assignments: Assignment[],
   now: Date,
+  eventMinutesByDay: Map<number, number> = new Map(),
 ): WeeklyForecast {
   const items = getWeekItems(assignments, now);
   const level = getForecastLevel(items);
+  const studyMinutesOn = getStudyMinutesOn(eventMinutesByDay);
 
   return {
     level,
     title: LEVEL_TITLES[level],
-    summary: getSummary(items, now),
-    recommended: rankForecastItems(items).slice(0, MAX_RECOMMENDED),
+    summary: getSummary(items, eventMinutesByDay, now),
+    recommended: rankForecastItems(items, studyMinutesOn).slice(0, MAX_RECOMMENDED),
     totalMinutes: items.reduce((sum, item) => sum + item.minutes, 0),
   };
 }

@@ -7,7 +7,7 @@ import { HighPriorityTasks } from '../components/HighPriorityTasks';
 import { HomeHeader } from '../components/HomeHeader';
 import { HomeSkyBackdrop } from '../components/HomeSkyBackdrop';
 import { WeeklyForecastCard } from '../components/WeeklyForecastCard';
-import { useHomeAssignments } from '../hooks/useHomeAssignments';
+import { useHomeData } from '../hooks/useHomeData';
 import { useStudentFirstName } from '../hooks/useStudentFirstName';
 import { getTimeOfDay } from '../utils/greeting';
 import { getHighPriorityTasks } from '../utils/highPriorityTasks';
@@ -22,15 +22,16 @@ export function HomeScreen() {
   const greetingRef = useRef<Text>(null);
   const date = useCurrentDate();
   const firstName = useStudentFirstName();
-  const { status, assignments } = useHomeAssignments();
+  const { status, assignments, eventMinutesByDay } = useHomeData();
 
   const forecast = useMemo(
-    () => (status === 'ready' ? buildWeeklyForecast(assignments, date) : null),
-    [assignments, date, status],
+    () =>
+      status === 'ready' ? buildWeeklyForecast(assignments, date, eventMinutesByDay) : null,
+    [assignments, date, eventMinutesByDay, status],
   );
   const highPriorityTasks = useMemo(
-    () => getHighPriorityTasks(assignments, date),
-    [assignments, date],
+    () => getHighPriorityTasks(assignments, date, eventMinutesByDay),
+    [assignments, date, eventMinutesByDay],
   );
   // Where the header (and so the date line) ends, so the sky can line up with it.
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
