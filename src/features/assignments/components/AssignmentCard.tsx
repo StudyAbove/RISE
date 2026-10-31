@@ -2,7 +2,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { format, isSameYear } from 'date-fns';
 import { isAssignmentUrgent } from '../utils/isAssignmentUrgent';
+import { getPriorityLevel } from '../utils/assignmentPriority';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { PRIORITY_LABELS, PriorityPill } from './PriorityPill';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 import { colors, statusColors } from '../../../theme/colors';
@@ -68,6 +70,12 @@ export function AssignmentCard({
     today,
   );
 
+  // List and Study show how urgent unfinished work is (#86).
+  const priority =
+    isHome || assignment.completed
+      ? null
+      : getPriorityLevel(assignment, today);
+
   // Red when due within 24 hours, even on a get-ahead card.
   const dueColor = needsAttention
     ? statusColors.urgentRed
@@ -99,7 +107,7 @@ export function AssignmentCard({
       accessibilityLabel={
         isHome
           ? `${assignment.title}. Course: ${courseLabel}. ${getAhead ? 'Get ahead. ' : ''}${dueLabel}.`
-          : `${assignment.title}. Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`
+          : `${assignment.title}. ${priority ? `${PRIORITY_LABELS[priority]}. ` : ''}Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`
       }
       accessibilityHint="Opens assignment details"
       onPress={() =>
@@ -123,9 +131,16 @@ export function AssignmentCard({
       />
 
       <View style={styles.cardContent}>
-        <Text style={styles.assignmentTitle} numberOfLines={isHome ? 1 : undefined}>
-          {assignment.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text
+            style={styles.assignmentTitle}
+            numberOfLines={isHome ? 1 : undefined}
+          >
+            {assignment.title}
+          </Text>
+
+          {priority && <PriorityPill level={priority} size="small" />}
+        </View>
 
         {/* Shorten only what is visible, without rewriting the instructions. */}
         <Text
@@ -213,9 +228,15 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   assignmentTitle: {
     ...textStyles.cardTitle,
     color: colors.deepOlive,
+    flex: 1,
   },
   description: {
     ...textStyles.caption,
