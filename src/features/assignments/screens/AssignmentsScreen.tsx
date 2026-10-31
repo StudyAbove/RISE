@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -22,6 +22,10 @@ import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
 import { getTimeOfDay } from '../../home/utils/greeting';
 import { SettingsButton } from '../../settings/components/SettingsButton';
 import { AssignmentCard } from '../components/AssignmentCard';
+import {
+  isPastAssignment,
+  sortByPriority,
+} from '../utils/assignmentPriority';
 
 type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
 
@@ -36,6 +40,24 @@ export function AssignmentsScreen() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
+  const [showPast, setShowPast] = useState(false);
+
+  // Most urgent first (#86). Completed work, and work overdue for over a
+  // week, stays hidden unless the student asks to see it.
+  const { visibleAssignments, pastCount } = useMemo(() => {
+    const current = sortByPriority(
+      assignments.filter((assignment) => !isPastAssignment(assignment, date)),
+    );
+    // Shown below current work, most recent first.
+    const past = sortByPriority(
+      assignments.filter((assignment) => isPastAssignment(assignment, date)),
+    ).reverse();
+
+    return {
+      visibleAssignments: showPast ? [...current, ...past] : current,
+      pastCount: past.length,
+    };
+  }, [assignments, date, showPast]);
 
   // Reload when the student opens this tab or requests a refresh.
   useFocusEffect(
@@ -178,15 +200,43 @@ export function AssignmentsScreen() {
           </View>
         )}
 
-        {/* No due-soon cutoff: display every assignment returned. */}
         {status === 'ready' &&
-          assignments.map((assignment) => (
+          assignments.length > 0 &&
+          visibleAssignments.length === 0 && (
+            <View style={styles.statusCard}>
+              <Text style={styles.statusText}>You’re all caught up!</Text>
+              <Text style={styles.statusNote}>
+                Completed and past assignments are hidden.
+              </Text>
+            </View>
+          )}
+
+        {status === 'ready' &&
+          visibleAssignments.map((assignment) => (
             <AssignmentCard
               key={assignment.id}
               assignment={assignment}
               today={date}
             />
           ))}
+
+        {status === 'ready' && pastCount > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showPast }}
+            onPress={() => setShowPast((shown) => !shown)}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.retryText}>
+              {showPast
+                ? 'Hide past assignments'
+                : `Show past assignments (${pastCount})`}
+            </Text>
+          </Pressable>
+        )}
 
         {status === 'ready' && (
           <Pressable
