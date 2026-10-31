@@ -5,6 +5,88 @@ import {
   requestCalendarPermissions,
 } from 'expo-calendar';
 
+const APPLE_RECURRING_OCCURRENCE_PREFIX =
+  'rise-apple-occurrence:';
+
+/**
+ * Provider-link identity for Apple Calendar.
+ *
+ * One-time events keep their existing raw EventKit ID.
+ * A recurring occurrence also includes EventKit's original occurrence
+ * start date so separate instances of one series do not collapse into
+ * one RISE event.
+ */
+export function getAppleCalendarExternalEventId(
+  nativeEventId: string,
+  originalStartAt?: string,
+): string {
+  if (!originalStartAt) {
+    return nativeEventId;
+  }
+
+  return `${APPLE_RECURRING_OCCURRENCE_PREFIX}${encodeURIComponent(
+    nativeEventId,
+  )}:${encodeURIComponent(originalStartAt)}`;
+}
+
+function parseAppleCalendarExternalEventId(
+  externalEventId: string,
+): {
+  nativeEventId: string;
+  instanceStartAt?: string;
+} {
+  if (
+    !externalEventId.startsWith(
+      APPLE_RECURRING_OCCURRENCE_PREFIX,
+    )
+  ) {
+    return {
+      nativeEventId:
+        externalEventId,
+    };
+  }
+
+  const encoded =
+    externalEventId.slice(
+      APPLE_RECURRING_OCCURRENCE_PREFIX.length,
+    );
+
+  const separator =
+    encoded.indexOf(':');
+
+  if (separator < 0) {
+    return {
+      nativeEventId:
+        externalEventId,
+    };
+  }
+
+  try {
+    return {
+      nativeEventId:
+        decodeURIComponent(
+          encoded.slice(
+            0,
+            separator,
+          ),
+        ),
+
+      instanceStartAt:
+        decodeURIComponent(
+          encoded.slice(
+            separator + 1,
+          ),
+        ),
+    };
+  } catch {
+    // Preserve compatibility with any existing raw EventKit IDs.
+    return {
+      nativeEventId:
+        externalEventId,
+    };
+  }
+}
+
 export type AppleCalendarAccess =
   | 'full'
   | 'write-only'
@@ -135,6 +217,14 @@ export async function updateAppleCalendarEvent(
     );
   }
 
+  const {
+    nativeEventId,
+    instanceStartAt,
+  } =
+    parseAppleCalendarExternalEventId(
+      externalEventId,
+    );
+
   const requestedStart =
     new Date(
       updates.startAt,
@@ -158,10 +248,19 @@ export async function updateAppleCalendarEvent(
 
   const appleEvent =
     await ExpoCalendarEvent.get(
-      externalEventId,
+      nativeEventId,
     );
 
-  await appleEvent.update({
+  const eventToUpdate =
+    instanceStartAt &&
+    appleEvent.recurrenceRule
+      ? appleEvent.getOccurrenceSync({
+          instanceStartDate:
+            instanceStartAt,
+        })
+      : appleEvent;
+
+  await eventToUpdate.update({
     title:
       updates.title,
 
@@ -180,10 +279,19 @@ export async function updateAppleCalendarEvent(
       '',
   });
 
-  const refreshedEvent =
+  const refreshedSeries =
     await ExpoCalendarEvent.get(
-      externalEventId,
+      nativeEventId,
     );
+
+  const refreshedEvent =
+    instanceStartAt &&
+    refreshedSeries.recurrenceRule
+      ? refreshedSeries.getOccurrenceSync({
+          instanceStartDate:
+            instanceStartAt,
+        })
+      : refreshedSeries;
 
   console.log(
     'Apple Calendar update persisted:',
@@ -337,10 +445,29 @@ export async function appleCalendarEventExists(
     );
   }
 
-  try {
-    await ExpoCalendarEvent.get(
+  const {
+    nativeEventId,
+    instanceStartAt,
+  } =
+    parseAppleCalendarExternalEventId(
       externalEventId,
     );
+
+  try {
+    const appleEvent =
+      await ExpoCalendarEvent.get(
+        nativeEventId,
+      );
+
+    if (
+      instanceStartAt &&
+      appleEvent.recurrenceRule
+    ) {
+      appleEvent.getOccurrenceSync({
+        instanceStartDate:
+          instanceStartAt,
+      });
+    }
 
     return true;
   } catch {
@@ -373,6 +500,14 @@ export async function deleteAppleCalendarEvent(
     );
   }
 
+  const {
+    nativeEventId,
+    instanceStartAt,
+  } =
+    parseAppleCalendarExternalEventId(
+      externalEventId,
+    );
+
   let appleEvent:
     ExpoCalendarEvent;
 
@@ -380,7 +515,7 @@ export async function deleteAppleCalendarEvent(
     // Throws when no event has this ID anymore.
     appleEvent =
       await ExpoCalendarEvent.get(
-        externalEventId,
+        nativeEventId,
       );
   } catch {
     return;
@@ -390,6 +525,7 @@ export async function deleteAppleCalendarEvent(
     appleEvent.recurrenceRule
       ? appleEvent.getOccurrenceSync({
           instanceStartDate:
+            instanceStartAt ??
             startAt,
         })
       : appleEvent;

@@ -223,6 +223,133 @@ describe(
     );
 
     it(
+      'updates only the linked occurrence of a recurring Apple event',
+      async () => {
+        mockGetCalendarPermissions.mockResolvedValueOnce({
+          status: 'granted',
+          accessPrivileges: 'full',
+        });
+
+        const firstOccurrenceUpdate =
+          jest.fn().mockResolvedValue(undefined);
+
+        const firstOccurrence = {
+          update:
+            firstOccurrenceUpdate,
+        };
+
+        const refreshedOccurrence = {
+          startDate:
+            '2026-11-09T19:00:00.000Z',
+          endDate:
+            '2026-11-09T20:15:00.000Z',
+          lastModifiedDate:
+            '2026-11-01T20:00:00.000Z',
+        };
+
+        const firstSeries = {
+          recurrenceRule: {
+            frequency: 'weekly',
+          },
+          getOccurrenceSync:
+            jest.fn(
+              () => firstOccurrence,
+            ),
+        };
+
+        const refreshedSeries = {
+          recurrenceRule: {
+            frequency: 'weekly',
+          },
+          getOccurrenceSync:
+            jest.fn(
+              () => refreshedOccurrence,
+            ),
+        };
+
+        mockGetAppleEvent
+          .mockReset()
+          .mockResolvedValueOnce(
+            firstSeries,
+          )
+          .mockResolvedValueOnce(
+            refreshedSeries,
+          );
+
+        const externalEventId =
+          'rise-apple-occurrence:apple-series-1:2026-11-09T18%3A00%3A00.000Z';
+
+        await expect(
+          updateAppleCalendarEvent(
+            externalEventId,
+            {
+              title:
+                'Updated CECS 378',
+              startAt:
+                '2026-11-09T19:00:00.000Z',
+              endAt:
+                '2026-11-09T20:15:00.000Z',
+              location:
+                'Room 305',
+              description:
+                'Updated occurrence only',
+            },
+          ),
+        ).resolves.toEqual({
+          updatedAt:
+            '2026-11-01T20:00:00.000Z',
+        });
+
+        expect(
+          mockGetAppleEvent,
+        ).toHaveBeenNthCalledWith(
+          1,
+          'apple-series-1',
+        );
+
+        expect(
+          firstSeries.getOccurrenceSync,
+        ).toHaveBeenCalledWith({
+          instanceStartDate:
+            '2026-11-09T18:00:00.000Z',
+        });
+
+        expect(
+          firstOccurrenceUpdate,
+        ).toHaveBeenCalledWith({
+          title:
+            'Updated CECS 378',
+          startDate:
+            new Date(
+              '2026-11-09T19:00:00.000Z',
+            ),
+          endDate:
+            new Date(
+              '2026-11-09T20:15:00.000Z',
+            ),
+          location:
+            'Room 305',
+          notes:
+            'Updated occurrence only',
+        });
+
+        expect(
+          mockGetAppleEvent,
+        ).toHaveBeenNthCalledWith(
+          2,
+          'apple-series-1',
+        );
+
+        expect(
+          refreshedSeries.getOccurrenceSync,
+        ).toHaveBeenCalledWith({
+          instanceStartDate:
+            '2026-11-09T18:00:00.000Z',
+        });
+      },
+    );
+
+    it(
       'normalizes an Apple Date lastModifiedDate',
       async () => {
         mockGetCalendarPermissions.mockResolvedValueOnce(

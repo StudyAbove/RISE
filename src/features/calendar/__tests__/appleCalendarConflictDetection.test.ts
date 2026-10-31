@@ -81,6 +81,9 @@ jest.mock(
     updateCalendarEventLinkAllDayMetadata:
       jest.fn(),
 
+    updateCalendarEventLinkExternalEventId:
+      jest.fn(),
+
     updateCalendarEventLinkWritability:
       jest.fn(),
   }),
@@ -102,6 +105,21 @@ jest.mock(
 
     getAppleCalendarAccess:
       jest.fn(),
+
+    getAppleCalendarExternalEventId:
+      jest.fn(
+        (
+          nativeEventId: string,
+          originalStartAt?: string,
+        ) =>
+          originalStartAt
+            ? `rise-apple-occurrence:${encodeURIComponent(
+                nativeEventId,
+              )}:${encodeURIComponent(
+                originalStartAt,
+              )}`
+            : nativeEventId,
+      ),
 
     updateAppleCalendarEvent:
       jest.fn(),
