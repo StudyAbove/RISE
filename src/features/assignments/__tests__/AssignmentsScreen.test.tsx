@@ -88,7 +88,7 @@ describe('AssignmentsScreen', () => {
 
     await render(<AssignmentsScreen />);
 
-    expect(await screen.findByText('Show past assignments (2)')).toBeTruthy();
+    expect(await screen.findByLabelText('Show 2 past assignments')).toBeTruthy();
     expect(titlesOnScreen()).toEqual(['Quiz 3', 'Problem Set 6', 'Essay']);
     expect(screen.getByText('Overdue')).toBeTruthy();
     expect(screen.getByText('High Priority')).toBeTruthy();
@@ -102,10 +102,10 @@ describe('AssignmentsScreen', () => {
     ]);
 
     await render(<AssignmentsScreen />);
-    await fireEvent.press(await screen.findByText('Show past assignments (2)'));
+    await fireEvent.press(await screen.findByLabelText('Show 2 past assignments'));
 
     expect(titlesOnScreen()).toEqual(['Essay', 'Finished Lab', 'Week 1 Reading']);
-    expect(screen.getByText('Hide past assignments')).toBeTruthy();
+    expect(screen.getByLabelText('Hide past assignments')).toBeTruthy();
   });
 
   it('says when everything is done', async () => {
