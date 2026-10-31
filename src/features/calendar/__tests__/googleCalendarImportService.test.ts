@@ -386,6 +386,107 @@ describe(
     );
 
     it(
+      'imports each expanded occurrence of a recurring Google event',
+      async () => {
+        mockCalendarListResponse();
+
+        mockGoogleEventsResponse([
+          {
+            id: 'series-1_20261102T180000Z',
+            recurringEventId: 'series-1',
+            status: 'confirmed',
+            summary: 'CECS 378',
+            start: {
+              dateTime: '2026-11-02T10:00:00-08:00',
+            },
+            end: {
+              dateTime: '2026-11-02T11:15:00-08:00',
+            },
+            updated: '2026-10-30T18:00:00.000Z',
+          },
+          {
+            id: 'series-1_20261109T180000Z',
+            recurringEventId: 'series-1',
+            status: 'confirmed',
+            summary: 'CECS 378',
+            start: {
+              dateTime: '2026-11-09T10:00:00-08:00',
+            },
+            end: {
+              dateTime: '2026-11-09T11:15:00-08:00',
+            },
+            updated: '2026-10-30T18:00:00.000Z',
+          },
+        ]);
+
+        mockCreateImportedCalendarEvent
+          .mockResolvedValueOnce({
+            id: 'rise-google-occurrence-1',
+            userId: 'user-1',
+            title: 'CECS 378',
+            startAt: '2026-11-02T18:00:00.000Z',
+            endAt: '2026-11-02T19:15:00.000Z',
+            source: 'google',
+          })
+          .mockResolvedValueOnce({
+            id: 'rise-google-occurrence-2',
+            userId: 'user-1',
+            title: 'CECS 378',
+            startAt: '2026-11-09T18:00:00.000Z',
+            endAt: '2026-11-09T19:15:00.000Z',
+            source: 'google',
+          });
+
+        const result =
+          await syncGoogleCalendarEvents(
+            new Date(2026, 9, 31),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).toHaveBeenCalledTimes(2);
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledTimes(2);
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            calendarEventId:
+              'rise-google-occurrence-1',
+            provider: 'google',
+            externalEventId:
+              'series-1_20261102T180000Z',
+          }),
+        );
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({
+            calendarEventId:
+              'rise-google-occurrence-2',
+            provider: 'google',
+            externalEventId:
+              'series-1_20261109T180000Z',
+          }),
+        );
+
+        expect(result).toEqual({
+          imported: 2,
+          skipped: 0,
+          failed: 0,
+          conflicts: 0,
+          total: 2,
+        });
+      },
+    );
+
+    it(
       'skips a matching linked event and records its Google baseline timestamp',
       async () => {
         mockCalendarListResponse();
