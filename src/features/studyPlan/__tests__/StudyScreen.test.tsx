@@ -114,7 +114,7 @@ describe('StudyScreen', () => {
     ]);
 
     await render(<StudyScreen />);
-    await fireEvent.press((await screen.findAllByLabelText('View all assignments'))[0]);
+    await fireEvent.press(await screen.findByLabelText('View all assignments'));
 
     expect(mockNavigate).toHaveBeenCalledWith('List');
   });

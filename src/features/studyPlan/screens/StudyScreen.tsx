@@ -214,15 +214,13 @@ export function StudyScreen() {
           </View>
         )}
 
-        {/* Overdue only appears when something is overdue. */}
+        {/* Overdue only appears when something is overdue. View all is on
+            Upcoming only, so the page has one way to open List. */}
         {status === 'ready' && sections.overdue.length > 0 && (
           <View style={styles.section}>
             <SectionHeader
               title="Overdue"
               count={sections.overdue.length}
-              linkText="View all"
-              linkLabel="View all assignments"
-              onLinkPress={openList}
             />
 
             {sections.overdue.map((assignment) => (
@@ -241,9 +239,6 @@ export function StudyScreen() {
               <SectionHeader
                 title="Due Today"
                 count={sections.dueToday.length}
-                linkText="View all"
-                linkLabel="View all assignments"
-                onLinkPress={openList}
               />
 
               {sections.dueToday.length === 0 && (
