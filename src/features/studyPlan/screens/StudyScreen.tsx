@@ -239,6 +239,7 @@ export function StudyScreen() {
               <SectionHeader
                 title="Due Today"
                 count={sections.dueToday.length}
+                colorByWorkload
               />
 
               {sections.dueToday.length === 0 && (
@@ -258,6 +259,7 @@ export function StudyScreen() {
               <SectionHeader
                 title="Upcoming"
                 count={sections.upcoming.length}
+                colorByWorkload
                 linkText="View all"
                 linkLabel="View all assignments"
                 onLinkPress={openList}
