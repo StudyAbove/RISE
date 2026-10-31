@@ -48,3 +48,19 @@ export const onboardingColors = {
 export const homeColors = {
   helpGold: '#F0B626', // "Help" on the Weekly Forecast card
 } as const;
+
+/**
+ * Priority pills on assignments (#86). High is based on the Figma "High
+ * Priority" pill (#F9E0DD / #B85F55), shifted toward orange so Overdue can be
+ * the darker red. Confirm with the designer.
+ */
+export const priorityColors = {
+  overdueText: '#8E2F28',
+  overdueBackground: '#F2D2CE',
+  highText: '#C0532E',
+  highBackground: '#FBE3D7',
+  mediumText: '#8A6A00',
+  mediumBackground: '#FFF1B8', // paleSun
+  noDueDateText: '#758078', // mutedGrayGreen
+  noDueDateBackground: '#ECEEEA',
+} as const;
