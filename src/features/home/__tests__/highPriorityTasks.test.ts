@@ -118,6 +118,26 @@ describe('getHighPriorityTasks', () => {
     ).toEqual(['Tonight (dueSoon)', 'Big project (getAhead)']);
   });
 
+  it('suggests big work sooner when the calendar is booked before it (#67)', () => {
+    // 8 hours due in 8 days: with normal days it can wait until Friday...
+    const paper = assignment({ title: 'Paper', dueAt: new Date(2026, 10, 17, 9, 0), estimatedMinutes: 480, kind: 'paper' });
+    const tonight = ['1', '2', '3'].map((id) =>
+      assignment({ id: `t${id}`, title: `Tonight ${id}`, dueAt: new Date(2026, 10, 9, 23, 59) }),
+    );
+
+    expect(summarize([...tonight, paper])).not.toContain('Paper (getAhead)');
+
+    // ...but Friday through Monday are fully booked, so it has to start now.
+    const midnight = (date: number) => new Date(2026, 10, date).getTime();
+    const bookedDays = new Map([13, 14, 15, 16].map((date) => [midnight(date), 11 * 60]));
+
+    expect(
+      getHighPriorityTasks([...tonight, paper], now, bookedDays).map(
+        ({ assignment: { title }, reason }) => `${title} (${reason})`,
+      ),
+    ).toContain('Paper (getAhead)');
+  });
+
   it('returns nothing when there is nothing to do', () => {
     expect(summarize([])).toEqual([]);
   });
