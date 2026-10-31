@@ -23,6 +23,7 @@ import WelcomeScreen from '../../auth/screens/WelcomeScreen';
 import { ConnectCalendarScreen } from '../../onboarding/screens/ConnectCalendarScreen';
 import { ConnectClassesScreen } from '../../onboarding/screens/ConnectClassesScreen';
 import { OnboardingCompleteScreen } from '../../onboarding/screens/OnboardingCompleteScreen';
+import { FocusSessionScreen } from '../../studySessions/screens/FocusSessionScreen';
 
 import {
   CalendarSyncSuccessModal,
@@ -668,7 +669,6 @@ export function RootNavigator({
                 MainTabNavigator
               }
             />
-
             <Stack.Screen
               name="Settings"
               component={
@@ -679,12 +679,13 @@ export function RootNavigator({
               name="AssignmentDetails"
               component={AssignmentDetailsScreen}
             />
-
-
+            <Stack.Screen
+              name="FocusSession"
+              component={FocusSessionScreen}
+            />
             <Stack.Screen
 
               name="TakeABreak"
-
               component={TakeABreakScreen}
 
             />

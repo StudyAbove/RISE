@@ -21,6 +21,10 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
   AssignmentDetails: { assignmentId: string };
+  FocusSession: {
+    assignmentId: string;
+    assignmentTitle: string;
+  };
   TakeABreak: undefined;
 };
 

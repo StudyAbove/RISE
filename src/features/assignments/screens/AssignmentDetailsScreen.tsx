@@ -210,6 +210,25 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
           <Text style={styles.description}>
             {assignment.description || 'No description provided'}
           </Text>
+          {/* Open the focus screen for this selected assignment. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Start study session for ${assignment.title}`}
+            onPress={() =>
+              navigation.navigate('FocusSession', {
+                assignmentId: assignment.id,
+                assignmentTitle: assignment.title,
+              })
+            }
+            style={({ pressed }) => [
+              styles.startButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.startButtonText}>
+              Start Study Session
+            </Text>
+          </Pressable>
         </View>
       )}
     </ScrollView>
@@ -296,6 +315,21 @@ const styles = StyleSheet.create({
   retryText: {
     ...textStyles.link,
     color: colors.deepOlive,
+  },
+  startButton: {
+    minHeight: 52,
+    backgroundColor: colors.butterYellow,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  startButtonText: {
+    ...textStyles.link,
+    color: colors.deepOlive,
+    textAlign: 'center',
   },
   pressed: {
     opacity: 0.7,
