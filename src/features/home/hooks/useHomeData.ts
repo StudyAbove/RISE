@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
+import { AppState } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { addDays, startOfDay } from 'date-fns';
 
 import { supabase } from '../../../lib/supabase';
 import {
@@ -7,22 +9,44 @@ import {
   requestAssignmentEstimates,
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
+import { getCalendarEventsInRange } from '../../../repositories/calendarEventsRepository';
+import { getEventMinutesByDay } from '../utils/dailyStudyTime';
 
-export type HomeAssignmentsStatus = 'loading' | 'ready' | 'error' | 'signedOut';
+export type HomeDataStatus = 'loading' | 'ready' | 'error' | 'signedOut';
+
+// Calendar days to read events for: covers the forecast's week and the
+// 14 days High Priority Tasks looks ahead.
+const CALENDAR_DAYS_AHEAD = 15;
+
+/** How much of each upcoming day the student's calendar takes up. */
+async function loadEventMinutesByDay(): Promise<Map<number, number>> {
+  const today = startOfDay(new Date());
+
+  try {
+    const events = await getCalendarEventsInRange(today, addDays(today, CALENDAR_DAYS_AHEAD));
+    return getEventMinutesByDay(events);
+  } catch {
+    // The plan still works from assignments alone.
+    return new Map();
+  }
+}
 
 /**
- * Loads the student's assignments for Home's Weekly Forecast and High
- * Priority Tasks, then asks for time estimates on any that don't have one
- * and reloads with them. RISE's own guesses show until the estimates
- * arrive, or if they can't be made.
+ * Loads what Home's Weekly Forecast and High Priority Tasks are built from:
+ * the student's assignments and how busy their calendar is (#67).
+ *
+ * Reloads whenever Home is opened and when the app comes back to the
+ * foreground on Home, so added, finished, or moved assignments and calendar
+ * changes show up. Then asks for time estimates on any assignment without
+ * one and reloads with them; RISE's own guesses show until they arrive.
  *
  * `signedOut` hides those sections, e.g. when skipping login in development.
  */
-export function useHomeAssignments() {
+export function useHomeData() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [status, setStatus] = useState<HomeAssignmentsStatus>('loading');
+  const [eventMinutesByDay, setEventMinutesByDay] = useState<Map<number, number>>(new Map());
+  const [status, setStatus] = useState<HomeDataStatus>('loading');
 
-  // Reload whenever the student comes back to Home.
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -39,11 +63,15 @@ export function useHomeAssignments() {
             return;
           }
 
-          const loaded = await fetchAssignments();
+          const [loaded, eventMinutes] = await Promise.all([
+            fetchAssignments(),
+            loadEventMinutesByDay(),
+          ]);
 
           if (!active) return;
 
           setAssignments(loaded);
+          setEventMinutesByDay(eventMinutes);
           setStatus('ready');
 
           const needsEstimate = loaded.some(
@@ -70,12 +98,18 @@ export function useHomeAssignments() {
 
       void load();
 
+      // Coming back to the app on Home, e.g. after syncing Canvas elsewhere.
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void load();
+      });
+
       // Ignore results that arrive after the student leaves Home.
       return () => {
         active = false;
+        subscription.remove();
       };
     }, []),
   );
 
-  return { status, assignments };
+  return { status, assignments, eventMinutesByDay };
 }
