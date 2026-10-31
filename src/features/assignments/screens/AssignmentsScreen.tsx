@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -22,6 +23,11 @@ import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
 import { getTimeOfDay } from '../../home/utils/greeting';
 import { SettingsButton } from '../../settings/components/SettingsButton';
 import { AssignmentCard } from '../components/AssignmentCard';
+import { SectionHeader } from '../components/SectionHeader';
+import {
+  isPastAssignment,
+  sortByPriority,
+} from '../utils/assignmentPriority';
 
 type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
 
@@ -36,15 +42,37 @@ export function AssignmentsScreen() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
+  const [showPast, setShowPast] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Reload when the student opens this tab or requests a refresh.
+  // A pull-to-refresh keeps the list on screen while it reloads.
+  const isPullRefresh = useRef(false);
+
+  // Most urgent first (#86). Completed work, and work overdue for over a
+  // week, stays hidden unless the student asks to see it.
+  const { currentAssignments, pastAssignments } = useMemo(
+    () => ({
+      currentAssignments: sortByPriority(
+        assignments.filter((assignment) => !isPastAssignment(assignment, date)),
+      ),
+      // Most recent first.
+      pastAssignments: sortByPriority(
+        assignments.filter((assignment) => isPastAssignment(assignment, date)),
+      ).reverse(),
+    }),
+    [assignments, date],
+  );
+
+  // Reload when the student opens this tab, pulls down, or taps Try again.
   useFocusEffect(
     useCallback(() => {
       let active = true;
 
       async function loadAssignments() {
-        setStatus('loading');
-        setAssignments([]);
+        if (!isPullRefresh.current) {
+          setStatus('loading');
+          setAssignments([]);
+        }
 
         try {
           const { data, error } = await supabase.auth.getSession();
@@ -69,6 +97,9 @@ export function AssignmentsScreen() {
 
           setAssignments([]);
           setStatus('error');
+        } finally {
+          isPullRefresh.current = false;
+          setRefreshing(false);
         }
       }
 
@@ -91,10 +122,24 @@ export function AssignmentsScreen() {
     setReloadCount((count) => count + 1);
   };
 
+  const pullToRefresh = () => {
+    isPullRefresh.current = true;
+    setRefreshing(true);
+    refreshAssignments();
+  };
+
   return (
     <TabScreenScrollView
       focusTargetRef={titleRef}
       contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={pullToRefresh}
+          tintColor={colors.deepOlive}
+          colors={[colors.deepOlive]}
+        />
+      }
     >
       {/* Draw the artwork behind the header. */}
       {headerBottom !== null && (
@@ -178,9 +223,16 @@ export function AssignmentsScreen() {
           </View>
         )}
 
-        {/* No due-soon cutoff: display every assignment returned. */}
         {status === 'ready' &&
-          assignments.map((assignment) => (
+          assignments.length > 0 &&
+          currentAssignments.length === 0 && (
+            <View style={styles.statusCard}>
+              <Text style={styles.statusText}>You’re all caught up!</Text>
+            </View>
+          )}
+
+        {status === 'ready' &&
+          currentAssignments.map((assignment) => (
             <AssignmentCard
               key={assignment.id}
               assignment={assignment}
@@ -188,19 +240,32 @@ export function AssignmentsScreen() {
             />
           ))}
 
-        {status === 'ready' && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Refresh assignments"
-            onPress={refreshAssignments}
-            style={({ pressed }) => [
-              styles.refreshButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.retryText}>Refresh assignments</Text>
-          </Pressable>
+        {status === 'ready' && pastAssignments.length > 0 && (
+          <View style={styles.pastHeader}>
+            <SectionHeader
+              title="Past"
+              count={pastAssignments.length}
+              linkText={showPast ? 'Hide' : 'Show'}
+              linkLabel={
+                showPast
+                  ? 'Hide past assignments'
+                  : `Show ${pastAssignments.length} past assignments`
+              }
+              linkExpanded={showPast}
+              onLinkPress={() => setShowPast((shown) => !shown)}
+            />
+          </View>
         )}
+
+        {status === 'ready' &&
+          showPast &&
+          pastAssignments.map((assignment) => (
+            <AssignmentCard
+              key={assignment.id}
+              assignment={assignment}
+              today={date}
+            />
+          ))}
       </View>
     </TabScreenScrollView>
   );
@@ -266,11 +331,9 @@ const styles = StyleSheet.create({
     color: colors.deepOlive,
     textAlign: 'center',
   },
-  refreshButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
+  pastHeader: {
+    marginTop: 16,
+    marginBottom: 2,
   },
   pressed: {
     opacity: 0.7,

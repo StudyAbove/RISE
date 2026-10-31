@@ -17,9 +17,12 @@ import {
   fetchAssignmentById,
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
+import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { colors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
+import { PriorityPill } from '../components/PriorityPill';
+import { getPriorityLevel } from '../utils/assignmentPriority';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -31,6 +34,7 @@ type LoadStatus = 'loading' | 'ready' | 'missing' | 'error';
 // The same details screen is opened from Study Plan and List.
 export function AssignmentDetailsScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const now = useCurrentDate();
   const { assignmentId } = route.params;
 
   const [assignment, setAssignment] = useState<Assignment | null>(null);
@@ -164,6 +168,13 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
             />
 
             <Text style={styles.courseText}>{courseLabel}</Text>
+
+            {/* Same priority as the List and Study cards (#86). */}
+            {!assignment.completed && (
+              <View style={styles.priority}>
+                <PriorityPill level={getPriorityLevel(assignment, now)} />
+              </View>
+            )}
           </View>
 
           <Text accessibilityRole="header" style={styles.title}>
@@ -260,6 +271,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  // Pushes the pill to the right edge, as in the Figma.
+  priority: {
+    marginLeft: 'auto',
   },
   courseDot: {
     width: 10,
