@@ -23,6 +23,7 @@ import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
 import { getTimeOfDay } from '../../home/utils/greeting';
 import { SettingsButton } from '../../settings/components/SettingsButton';
 import { AssignmentCard } from '../components/AssignmentCard';
+import { SectionHeader } from '../components/SectionHeader';
 import {
   isPastAssignment,
   sortByPriority,
@@ -239,35 +240,20 @@ export function AssignmentsScreen() {
             />
           ))}
 
-        {/* Styled like the "Upcoming" section header on the Figma Study page. */}
         {status === 'ready' && pastAssignments.length > 0 && (
           <View style={styles.pastHeader}>
-            <View style={styles.pastTitleRow}>
-              <Text accessibilityRole="header" style={styles.pastTitle}>
-                Past
-              </Text>
-
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>
-                  {pastAssignments.length}
-                </Text>
-              </View>
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
+            <SectionHeader
+              title="Past"
+              count={pastAssignments.length}
+              linkText={showPast ? 'Hide' : 'Show'}
+              linkLabel={
                 showPast
                   ? 'Hide past assignments'
                   : `Show ${pastAssignments.length} past assignments`
               }
-              accessibilityState={{ expanded: showPast }}
-              hitSlop={12}
-              onPress={() => setShowPast((shown) => !shown)}
-              style={({ pressed }) => pressed && styles.pressed}
-            >
-              <Text style={styles.showLink}>{showPast ? 'Hide' : 'Show'}</Text>
-            </Pressable>
+              linkExpanded={showPast}
+              onLinkPress={() => setShowPast((shown) => !shown)}
+            />
           </View>
         )}
 
@@ -346,39 +332,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pastHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginTop: 16,
     marginBottom: 2,
-  },
-  pastTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  pastTitle: {
-    ...textStyles.sectionTitle,
-    color: colors.deepOlive,
-  },
-  // Count badge from the Figma Study page, e.g. "Upcoming 1".
-  countBadge: {
-    minWidth: 30,
-    height: 30,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    backgroundColor: colors.paleSun,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    ...textStyles.body,
-    color: colors.deepOlive,
-  },
-  showLink: {
-    ...textStyles.link,
-    color: colors.eucalyptus,
-    textDecorationLine: 'underline',
   },
   pressed: {
     opacity: 0.7,
