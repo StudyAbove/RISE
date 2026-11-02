@@ -687,6 +687,9 @@ export function RootNavigator({
 
               name="TakeABreak"
               component={TakeABreakScreen}
+              options={{
+                gestureEnabled: false,
+              }}
 
             />
           </>
