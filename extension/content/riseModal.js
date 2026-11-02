@@ -146,18 +146,12 @@ const RiseModal = (() => {
         <p class="subtitle subtitle--start" data-slot="course-name"></p>
         <p class="review-note" data-slot="syllabus-note"></p>
 
-        <label class="review-field">Course overview
-          <textarea name="courseOverview" maxlength="2000" placeholder="Unavailable — add or correct the overview"></textarea>
-        </label>
         <div class="review-grid">
           <label class="review-field">Professor name
-            <input name="professorName" maxlength="120" placeholder="Unavailable">
+            <input name="professorName" maxlength="100" placeholder="Unavailable">
           </label>
           <label class="review-field">Professor email
-            <input name="professorEmail" type="email" maxlength="254" placeholder="Unavailable">
-          </label>
-          <label class="review-field">Office location / meeting details
-            <input name="officeLocation" maxlength="250" placeholder="Unavailable">
+            <input name="professorEmail" type="email" maxlength="100" placeholder="Unavailable">
           </label>
         </div>
 
@@ -166,16 +160,16 @@ const RiseModal = (() => {
           <div class="review-rows" data-slot="office-hours"></div>
         </section>
 
+        <label class="review-field">Grading mode
+          <select name="gradingMode"><option value="points">Points</option><option value="weighted_categories">Weighted categories</option></select>
+        </label>
         <section class="review-section">
           <div class="review-section-heading"><h3>Grading percentages</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
           <div class="review-rows" data-slot="topics"></div>
         </section>
 
-        <label class="review-field">Late-work policy <span class="field-limit">Up to 200 characters</span>
-          <textarea name="latePolicy" maxlength="200" placeholder="Unavailable — add or correct the policy"></textarea>
-        </label>
-        <label class="review-field">Other course information
-          <textarea name="other" maxlength="2000" placeholder="Optional"></textarea>
+        <label class="review-field">Late-work policy
+          <textarea name="lateWork" placeholder="Unavailable — add or correct the policy"></textarea>
         </label>
 
         <p class="error" role="alert" hidden></p>
@@ -486,14 +480,14 @@ const RiseModal = (() => {
       dayLabel.textContent = 'Day';
       const day = document.createElement('select');
       day.name = 'dayOfWeek';
-      [['', 'Select day'], ...['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((item) => [item, item])]
+      [['', 'Select day'], ...[['Sunday', 0], ['Monday', 1], ['Tuesday', 2], ['Wednesday', 3], ['Thursday', 4], ['Friday', 5], ['Saturday', 6]].map(([label, value]) => [value, label])]
         .forEach(([key, text]) => {
           const option = document.createElement('option');
           option.value = key;
           option.textContent = text;
           day.append(option);
         });
-      day.value = value.dayOfWeek ?? '';
+      day.value = value.day_of_week ?? value.dayOfWeek ?? '';
       dayLabel.append(day);
       row.append(dayLabel);
       appendInput(row, 'Start', 'start', value.start, 'time');
@@ -507,7 +501,7 @@ const RiseModal = (() => {
       booking.checked = Boolean(value.required_booking);
       bookingLabel.append(booking, document.createTextNode('Booking required'));
       row.append(bookingLabel);
-      appendInput(row, 'Booking link (optional)', 'schedule_booking', value.schedule_booking, 'url');
+      appendInput(row, 'Booking link (optional)', 'booking_link', value.booking_link ?? value.schedule_booking, 'url');
 
       const remove = document.createElement('button');
       remove.className = 'small-button small-button--remove';
@@ -522,10 +516,11 @@ const RiseModal = (() => {
       const row = document.createElement('div');
       row.className = 'review-row review-row--topic';
       appendInput(row, 'Topic', 'title', value.title);
-      const percentage = appendInput(row, 'Percent', 'percentage_worth', value.percentage_worth, 'number');
+      const percentage = appendInput(row, 'Percent', 'percentage', value.percentage, 'number');
       percentage.min = '0';
       percentage.max = '100';
-      percentage.step = '1';
+      percentage.step = '0.01';
+      appendInput(row, 'Total count (optional)', 'total_count', value.total_count ?? '', 'number').min = '1';
 
       const remove = document.createElement('button');
       remove.className = 'small-button small-button--remove';
@@ -546,8 +541,7 @@ const RiseModal = (() => {
       const overlay = render('syllabusReview', { index, total: queue.length });
       const form = overlay.querySelector('form');
       const data = review.syllabusInfo ?? review;
-      const gradingScale = data.grading_scale ?? {};
-      const latePolicy = data.late_policy ?? {};
+      const topicData = data.topics ?? data.grading_scale?.topics ?? [];
       const courseName = review.courseName ?? review.name ?? 'Class';
 
       overlay.querySelector('[data-slot="progress"]').textContent = `Class ${index + 1} of ${queue.length}`;
@@ -556,20 +550,18 @@ const RiseModal = (() => {
         ? 'RISE could not find a syllabus for this class. Add the details you know below.'
         : 'Check the information found in the syllabus and correct anything that needs updating.';
 
-      form.elements.courseOverview.value = data.courseOverview ?? data.course_overview ?? '';
+      form.elements.gradingMode.value = data.grading_mode ?? 'points';
       form.elements.professorName.value = data.professorName ?? data.professor_name ?? '';
       form.elements.professorEmail.value = data.professorEmail ?? data.professor_email ?? '';
-      form.elements.officeLocation.value = data.officeLocation ?? data.office_location ?? '';
-      form.elements.latePolicy.value = latePolicy.description ?? data.latePolicy ?? '';
-      form.elements.other.value = data.other ?? '';
+      form.elements.lateWork.value = data.late_work ?? data.lateWork ?? '';
 
       const officeHours = overlay.querySelector('[data-slot="office-hours"]');
-      const topics = overlay.querySelector('[data-slot="topics"]');
+      const topicsContainer = overlay.querySelector('[data-slot="topics"]');
       (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
-      (gradingScale.topics?.length ? gradingScale.topics : []).forEach((item) => appendTopic(topics, item));
+      topicData.forEach((item) => appendTopic(topicsContainer, item));
 
       overlay.querySelector('[data-action="add-office-hour"]').addEventListener('click', () => appendOfficeHour(officeHours));
-      overlay.querySelector('[data-action="add-topic"]').addEventListener('click', () => appendTopic(topics));
+      overlay.querySelector('[data-action="add-topic"]').addEventListener('click', () => appendTopic(topicsContainer));
       const errorText = form.querySelector('.error');
 
       form.addEventListener('submit', async (event) => {
@@ -585,36 +577,34 @@ const RiseModal = (() => {
         const optionalText = (value) => value.trim() || null;
 
         const confirmed = {
-          courseId: review.courseId ?? review.id,
-          courseName,
-          courseOverview: optionalText(form.elements.courseOverview.value),
-          professorName: optionalText(form.elements.professorName.value),
-          professorEmail: optionalText(form.elements.professorEmail.value),
-          officeLocation: optionalText(form.elements.officeLocation.value),
+          course_id: review.courseId ?? review.id,
+          professor_name: optionalText(form.elements.professorName.value),
+          professor_email: optionalText(form.elements.professorEmail.value),
+          late_work: optionalText(form.elements.lateWork.value),
+          grading_mode: form.elements.gradingMode.value,
           office_hours: valueByRow('office-hours', (row) => ({
-            dayOfWeek: optionalText(row.querySelector('[name="dayOfWeek"]').value),
-            start: optionalText(row.querySelector('[name="start"]').value),
-            end: optionalText(row.querySelector('[name="end"]').value),
+            day_of_week: row.querySelector('[name="dayOfWeek"]').value === '' ? null : Number(row.querySelector('[name="dayOfWeek"]').value),
+            start_time: optionalText(row.querySelector('[name="start"]').value),
+            end_time: optionalText(row.querySelector('[name="end"]').value),
             required_booking: row.querySelector('[name="required_booking"]').checked,
-            schedule_booking: optionalText(row.querySelector('[name="schedule_booking"]').value),
+            booking_link: optionalText(row.querySelector('[name="booking_link"]').value),
           })),
-          grading_scale: {
-            topics: valueByRow('topics', (row) => ({
+          topics: valueByRow('topics', (row) => ({
               title: row.querySelector('[name="title"]').value.trim(),
-              percentage_worth: row.querySelector('[name="percentage_worth"]').value === ''
+              percentage: row.querySelector('[name="percentage"]').value === ''
                 ? null
-                : Number(row.querySelector('[name="percentage_worth"]').value),
+                : Number(row.querySelector('[name="percentage"]').value),
+              total_count: row.querySelector('[name="total_count"]').value === ''
+                ? null
+                : Number(row.querySelector('[name="total_count"]').value),
             })),
-          },
-          late_policy: { description: optionalText(form.elements.latePolicy.value) },
-          other: optionalText(form.elements.other.value),
         };
 
         try {
-          if (confirmed.office_hours.some((item) => !item.dayOfWeek || !item.start || !item.end)) {
+          if (confirmed.office_hours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
             throw new Error('For each office-hours entry, add a day, start time, and end time.');
           }
-          if (confirmed.grading_scale.topics.some((item) => !item.title || item.percentage_worth == null)) {
+          if (confirmed.topics.some((item) => !item.title || item.percentage == null)) {
             throw new Error('For each grading topic, add a title and percentage.');
           }
 
