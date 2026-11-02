@@ -69,6 +69,12 @@
   text-align: center;
 }
 
+.dialog--review {
+  width: 680px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
 /* ---------- Header ---------- */
 
 .brand {
@@ -454,6 +460,151 @@
   font-size: 12.5px;
   line-height: 18px;
   color: var(--error);
+}
+
+.review-progress,
+.review-note {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.review-note {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--note);
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.review-field input,
+.review-field textarea,
+.review-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline-color: var(--gold-dark);
+  background: var(--input);
+  font: 400 13px/18px var(--font-body);
+  color: var(--ink);
+}
+
+.review-field textarea {
+  min-height: 68px;
+  resize: vertical;
+}
+
+.review-field--compact {
+  margin-top: 0;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.review-field--compact input,
+.review-field--compact select {
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.field-limit {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.review-section {
+  margin-top: 18px;
+}
+
+.review-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.review-section-heading h3 {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.review-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-row {
+  display: grid;
+  align-items: end;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.review-row--office {
+  grid-template-columns: 1fr 0.8fr 0.8fr auto 1.5fr auto;
+}
+
+.review-row--topic {
+  grid-template-columns: 1fr 110px auto;
+}
+
+.review-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.small-button {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 11px/16px var(--font-body);
+  cursor: pointer;
+}
+
+.small-button--remove {
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .dialog--review {
+    width: 100%;
+    padding: 28px 20px 24px;
+  }
+
+  .review-row--office {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-row--topic {
+    grid-template-columns: 1fr 90px auto;
+  }
 }
 
 /* ---------- "You're connected" (in Screen8's layout) ---------- */

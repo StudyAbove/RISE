@@ -137,6 +137,50 @@ const RiseModal = (() => {
         <p class="info-box" data-slot="status" role="status">📚 Importing your courses and assignments…</p>
         <button class="link-button" type="button" data-action="close">Done</button>
       </div>`,
+
+    syllabusReview: ({ index, total }) => `
+      <form class="dialog dialog--review" role="dialog" aria-modal="true" aria-labelledby="rise-title" novalidate>
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <p class="review-progress" data-slot="progress"></p>
+        <h2 class="title title--start" id="rise-title">Review class information</h2>
+        <p class="subtitle subtitle--start" data-slot="course-name"></p>
+        <p class="review-note" data-slot="syllabus-note"></p>
+
+        <label class="review-field">Course overview
+          <textarea name="courseOverview" maxlength="2000" placeholder="Unavailable — add or correct the overview"></textarea>
+        </label>
+        <div class="review-grid">
+          <label class="review-field">Professor name
+            <input name="professorName" maxlength="120" placeholder="Unavailable">
+          </label>
+          <label class="review-field">Professor email
+            <input name="professorEmail" type="email" maxlength="254" placeholder="Unavailable">
+          </label>
+          <label class="review-field">Office location / meeting details
+            <input name="officeLocation" maxlength="250" placeholder="Unavailable">
+          </label>
+        </div>
+
+        <section class="review-section">
+          <div class="review-section-heading"><h3>Office hours</h3><button class="small-button" type="button" data-action="add-office-hour">Add time</button></div>
+          <div class="review-rows" data-slot="office-hours"></div>
+        </section>
+
+        <section class="review-section">
+          <div class="review-section-heading"><h3>Grading percentages</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
+          <div class="review-rows" data-slot="topics"></div>
+        </section>
+
+        <label class="review-field">Late-work policy <span class="field-limit">Up to 200 characters</span>
+          <textarea name="latePolicy" maxlength="200" placeholder="Unavailable — add or correct the policy"></textarea>
+        </label>
+        <label class="review-field">Other course information
+          <textarea name="other" maxlength="2000" placeholder="Optional"></textarea>
+        </label>
+
+        <p class="error" role="alert" hidden></p>
+        <button class="button button--gold" type="submit">Confirm and continue</button>
+      </form>`,
   };
 
   let host = null;
@@ -415,6 +459,180 @@ const RiseModal = (() => {
     overlay.querySelector('[data-action="close"]').addEventListener('click', close);
   }
 
+  function showSyllabusReviews({ reviews, onSave }) {
+    const queue = [...reviews];
+    let index = 0;
+
+    function appendInput(parent, labelText, name, value = '', type = 'text') {
+      const label = document.createElement('label');
+      label.className = 'review-field review-field--compact';
+      label.textContent = labelText;
+      const input = document.createElement('input');
+      input.name = name;
+      input.type = type;
+      input.value = value ?? '';
+      if (name === 'title') input.maxLength = 50;
+      if (type === 'time') input.step = '60';
+      label.append(input);
+      parent.append(label);
+      return input;
+    }
+
+    function appendOfficeHour(parent, value = {}) {
+      const row = document.createElement('div');
+      row.className = 'review-row review-row--office';
+      const dayLabel = document.createElement('label');
+      dayLabel.className = 'review-field review-field--compact';
+      dayLabel.textContent = 'Day';
+      const day = document.createElement('select');
+      day.name = 'dayOfWeek';
+      [['', 'Select day'], ...['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((item) => [item, item])]
+        .forEach(([key, text]) => {
+          const option = document.createElement('option');
+          option.value = key;
+          option.textContent = text;
+          day.append(option);
+        });
+      day.value = value.dayOfWeek ?? '';
+      dayLabel.append(day);
+      row.append(dayLabel);
+      appendInput(row, 'Start', 'start', value.start, 'time');
+      appendInput(row, 'End', 'end', value.end, 'time');
+
+      const bookingLabel = document.createElement('label');
+      bookingLabel.className = 'review-checkbox';
+      const booking = document.createElement('input');
+      booking.type = 'checkbox';
+      booking.name = 'required_booking';
+      booking.checked = Boolean(value.required_booking);
+      bookingLabel.append(booking, document.createTextNode('Booking required'));
+      row.append(bookingLabel);
+      appendInput(row, 'Booking link (optional)', 'schedule_booking', value.schedule_booking, 'url');
+
+      const remove = document.createElement('button');
+      remove.className = 'small-button small-button--remove';
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', () => row.remove());
+      row.append(remove);
+      parent.append(row);
+    }
+
+    function appendTopic(parent, value = {}) {
+      const row = document.createElement('div');
+      row.className = 'review-row review-row--topic';
+      appendInput(row, 'Topic', 'title', value.title);
+      const percentage = appendInput(row, 'Percent', 'percentage_worth', value.percentage_worth, 'number');
+      percentage.min = '0';
+      percentage.max = '100';
+      percentage.step = '1';
+
+      const remove = document.createElement('button');
+      remove.className = 'small-button small-button--remove';
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', () => row.remove());
+      row.append(remove);
+      parent.append(row);
+    }
+
+    function renderReview() {
+      if (index >= queue.length) {
+        close();
+        return;
+      }
+
+      const review = queue[index];
+      const overlay = render('syllabusReview', { index, total: queue.length });
+      const form = overlay.querySelector('form');
+      const data = review.syllabusInfo ?? review;
+      const gradingScale = data.grading_scale ?? {};
+      const latePolicy = data.late_policy ?? {};
+      const courseName = review.courseName ?? review.name ?? 'Class';
+
+      overlay.querySelector('[data-slot="progress"]').textContent = `Class ${index + 1} of ${queue.length}`;
+      overlay.querySelector('[data-slot="course-name"]').textContent = courseName;
+      overlay.querySelector('[data-slot="syllabus-note"]').textContent = review.hasSyllabus === false
+        ? 'RISE could not find a syllabus for this class. Add the details you know below.'
+        : 'Check the information found in the syllabus and correct anything that needs updating.';
+
+      form.elements.courseOverview.value = data.courseOverview ?? data.course_overview ?? '';
+      form.elements.professorName.value = data.professorName ?? data.professor_name ?? '';
+      form.elements.professorEmail.value = data.professorEmail ?? data.professor_email ?? '';
+      form.elements.officeLocation.value = data.officeLocation ?? data.office_location ?? '';
+      form.elements.latePolicy.value = latePolicy.description ?? data.latePolicy ?? '';
+      form.elements.other.value = data.other ?? '';
+
+      const officeHours = overlay.querySelector('[data-slot="office-hours"]');
+      const topics = overlay.querySelector('[data-slot="topics"]');
+      (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
+      (gradingScale.topics?.length ? gradingScale.topics : []).forEach((item) => appendTopic(topics, item));
+
+      overlay.querySelector('[data-action="add-office-hour"]').addEventListener('click', () => appendOfficeHour(officeHours));
+      overlay.querySelector('[data-action="add-topic"]').addEventListener('click', () => appendTopic(topics));
+      const errorText = form.querySelector('.error');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorText.hidden = true;
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        button.textContent = 'Saving…';
+
+        const valueByRow = (slot, build) => [...overlay.querySelectorAll(`[data-slot="${slot}"] .review-row`)]
+          .map(build)
+          .filter((item) => Object.values(item).some((value) => value !== '' && value !== false && value != null));
+        const optionalText = (value) => value.trim() || null;
+
+        const confirmed = {
+          courseId: review.courseId ?? review.id,
+          courseName,
+          courseOverview: optionalText(form.elements.courseOverview.value),
+          professorName: optionalText(form.elements.professorName.value),
+          professorEmail: optionalText(form.elements.professorEmail.value),
+          officeLocation: optionalText(form.elements.officeLocation.value),
+          office_hours: valueByRow('office-hours', (row) => ({
+            dayOfWeek: optionalText(row.querySelector('[name="dayOfWeek"]').value),
+            start: optionalText(row.querySelector('[name="start"]').value),
+            end: optionalText(row.querySelector('[name="end"]').value),
+            required_booking: row.querySelector('[name="required_booking"]').checked,
+            schedule_booking: optionalText(row.querySelector('[name="schedule_booking"]').value),
+          })),
+          grading_scale: {
+            topics: valueByRow('topics', (row) => ({
+              title: row.querySelector('[name="title"]').value.trim(),
+              percentage_worth: row.querySelector('[name="percentage_worth"]').value === ''
+                ? null
+                : Number(row.querySelector('[name="percentage_worth"]').value),
+            })),
+          },
+          late_policy: { description: optionalText(form.elements.latePolicy.value) },
+          other: optionalText(form.elements.other.value),
+        };
+
+        try {
+          if (confirmed.office_hours.some((item) => !item.dayOfWeek || !item.start || !item.end)) {
+            throw new Error('For each office-hours entry, add a day, start time, and end time.');
+          }
+          if (confirmed.grading_scale.topics.some((item) => !item.title || item.percentage_worth == null)) {
+            throw new Error('For each grading topic, add a title and percentage.');
+          }
+
+          await onSave(confirmed);
+          index += 1;
+          renderReview();
+        } catch (error) {
+          errorText.textContent = error.message || 'Could not save this review. Please try again.';
+          errorText.hidden = false;
+          button.disabled = false;
+          button.textContent = 'Confirm and continue';
+        }
+      });
+    }
+
+    if (queue.length) renderReview();
+  }
+
   /** Updates the status box on the "You're connected" screen, if it's open. */
   function showSyncResult({ message, isError = false }) {
     const status = shadow?.querySelector('[data-slot="status"]');
@@ -441,5 +659,5 @@ const RiseModal = (() => {
     setTimeout(() => toast.remove(), 4000);
   }
 
-  return { showNote, showWelcome, showClassPicker, showSyncResult, showToast };
+  return { showNote, showWelcome, showClassPicker, showSyllabusReviews, showSyncResult, showToast };
 })();
