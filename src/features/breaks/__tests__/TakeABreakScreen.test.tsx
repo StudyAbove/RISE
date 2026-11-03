@@ -390,7 +390,95 @@ describe(
     );
 
     it(
-      'goes back when the back button is pressed',
+      'shows a confirmation popup when the back button is pressed',
+      async () => {
+        const {
+          getByRole,
+          getByText,
+        } = await render(
+          <TakeABreakScreen />,
+        );
+
+        fireEvent.press(
+          getByRole(
+            'button',
+            {
+              name: 'Back',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            getByText(
+              'Are you sure you want to go Back?',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        expect(
+          mockGoBack,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it(
+      'stays on Take a Break when back is cancelled',
+      async () => {
+        const {
+          getByRole,
+          queryByText,
+        } = await render(
+          <TakeABreakScreen />,
+        );
+
+        fireEvent.press(
+          getByRole(
+            'button',
+            {
+              name: 'Back',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            getByRole(
+              'button',
+              {
+                name:
+                  'Cancel going back',
+              },
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        fireEvent.press(
+          getByRole(
+            'button',
+            {
+              name:
+                'Cancel going back',
+            },
+          ),
+        );
+
+        await waitFor(() => {
+          expect(
+            queryByText(
+              'Are you sure you want to go Back?',
+            ),
+          ).not.toBeOnTheScreen();
+        });
+
+        expect(
+          mockGoBack,
+        ).not.toHaveBeenCalled();
+      },
+    );
+
+    it(
+      'goes back only after back is confirmed',
       async () => {
         const {
           getByRole,
@@ -402,8 +490,33 @@ describe(
           getByRole(
             'button',
             {
+              name: 'Back',
+            },
+          ),
+        );
+
+        expect(
+          mockGoBack,
+        ).not.toHaveBeenCalled();
+
+        await waitFor(() => {
+          expect(
+            getByRole(
+              'button',
+              {
+                name:
+                  'Confirm going back',
+              },
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        fireEvent.press(
+          getByRole(
+            'button',
+            {
               name:
-                'Back',
+                'Confirm going back',
             },
           ),
         );
@@ -415,5 +528,6 @@ describe(
         );
       },
     );
+
   },
 );

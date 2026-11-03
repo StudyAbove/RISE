@@ -445,3 +445,9 @@ entrypoint = "./functions/delete-account/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/estimate-assignments/index.ts"
+
+# Generate saved microtasks for the signed-in student's assignment (#42).
+[functions.generate-microtasks]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/generate-microtasks/index.ts"
