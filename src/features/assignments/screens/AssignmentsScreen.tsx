@@ -48,20 +48,27 @@ export function AssignmentsScreen() {
   // A pull-to-refresh keeps the list on screen while it reloads.
   const isPullRefresh = useRef(false);
 
-  // Most urgent first (#86). Completed work, and work overdue for over a
-  // week, stays hidden unless the student asks to see it.
-  const { currentAssignments, pastAssignments } = useMemo(
-    () => ({
+  // Most urgent first (#86). Completed work is hidden from both sections.
+  // Older unfinished work stays available in the existing Past section.
+  const { currentAssignments, pastAssignments } = useMemo(() => {
+    const unfinishedAssignments = assignments.filter(
+      (assignment) => !assignment.completed,
+    );
+
+    return {
       currentAssignments: sortByPriority(
-        assignments.filter((assignment) => !isPastAssignment(assignment, date)),
+        unfinishedAssignments.filter(
+          (assignment) => !isPastAssignment(assignment, date),
+        ),
       ),
       // Most recent first.
       pastAssignments: sortByPriority(
-        assignments.filter((assignment) => isPastAssignment(assignment, date)),
+        unfinishedAssignments.filter(
+          (assignment) => isPastAssignment(assignment, date),
+        ),
       ).reverse(),
-    }),
-    [assignments, date],
-  );
+    };
+  }, [assignments, date]);
 
   // Reload when the student opens this tab, pulls down, or taps Try again.
   useFocusEffect(
@@ -225,7 +232,8 @@ export function AssignmentsScreen() {
 
         {status === 'ready' &&
           assignments.length > 0 &&
-          currentAssignments.length === 0 && (
+          currentAssignments.length === 0 &&
+          pastAssignments.length === 0 && (
             <View style={styles.statusCard}>
               <Text style={styles.statusText}>You’re all caught up!</Text>
             </View>
