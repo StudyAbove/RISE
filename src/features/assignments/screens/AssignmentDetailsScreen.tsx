@@ -23,6 +23,7 @@ import { textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
 import { PriorityPill } from '../components/PriorityPill';
 import { getPriorityLevel } from '../utils/assignmentPriority';
+import { AssignmentDescription } from '../components/AssignmentDescription';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -40,6 +41,11 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
+  // Remember each assignment's expanded description while this screen is mounted,
+  // including when returning from a focus session.
+  const [expandedDescriptions, setExpandedDescriptions] = useState<
+    Record<string, boolean>
+  >({});
 
   // Load the selected assignment again whenever this screen gains focus.
   useFocusEffect(
@@ -218,9 +224,17 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
           </View>
 
           {/* Show the full Canvas description without inventing a summary. */}
-          <Text style={styles.description}>
-            {assignment.description || 'No description provided'}
-          </Text>
+          <AssignmentDescription
+            key={`${assignment.id}:${assignment.description ?? ''}`}
+            description={assignment.description}
+            expanded={expandedDescriptions[assignment.id] ?? false}
+            onExpandedChange={(expanded) =>
+              setExpandedDescriptions((previous) => ({
+                ...previous,
+                [assignment.id]: expanded,
+              }))
+            }
+          />
           {/* Open the focus screen for this selected assignment. */}
           <Pressable
             accessibilityRole="button"
@@ -302,12 +316,6 @@ const styles = StyleSheet.create({
     ...textStyles.tinyLabel,
     flex: 1,
     color: colors.deepOlive,
-  },
-  description: {
-    ...textStyles.caption,
-    color: colors.mutedGrayGreen,
-    lineHeight: 18,
-    marginTop: 4,
   },
   statusContainer: {
     paddingVertical: 32,
