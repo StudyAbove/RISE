@@ -23,6 +23,7 @@ import { textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
 import { PriorityPill } from '../components/PriorityPill';
 import { getPriorityLevel } from '../utils/assignmentPriority';
+import { AssignmentMicrotasks } from '../components/AssignmentMicrotasks';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -221,6 +222,11 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
           <Text style={styles.description}>
             {assignment.description || 'No description provided'}
           </Text>
+          {/* Saved microtasks for this specific assignment (#42). */}
+          <AssignmentMicrotasks
+            key={assignment.id}
+            assignment={assignment}
+          />
           {/* Open the focus screen for this selected assignment. */}
           <Pressable
             accessibilityRole="button"
