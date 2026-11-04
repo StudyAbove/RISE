@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -58,6 +59,8 @@ import {
 import { EditCalendarEventModal } from '../components/EditCalendarEventModal';
 import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { EventSourceLegend } from '../components/EventSourceLegend';
+import { CalendarFilterNotice } from '../components/filters/CalendarFilterNotice';
+import { CalendarFilterSheet } from '../components/filters/CalendarFilterSheet';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
 import { TodayEventsCard } from '../components/TodayEventsCard';
@@ -84,6 +87,11 @@ import {
 } from '../services/calendarRefreshService';
 
 import {
+  loadCalendarFilters,
+  saveCalendarFilters,
+} from '../services/calendarFilterStorage';
+
+import {
   deleteCalendarEventWithSync,
   type CalendarEventSyncResult,
 } from '../services/calendarEventSyncService';
@@ -96,6 +104,13 @@ import {
 } from '../utils/calendarDates';
 
 import { getAddEventSyncMessage } from '../utils/addEventSyncMessage';
+
+import {
+  DEFAULT_CALENDAR_FILTERS,
+  filterCalendarEvents,
+  isFiltering,
+  type CalendarFilters,
+} from '../utils/calendarFilters';
 
 import { styles } from './CalendarScreen.styles';
 
@@ -200,6 +215,22 @@ export function CalendarScreen() {
   const [
     isAddingEvent,
     setIsAddingEvent,
+  ] =
+    useState(false);
+
+  // What "Show on calendar" (#79) hides. The type and source toggles are
+  // saved on the phone; the date range starts empty each time.
+  const [
+    filters,
+    setFilters,
+  ] =
+    useState<CalendarFilters>(
+      loadCalendarFilters,
+    );
+
+  const [
+    isFilterSheetOpen,
+    setIsFilterSheetOpen,
   ] =
     useState(false);
 
@@ -343,6 +374,31 @@ export function CalendarScreen() {
     useCalendarEvents(
       visibleRange.start,
       visibleRange.end,
+    );
+
+  const filtering =
+    isFiltering(filters);
+
+  const visibleEvents =
+    useMemo(
+      () =>
+        filterCalendarEvents(
+          events,
+          filters,
+        ),
+      [events, filters],
+    );
+
+  const applyFilters =
+    useCallback(
+      (
+        nextFilters: CalendarFilters,
+      ) => {
+        setFilters(nextFilters);
+        saveCalendarFilters(nextFilters);
+        setIsFilterSheetOpen(false);
+      },
+      [],
     );
 
   const refreshConflicts =
@@ -1895,6 +1951,12 @@ export function CalendarScreen() {
         onAddEvent={() =>
           setIsAddingEvent(true)
         }
+        onOpenFilters={() =>
+          setIsFilterSheetOpen(true)
+        }
+        isFiltering={
+          filtering
+        }
       />
 
       <CalendarViewSwitcher
@@ -1997,6 +2059,22 @@ export function CalendarScreen() {
         </Pressable>
       </View>
 
+      {filtering && (
+        <CalendarFilterNotice
+          noMatches={
+            status ===
+              'ready' &&
+            visibleEvents.length ===
+              0
+          }
+          onShowAll={() =>
+            applyFilters(
+              DEFAULT_CALENDAR_FILTERS,
+            )
+          }
+        />
+      )}
+
       <View
         style={
           styles.body
@@ -2017,7 +2095,7 @@ export function CalendarScreen() {
                 anchorDate
               }
               events={
-                events
+                visibleEvents
               }
               conflictEventIds={
                 conflictEventIds
@@ -2039,6 +2117,9 @@ export function CalendarScreen() {
               key={
                 todayCardRefreshKey
               }
+              filters={
+                filters
+              }
               onEventPress={
                 handleEventPress
               }
@@ -2058,7 +2139,7 @@ export function CalendarScreen() {
                 view
               }
               events={
-                events
+                visibleEvents
               }
               onEventPress={
                 handleEventPress
@@ -2176,6 +2257,21 @@ export function CalendarScreen() {
         }
         onSaved={
           handleEventAdded
+        }
+      />
+
+      <CalendarFilterSheet
+        visible={
+          isFilterSheetOpen
+        }
+        filters={
+          filters
+        }
+        onApply={
+          applyFilters
+        }
+        onClose={() =>
+          setIsFilterSheetOpen(false)
         }
       />
     </View>

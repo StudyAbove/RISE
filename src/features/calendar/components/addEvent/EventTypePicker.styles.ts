@@ -29,13 +29,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  classIcon: {
-    width: 28,
-    height: 28,
-  },
-  selectedClassIcon: {
-    tintColor: colors.softWhite,
-  },
   label: {
     fontFamily: fonts.body.medium,
     fontSize: 10,

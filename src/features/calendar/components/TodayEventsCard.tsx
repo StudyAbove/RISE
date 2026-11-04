@@ -16,6 +16,12 @@ import { eventSourceColors } from '../calendarColors';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { isAllDayEvent } from '../utils/allDayEvents';
 import { getDaySegments } from '../utils/calendarEvents';
+import {
+  DEFAULT_CALENDAR_FILTERS,
+  filterCalendarEvents,
+  isFiltering,
+  type CalendarFilters,
+} from '../utils/calendarFilters';
 import { EVENT_SOURCE_LABELS } from '../utils/eventLabels';
 import { SourceLogo } from './SourceLogo';
 import { styles } from './TodayEventsCard.styles';
@@ -24,6 +30,9 @@ interface TodayEventsCardProps {
   onEventPress?: (
     event: CalendarEvent,
   ) => void;
+
+  /** What "Show on calendar" hides (#79); the card hides the same events. */
+  filters?: CalendarFilters;
 }
 
 /**
@@ -69,6 +78,7 @@ export function formatEventTime(
  */
 export function TodayEventsCard({
   onEventPress,
+  filters = DEFAULT_CALENDAR_FILTERS,
 }: TodayEventsCardProps) {
   const [today] =
     useState(() =>
@@ -88,7 +98,10 @@ export function TodayEventsCard({
 
   const todayEvents =
     getDaySegments(
-      events,
+      filterCalendarEvents(
+        events,
+        filters,
+      ),
       today,
     ).map(
       (segment) =>
@@ -218,7 +231,9 @@ export function TodayEventsCard({
                 styles.emptyMessage,
               ]}
             >
-              No events today.
+              {isFiltering(filters)
+                ? 'No events today match your filters.'
+                : 'No events today.'}
             </Text>
           )}
 

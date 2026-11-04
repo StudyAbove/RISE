@@ -22,6 +22,8 @@ export const calendarColors = {
   dateText: '#000000',
   // deepOlive family: dates above the Week grid
   weekHeaderNumber: '#1E1E1E',
+  // deepOlive family: event type icons and the "No type" dot on the filter sheet (#79)
+  typeIcon: '#1E1E1E',
   // mutedGrayGreen family: weekday letters and names (S M T…, SUN MON…)
   weekdayText: '#676767',
   // mutedGrayGreen family: "7 AM" hour labels
@@ -32,6 +34,10 @@ export const calendarColors = {
   todayCardBand: '#EFEEE9',
   // warmCream family: background of the event details sheet (#34)
   detailsBackground: '#F4F3F0',
+  // The red of a switched-off toggle on the filter sheet (#79). The palette
+  // has no red; this follows the Figma "Toggle" component, an exception to
+  // the family rule like Google's blue below.
+  toggleOff: '#D36062',
 } as const;
 
 /**
