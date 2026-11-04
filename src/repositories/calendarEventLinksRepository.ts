@@ -403,6 +403,45 @@ export async function saveCalendarEventLink({
  * Provider permissions can change, and links created before
  * writability tracking may have an old/default value.
  */
+/**
+ * Replaces the provider-side event identity without resetting the
+ * synchronization baseline.
+ *
+ * This is used when upgrading legacy Apple recurring-event links from
+ * the raw EventKit series ID to an occurrence-specific identity.
+ */
+export async function updateCalendarEventLinkExternalEventId(
+  calendarEventId: string,
+  provider: ExternalCalendarProvider,
+  externalEventId: string,
+): Promise<void> {
+  const {
+    error,
+  } =
+    await supabase
+      .from('calendar_event_links')
+      .update({
+        external_event_id:
+          externalEventId,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        'calendar_event_id',
+        calendarEventId,
+      )
+      .eq(
+        'provider',
+        provider,
+      );
+
+  if (error) {
+    throw error;
+  }
+}
+
+
 export async function updateCalendarEventLinkWritability(
   calendarEventId: string,
   provider: ExternalCalendarProvider,

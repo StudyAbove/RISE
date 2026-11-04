@@ -42,6 +42,23 @@ export const styles = StyleSheet.create({
     opacity: 0.5,
   },
 
+  deleteAccountCard: {
+    marginBottom: 16,
+  },
+
+  settingsChevronContainer: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  settingsChevron: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  },
+
   logoutCard: {
     height: 72,
     borderRadius: 16,
@@ -121,6 +138,29 @@ export const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     backgroundColor: 'rgba(238, 178, 0, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  deleteAccountWarningIcon: {
+    width: 24,
+    height: 24,
+  },
+
+  deleteAccountWarningOuter: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  deleteAccountWarningInner: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -213,11 +253,25 @@ export const styles = StyleSheet.create({
     borderColor: '#EF4444',
   },
 
+  deleteAccountConfirmButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+  },
+
   disconnectConfirmButtonText: {
     fontFamily: fonts.heading.bold,
     fontSize: 15,
     lineHeight: 18,
     color: '#EF4444',
+    textAlign: 'center',
+  },
+
+  deleteAccountConfirmButtonText: {
+    fontFamily: fonts.heading.bold,
+    fontSize: 15,
+    lineHeight: 18,
+    color: '#000000',
     textAlign: 'center',
   },
 

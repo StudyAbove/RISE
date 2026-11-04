@@ -82,6 +82,9 @@ import {
 import {
   getConnectedCalendarProviders,
 } from '../services/connectedCalendars';
+import {
+  subscribeToCalendarRefresh,
+} from '../services/calendarRefreshService';
 
 import {
   loadCalendarFilters,
@@ -1212,6 +1215,26 @@ export function CalendarScreen() {
     loadLatestSuccessfulSync,
     refreshCalendar,
     runAutomaticSyncIfDue,
+  ]);
+
+  /*
+   * Root-level permission handling can finish after this screen's
+   * AppState refresh has already run.
+   *
+   * Listen for a completed provider cleanup so deleted Apple events
+   * disappear immediately without requiring navigation away/back.
+   */
+  useEffect(() => {
+    return subscribeToCalendarRefresh(
+      () => {
+        refreshCalendar();
+
+        void loadLatestSuccessfulSync();
+      },
+    );
+  }, [
+    loadLatestSuccessfulSync,
+    refreshCalendar,
   ]);
 
   const shift = (

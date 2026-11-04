@@ -20,6 +20,12 @@ export type RootStackParamList = {
   OnboardingComplete: { calendarConnected: boolean };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
+  AssignmentDetails: { assignmentId: string };
+  FocusSession: {
+    assignmentId: string;
+    assignmentTitle: string;
+  };
+  TakeABreak: undefined;
 };
 
 // Lets useNavigation() know the app's routes without passing a type each time.

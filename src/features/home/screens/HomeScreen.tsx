@@ -1,22 +1,38 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent, type Text } from 'react-native';
 
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { HighPriorityTasks } from '../components/HighPriorityTasks';
 import { HomeHeader } from '../components/HomeHeader';
 import { HomeSkyBackdrop } from '../components/HomeSkyBackdrop';
+import { WeeklyForecastCard } from '../components/WeeklyForecastCard';
+import { useHomeData } from '../hooks/useHomeData';
 import { useStudentFirstName } from '../hooks/useStudentFirstName';
 import { getTimeOfDay } from '../utils/greeting';
+import { getHighPriorityTasks } from '../utils/highPriorityTasks';
+import { buildWeeklyForecast } from '../utils/weeklyForecast';
 
 // How far the sky picture extends below the date, so the date sits on the hills.
 const SKY_OVERLAP_BELOW_DATE = 8;
 
-// Main page of the Home tab. The sections below the greeting (weekly
-// forecast, priority tasks, mood check-in) come in their own stories.
+// Main page of the Home tab. The mood check-in below the tasks comes in
+// its own story.
 export function HomeScreen() {
   const greetingRef = useRef<Text>(null);
   const date = useCurrentDate();
   const firstName = useStudentFirstName();
+  const { status, assignments, eventMinutesByDay } = useHomeData();
+
+  const forecast = useMemo(
+    () =>
+      status === 'ready' ? buildWeeklyForecast(assignments, date, eventMinutesByDay) : null,
+    [assignments, date, eventMinutesByDay, status],
+  );
+  const highPriorityTasks = useMemo(
+    () => getHighPriorityTasks(assignments, date, eventMinutesByDay),
+    [assignments, date, eventMinutesByDay],
+  );
   // Where the header (and so the date line) ends, so the sky can line up with it.
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
 
@@ -36,6 +52,13 @@ export function HomeScreen() {
       <View onLayout={handleHeaderLayout}>
         <HomeHeader date={date} firstName={firstName} greetingRef={greetingRef} />
       </View>
+      {status !== 'signedOut' && (
+        <WeeklyForecastCard status={status} forecast={forecast} now={date} />
+      )}
+      {/* The forecast card shows loading and errors for both sections. */}
+      {status === 'ready' && (
+        <HighPriorityTasks tasks={highPriorityTasks} now={date} />
+      )}
     </TabScreenScrollView>
   );
 }

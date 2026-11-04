@@ -32,6 +32,7 @@ describe('parseSyncPayload', () => {
   it('shapes courses and assignments for saving', () => {
     expect(parseSyncPayload(validPayload())).toEqual({
       canvasDomain: 'csulb.instructure.com',
+      studentName: null,
       courses: [
         { canvasCourseId: '101', name: 'BIOL 201: Cell Biology', code: 'BIOL 201', term: 'Fall 2026' },
       ],
@@ -48,6 +49,15 @@ describe('parseSyncPayload', () => {
         },
       ],
     });
+  });
+
+  it("reads the student's Canvas name for the greeting", () => {
+    expect(parseSyncPayload({ ...validPayload(), studentName: '  Julia Matinyan  ' }).studentName).toBe(
+      'Julia Matinyan',
+    );
+    expect(parseSyncPayload({ ...validPayload(), studentName: 'x'.repeat(500) }).studentName).toHaveLength(100);
+    expect(parseSyncPayload({ ...validPayload(), studentName: 42 }).studentName).toBeNull();
+    expect(parseSyncPayload({ ...validPayload(), studentName: '   ' }).studentName).toBeNull();
   });
 
   it('fills in safe defaults for missing details', () => {
