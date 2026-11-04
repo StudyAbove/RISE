@@ -1,5 +1,5 @@
 import { type FC, type ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { SvgProps } from 'react-native-svg';
 import { format, parseISO } from 'date-fns';
 
@@ -9,6 +9,7 @@ import FileTextIcon from '../../../../assets/icons/calendar/details/file-text.sv
 import MapPinIcon from '../../../../assets/icons/calendar/details/map-pin.svg';
 import CloseIcon from '../../../../assets/icons/calendar/close.svg';
 import AssignmentIcon from '../../../../assets/icons/calendar/event-types/assignment.svg';
+import ClassIcon from '../../../../assets/icons/calendar/event-types/class.svg';
 import PersonalIcon from '../../../../assets/icons/calendar/event-types/personal.svg';
 import StudyIcon from '../../../../assets/icons/calendar/event-types/study.svg';
 import WellnessIcon from '../../../../assets/icons/calendar/event-types/wellness.svg';
@@ -25,8 +26,9 @@ import { formatEventTime } from './TodayEventsCard';
 
 const BIG_ICON_SIZE = 44;
 
-// The big icon at the top, by event type. Class is an image (see below).
-const TYPE_ICONS: Partial<Record<CalendarEventType, FC<SvgProps>>> = {
+// The big icon at the top, by event type.
+const TYPE_ICONS: Record<CalendarEventType, FC<SvgProps>> = {
+  class: ClassIcon,
   assignment: AssignmentIcon,
   study: StudyIcon,
   personal: PersonalIcon,
@@ -389,15 +391,7 @@ function TypeCircle({ type }: { type?: CalendarEventType }) {
       testID="event-type-circle"
       style={[styles.circle, { backgroundColor: eventTypeCircleColors[type ?? 'none'] }]}
     >
-      {Icon ? (
-        <Icon width={BIG_ICON_SIZE} height={BIG_ICON_SIZE} />
-      ) : (
-        <Image
-          source={require('../../../../assets/icons/calendar/event-types/class.png')}
-          style={styles.classIcon}
-          accessibilityIgnoresInvertColors
-        />
-      )}
+      <Icon width={BIG_ICON_SIZE} height={BIG_ICON_SIZE} />
     </View>
   );
 }

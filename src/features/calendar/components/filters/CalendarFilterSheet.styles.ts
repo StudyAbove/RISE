@@ -58,18 +58,13 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  classIcon: {
-    width: 28,
-    height: 25,
-  },
-  // "No type" has no Figma icon; it borrows the empty circle from the
-  // "All other courses" row.
+  // "No type" has no Figma icon; a solid dot in the type icons' black, a
+  // little smaller than the icons so it doesn't look heavier than them.
   noTypeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.softSage,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: calendarColors.typeIcon,
   },
   label: {
     flex: 1,

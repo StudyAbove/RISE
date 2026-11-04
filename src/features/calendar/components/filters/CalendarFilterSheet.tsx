@@ -1,9 +1,10 @@
 import { useEffect, useState, type FC, type ReactNode } from 'react';
-import { Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import type { SvgProps } from 'react-native-svg';
 
 import AssignmentIcon from '../../../../../assets/icons/calendar/event-types/assignment.svg';
+import ClassIcon from '../../../../../assets/icons/calendar/event-types/class.svg';
 import PersonalIcon from '../../../../../assets/icons/calendar/event-types/personal.svg';
 import StudyIcon from '../../../../../assets/icons/calendar/event-types/study.svg';
 import WellnessIcon from '../../../../../assets/icons/calendar/event-types/wellness.svg';
@@ -16,14 +17,15 @@ import { SourceLogo } from '../SourceLogo';
 import { styles } from './CalendarFilterSheet.styles';
 import { FilterToggle } from './FilterToggle';
 
-// Order, names, and icon sizes from the Figma "Calendar settings" rows, then
+// Order, names, and icon sizes from the Figma "Calendar settings" rows (wellness
+// shrunk to match the others now that the Untitled UI icons share one grid), then
 // "No type" for events without one (most imported events).
 const TYPE_ROWS: { type: EventTypeFilter; label: string; Icon?: FC<SvgProps>; iconSize?: number }[] = [
-  { type: 'class', label: 'Classes' },
+  { type: 'class', label: 'Classes', Icon: ClassIcon, iconSize: 28 },
   { type: 'assignment', label: 'Assignments', Icon: AssignmentIcon, iconSize: 28 },
   { type: 'study', label: 'Study sessions', Icon: StudyIcon, iconSize: 28 },
   { type: 'personal', label: 'Personal', Icon: PersonalIcon, iconSize: 28 },
-  { type: 'wellness', label: 'Wellness', Icon: WellnessIcon, iconSize: 30 },
+  { type: 'wellness', label: 'Wellness', Icon: WellnessIcon, iconSize: 28 },
   { type: 'none', label: 'No type' },
 ];
 
@@ -104,14 +106,7 @@ export function CalendarFilterSheet({ visible, filters, onApply, onClose }: Cale
                 on={!draft.hiddenTypes.includes(type)}
                 onPress={() => setDraft((current) => ({ ...current, hiddenTypes: toggled(current.hiddenTypes, type) }))}
                 icon={
-                  type === 'class' ? (
-                    <Image
-                      source={require('../../../../../assets/icons/calendar/event-types/class.png')}
-                      style={styles.classIcon}
-                      resizeMode="contain"
-                      accessibilityIgnoresInvertColors
-                    />
-                  ) : Icon ? (
+                  Icon ? (
                     <Icon width={iconSize} height={iconSize} />
                   ) : (
                     <View style={styles.noTypeIcon} />

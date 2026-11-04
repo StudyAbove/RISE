@@ -36,10 +36,6 @@ export const styles = StyleSheet.create({
     // Above the card it overlaps.
     zIndex: 1,
   },
-  classIcon: {
-    width: 44,
-    height: 44,
-  },
   card: {
     backgroundColor: colors.softWhite,
     borderRadius: CARD_RADIUS,

@@ -22,6 +22,8 @@ export const calendarColors = {
   dateText: '#000000',
   // deepOlive family: dates above the Week grid
   weekHeaderNumber: '#1E1E1E',
+  // deepOlive family: event type icons and the "No type" dot on the filter sheet (#79)
+  typeIcon: '#1E1E1E',
   // mutedGrayGreen family: weekday letters and names (S M T…, SUN MON…)
   weekdayText: '#676767',
   // mutedGrayGreen family: "7 AM" hour labels
