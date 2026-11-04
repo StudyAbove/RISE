@@ -120,3 +120,33 @@ export async function requestMicrotaskGeneration(
     created: data.created,
   };
 }
+/**
+ * Save an explicit completion choice, including undo.
+ * Only completion changes; task details and assignment completion stay intact.
+ * Supabase permissions and row-level security enforce ownership.
+ */
+export async function setMicrotaskCompleted(
+  assignmentId: string,
+  microtaskId: string,
+  completed: boolean,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('assignment_microtasks')
+    .update({ completed })
+    .eq('assignment_id', assignmentId)
+    .eq('id', microtaskId)
+    .select('completed')
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  // No returned row means the task was missing or unavailable to this user.
+  // Never show a successful completion when nothing was saved.
+  if (!data || data.completed !== completed) {
+    throw new Error('Could not save task completion. Please try again.');
+  }
+
+  return data.completed;
+}

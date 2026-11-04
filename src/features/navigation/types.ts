@@ -24,6 +24,11 @@ export type RootStackParamList = {
   FocusSession: {
     assignmentId: string;
     assignmentTitle: string;
+    microtasks?: {
+      id: string;
+      title: string;
+      estimatedMinutes: number;
+    }[];
   };
   TakeABreak: undefined;
 };

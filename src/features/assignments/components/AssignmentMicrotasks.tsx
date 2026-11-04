@@ -13,6 +13,7 @@ import {
   fetchMicrotasks,
   MicrotaskGenerationError,
   requestMicrotaskGeneration,
+  setMicrotaskCompleted,
   type Microtask,
 } from '../../../repositories/microtasksRepository';
 import { colors, statusColors } from '../../../theme/colors';
@@ -21,18 +22,26 @@ import { formatEstimate } from '../utils/assignmentEstimate';
 
 type Props = {
   assignment: Assignment;
+  onSelectionChange?: (tasks: Microtask[]) => void;
 };
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
 // Display the selected assignment's saved, ordered microtasks.
-// Completion controls and session selection are handled by later stories.
-export function AssignmentMicrotasks({ assignment }: Props) {
+// Session selection is separate from saved completion.
+export function AssignmentMicrotasks({
+  assignment,
+  onSelectionChange,
+}: Props) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tasks, setTasks] = useState<Microtask[]>([]);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [generating, setGenerating] = useState(false);
   const [notice, setNotice] = useState('');
   const [reloadCount, setReloadCount] = useState(0);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const [completionError, setCompletionError] = useState('');
+  const completionInProgress = useRef(false);
 
   // Ignore old requests after this component reloads or unmounts.
   const requestVersion = useRef(0);
@@ -99,10 +108,90 @@ export function AssignmentMicrotasks({ assignment }: Props) {
     assignment.estimatedMinutes >= 5 &&
     assignment.estimatedMinutes <= 6000;
 
+  // Send only valid, unfinished tasks in their saved display order.
+  // Selecting a task never changes its saved completion status.
+  useEffect(() => {
+    const selectedTasks =
+      status === 'ready' && !assignment.completed
+        ? tasks.filter(
+            (task) =>
+              task.assignmentId === assignment.id &&
+              selectedIds.includes(task.id) &&
+              !task.completed &&
+              Number.isInteger(task.estimatedMinutes) &&
+              task.estimatedMinutes > 0 &&
+              task.estimatedMinutes <= 6000,
+          )
+        : [];
+
+    onSelectionChange?.(selectedTasks);
+  }, [
+    assignment.id,
+    assignment.completed,
+    tasks,
+    status,
+    selectedIds,
+    onSelectionChange,
+  ]);
+
+  function toggleSelection(taskId: string) {
+    setSelectedIds((previous) =>
+      previous.includes(taskId)
+        ? previous.filter((id) => id !== taskId)
+        : [...previous, taskId],
+    );
+  }
+
   const completedCount = tasks.filter((task) => task.completed).length;
   const progressPercent =
     tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
+  async function undoCompletion(task: Microtask) {
+    if (
+      completionInProgress.current ||
+      !task.completed ||
+      task.assignmentId !== assignment.id
+    ) {
+      return;
+    }
 
+    completionInProgress.current = true;
+    const version = requestVersion.current;
+
+    setUpdatingTaskId(task.id);
+    setCompletionError('');
+
+    try {
+      await setMicrotaskCompleted(assignment.id, task.id, false);
+
+      if (requestVersion.current !== version) return;
+
+      // Update the card and progress only after the database confirms success.
+      setTasks((previous) =>
+        previous.map((savedTask) =>
+          savedTask.id === task.id
+            ? { ...savedTask, completed: false }
+            : savedTask,
+        ),
+      );
+
+      // Undo makes the task available again; it does not select it to study.
+      setSelectedIds((previous) =>
+        previous.filter((id) => id !== task.id),
+      );
+    } catch {
+      if (requestVersion.current !== version) return;
+
+      setCompletionError(
+        'Couldn’t undo completion. Please try again.',
+      );
+    } finally {
+      completionInProgress.current = false;
+
+      if (requestVersion.current === version) {
+        setUpdatingTaskId(null);
+      }
+    }
+  }
   async function generateTasks() {
     if (
       generationInProgress.current ||
@@ -256,9 +345,14 @@ export function AssignmentMicrotasks({ assignment }: Props) {
           {notice}
         </Text>
       )}
+      {completionError !== '' && (
+        <Text accessibilityRole="alert" style={styles.notice}>
+          {completionError}
+        </Text>
+      )}
 
-      {status === 'ready' && tasks.length === 0 && (
-        <View style={styles.messageCard}>
+        {status === 'ready' && tasks.length === 0 && (
+          <View style={styles.messageCard}>
           <Text style={styles.messageText}>
             No microtasks available yet.
           </Text>
@@ -296,64 +390,116 @@ export function AssignmentMicrotasks({ assignment }: Props) {
           )}
         </View>
       )}
-
-      {status === 'ready' && (
+      {status === 'ready' && tasks.length > 0 && (
         <View style={styles.taskList}>
-          {tasks.map((task) => (
-            <View
-              key={task.id}
-              accessible
-              accessibilityLabel={
-                `Step ${task.position}. ${task.title}. ` +
-                `Estimated ${task.estimatedMinutes} minutes. ` +
-                (task.completed ? 'Completed.' : 'Not completed.')
-              }
-              style={[
-                styles.taskCard,
-                task.completed && styles.completedCard,
-              ]}
-            >
-              <View
-                style={[
-                  styles.taskCircle,
-                  task.completed && styles.completedCircle,
+          {!assignment.completed && (
+            <Text style={styles.messageText}>
+              Select the tasks you want to study. You’ll work on one at a time.
+            </Text>
+          )}
+
+          {tasks.map((task) => {
+            const canSelect =
+              !assignment.completed &&
+              !task.completed &&
+              Number.isInteger(task.estimatedMinutes) &&
+              task.estimatedMinutes > 0 &&
+              task.estimatedMinutes <= 6000;
+
+            const selected = canSelect && selectedIds.includes(task.id);
+
+            return (
+              <Pressable
+                key={task.id}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={
+                  `Step ${task.position}. ${task.title}. ` +
+                  `Estimated ${task.estimatedMinutes} minutes. ` +
+                  (task.completed ? 'Completed.' : 'Not completed.')
+                }
+                accessibilityHint={
+                  task.completed
+                    ? 'Marks this task incomplete again'
+                    : canSelect
+                      ? 'Selects or deselects this task for a study session'
+                      : undefined
+                }
+                accessibilityState={{
+                  selected,
+                  disabled:
+                    updatingTaskId !== null ||
+                    (!task.completed && !canSelect),
+                  busy: updatingTaskId === task.id,
+                }}
+                disabled={
+                  updatingTaskId !== null ||
+                  (!task.completed && !canSelect)
+                }
+                onPress={() => {
+                  if (task.completed) {
+                    void undoCompletion(task);
+                  } else {
+                    toggleSelection(task.id);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.taskCard,
+                  selected && styles.selectedCard,
+                  task.completed && styles.completedCard,
+                  pressed && styles.pressed,
                 ]}
               >
-                {task.completed && (
-                  <Svg
-                    width={15}
-                    height={15}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    accessible={false}
-                  >
-                    <Path
-                      d="m5 12 4 4L19 6"
-                      stroke={colors.softWhite}
-                      strokeWidth={3}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                )}
-              </View>
-
-              <View style={styles.taskText}>
-                <Text
+                {/* Checkmarks mean completed, never merely selected. */}
+                <View
                   style={[
-                    styles.taskTitle,
-                    task.completed && styles.completedTitle,
+                    styles.taskCircle,
+                    task.completed && styles.completedCircle,
                   ]}
                 >
-                  {task.title}
-                </Text>
+                  {task.completed && (
+                    <Svg
+                      width={15}
+                      height={15}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      accessible={false}
+                    >
+                      <Path
+                        d="m5 12 4 4L19 6"
+                        stroke={colors.softWhite}
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </Svg>
+                  )}
+                </View>
 
-                <Text style={styles.taskTime}>
-                  Est. {formatEstimate(task.estimatedMinutes)}
-                </Text>
-              </View>
-            </View>
-          ))}
+                <View style={styles.taskText}>
+                  <Text
+                    style={[
+                      styles.taskTitle,
+                      task.completed && styles.completedTitle,
+                    ]}
+                  >
+                    {task.title}
+                  </Text>
+
+                  <Text style={styles.taskTime}>
+                    Est. {formatEstimate(task.estimatedMinutes)}
+                    {updatingTaskId === task.id
+                      ? ' · Saving…'
+                      : task.completed
+                        ? ' · Tap to undo completion'
+                        : selected
+                          ? ' · Selected'
+                          : ''}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </View>
@@ -405,6 +551,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.mistGreen,
     backgroundColor: colors.softWhite,
+  },
+  selectedCard: {
+    borderColor: colors.eucalyptus,
+    borderWidth: 2,
   },
   completedCard: {
     borderColor: colors.softSage,

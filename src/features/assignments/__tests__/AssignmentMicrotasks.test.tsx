@@ -6,15 +6,18 @@ import {
   jest,
 } from '@jest/globals';
 import {
+  act,
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react-native';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 import {
   fetchMicrotasks,
   requestMicrotaskGeneration,
+  setMicrotaskCompleted,
   type Microtask,
 } from '../../../repositories/microtasksRepository';
 import { AssignmentMicrotasks } from '../components/AssignmentMicrotasks';
@@ -22,12 +25,14 @@ import { AssignmentMicrotasks } from '../components/AssignmentMicrotasks';
 // These tests use sample responses, not real accounts or AI requests.
 jest.mock('../../../repositories/microtasksRepository', () => ({
   fetchMicrotasks: jest.fn(),
+  setMicrotaskCompleted: jest.fn(),
   requestMicrotaskGeneration: jest.fn(),
   MicrotaskGenerationError: class extends Error {},
 }));
 
 const mockFetch = jest.mocked(fetchMicrotasks);
 const mockGenerate = jest.mocked(requestMicrotaskGeneration);
+const mockSetCompleted = jest.mocked(setMicrotaskCompleted);
 
 const assignment: Assignment = {
   id: 'assignment-1',
@@ -65,6 +70,8 @@ function savedTask(
 beforeEach(() => {
   mockFetch.mockReset();
   mockGenerate.mockReset();
+    mockSetCompleted.mockReset();
+  mockSetCompleted.mockResolvedValue(false);
 
   mockFetch.mockResolvedValue([]);
   mockGenerate.mockResolvedValue({
@@ -238,5 +245,251 @@ describe('AssignmentMicrotasks', () => {
     ).toBeTruthy();
 
     expect(screen.getByText('0 / 1 tasks')).toBeTruthy();
+  });
+});
+describe('AssignmentMicrotasks selection and undo', () => {
+  it('selects and deselects without completing a task or changing progress', async () => {
+    const task = savedTask();
+    const onSelectionChange = jest.fn();
+
+    mockFetch.mockResolvedValue([task]);
+
+    await render(
+      <AssignmentMicrotasks
+        assignment={assignment}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+
+    const card = await screen.findByRole('button', {
+      name: /Step 1\. Organize experimental data/,
+    });
+
+    await fireEvent.press(card);
+
+    await waitFor(() => {
+      expect(onSelectionChange).toHaveBeenLastCalledWith([task]);
+    });
+
+    expect(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }).props.accessibilityState.selected,
+    ).toBe(true);
+
+    expect(screen.getByText('0 / 1 tasks')).toBeTruthy();
+    expect(mockSetCompleted).not.toHaveBeenCalled();
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+    });
+
+    expect(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }).props.accessibilityState.selected,
+    ).toBe(false);
+
+    expect(mockSetCompleted).not.toHaveBeenCalled();
+  });
+
+  it('reports multiple selected tasks in their saved order', async () => {
+    const first = savedTask();
+    const second = savedTask({
+      id: 'task-2',
+      title: 'Write the conclusion',
+      position: 2,
+      estimatedMinutes: 65,
+    });
+    const onSelectionChange = jest.fn();
+
+    mockFetch.mockResolvedValue([first, second]);
+
+    await render(
+      <AssignmentMicrotasks
+        assignment={assignment}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+
+    // Select the second task first to verify saved order is preserved.
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: /Step 2\. Write the conclusion/,
+      }),
+    );
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onSelectionChange).toHaveBeenLastCalledWith([
+        first,
+        second,
+      ]);
+    });
+
+    expect(screen.getByText('0 / 2 tasks')).toBeTruthy();
+    expect(mockSetCompleted).not.toHaveBeenCalled();
+  });
+
+  it('undoes completion after saving and leaves the task unselected', async () => {
+    mockFetch.mockResolvedValue([
+      savedTask({ completed: true }),
+    ]);
+    const onSelectionChange = jest.fn();
+
+    await render(
+      <AssignmentMicrotasks
+        assignment={assignment}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+
+    expect(await screen.findByText('1 / 1 tasks')).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    expect(mockSetCompleted).toHaveBeenCalledWith(
+      assignment.id,
+      'task-1',
+      false,
+    );
+
+    expect(await screen.findByText('0 / 1 tasks')).toBeTruthy();
+
+    expect(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }).props.accessibilityState.selected,
+    ).toBe(false);
+
+    await waitFor(() => {
+      expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+    });
+  });
+
+  it('keeps completion and progress unchanged when undo fails, then allows retry', async () => {
+    mockFetch.mockResolvedValue([
+      savedTask({ completed: true }),
+    ]);
+
+    mockSetCompleted
+      .mockRejectedValueOnce(new Error('Connection failed'))
+      .mockResolvedValueOnce(false);
+
+    await render(<AssignmentMicrotasks assignment={assignment} />);
+
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Couldn’t undo completion. Please try again.',
+      ),
+    ).toBeTruthy();
+
+    expect(screen.getByText('1 / 1 tasks')).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    expect(await screen.findByText('0 / 1 tasks')).toBeTruthy();
+    expect(mockSetCompleted).toHaveBeenCalledTimes(2);
+
+    expect(
+      screen.queryByText(
+        'Couldn’t undo completion. Please try again.',
+      ),
+    ).toBeNull();
+  });
+
+  it('waits for an undo save before changing progress and blocks repeated taps', async () => {
+    let finishSave!: (completed: boolean) => void;
+
+    mockSetCompleted.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+
+    mockFetch.mockResolvedValue([
+      savedTask({ completed: true }),
+    ]);
+
+    await render(<AssignmentMicrotasks assignment={assignment} />);
+
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    expect(screen.getByText('1 / 1 tasks')).toBeTruthy();
+
+    expect(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }).props.accessibilityState.busy,
+    ).toBe(true);
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    expect(mockSetCompleted).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishSave(false);
+    });
+
+    expect(await screen.findByText('0 / 1 tasks')).toBeTruthy();
+  });
+
+  it('restores the saved completion state after reopening', async () => {
+    mockFetch
+      .mockResolvedValueOnce([savedTask({ completed: true })])
+      .mockResolvedValueOnce([savedTask({ completed: false })]);
+
+    const firstScreen = await render(
+      <AssignmentMicrotasks assignment={assignment} />,
+    );
+
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    expect(await screen.findByText('0 / 1 tasks')).toBeTruthy();
+
+    await firstScreen.unmount();
+
+    await render(<AssignmentMicrotasks assignment={assignment} />);
+
+    expect(await screen.findByText('0 / 1 tasks')).toBeTruthy();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });

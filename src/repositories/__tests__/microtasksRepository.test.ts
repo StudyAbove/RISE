@@ -11,6 +11,7 @@ import {
   fetchMicrotasks,
   MicrotaskGenerationError,
   requestMicrotaskGeneration,
+  setMicrotaskCompleted,
 } from '../microtasksRepository';
 
 const mockQueryResult = jest.fn<() => {
@@ -27,10 +28,16 @@ const mockInvoke = jest.fn<
 
 const mockEq = jest.fn();
 const mockOrder = jest.fn();
+const mockUpdate = jest.fn();
 
 // These tests do not access Supabase or make real AI requests.
 jest.mock('../../lib/supabase', () => {
   const query = {
+    update: (values: { completed: boolean }) => {
+      mockUpdate(values);
+      return query;
+    },
+    maybeSingle: () => Promise.resolve(mockQueryResult()),
     select: () => query,
     eq: (column: string, value: string) => {
       mockEq(column, value);
@@ -71,6 +78,7 @@ beforeEach(() => {
   mockInvoke.mockReset();
   mockEq.mockReset();
   mockOrder.mockReset();
+  mockUpdate.mockReset();
 
   mockQueryResult.mockReturnValue({
     data: [],
@@ -258,5 +266,78 @@ describe('requestMicrotaskGeneration', () => {
     ).rejects.toMatchObject({
       code: 'invalid_response',
     });
+  });
+});
+  describe('setMicrotaskCompleted', () => {
+  it.each([true, false])(
+    'saves completion as %s for the selected task and assignment',
+    async (completed) => {
+      mockQueryResult.mockReturnValue({
+        data: { completed },
+        error: null,
+      });
+
+      await expect(
+        setMicrotaskCompleted('assignment-1', 'task-1', completed),
+      ).resolves.toBe(completed);
+
+      expect(mockUpdate).toHaveBeenCalledWith({ completed });
+
+      expect(mockEq).toHaveBeenCalledWith(
+        'assignment_id',
+        'assignment-1',
+      );
+
+      expect(mockEq).toHaveBeenCalledWith('id', 'task-1');
+    },
+  );
+
+  it('allows the same completion choice to be retried safely', async () => {
+    mockQueryResult.mockReturnValue({
+      data: { completed: true },
+      error: null,
+    });
+
+    await setMicrotaskCompleted('assignment-1', 'task-1', true);
+    await setMicrotaskCompleted('assignment-1', 'task-1', true);
+
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockUpdate).toHaveBeenNthCalledWith(1, { completed: true });
+    expect(mockUpdate).toHaveBeenNthCalledWith(2, { completed: true });
+  });
+
+  it('reports database errors so the screen can offer a retry', async () => {
+    const error = new Error('Connection failed');
+
+    mockQueryResult.mockReturnValue({
+      data: null,
+      error,
+    });
+
+    await expect(
+      setMicrotaskCompleted('assignment-1', 'task-1', true),
+    ).rejects.toBe(error);
+  });
+
+  it('does not claim success when the task is unavailable', async () => {
+    mockQueryResult.mockReturnValue({
+      data: null,
+      error: null,
+    });
+
+    await expect(
+      setMicrotaskCompleted('assignment-1', 'task-1', true),
+    ).rejects.toThrow('Could not save task completion');
+  });
+
+  it('rejects a response that does not match the requested completion', async () => {
+    mockQueryResult.mockReturnValue({
+      data: { completed: false },
+      error: null,
+    });
+
+    await expect(
+      setMicrotaskCompleted('assignment-1', 'task-1', true),
+    ).rejects.toThrow('Could not save task completion');
   });
 });

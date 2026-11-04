@@ -25,6 +25,7 @@ import { PriorityPill } from '../components/PriorityPill';
 import { getPriorityLevel } from '../utils/assignmentPriority';
 import { AssignmentDescription } from '../components/AssignmentDescription';
 import { AssignmentMicrotasks } from '../components/AssignmentMicrotasks';
+import type { Microtask } from '../../../repositories/microtasksRepository';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -42,6 +43,8 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
+    // Selection prepares a session; it does not mark tasks complete.
+  const [selectedTasks, setSelectedTasks] = useState<Microtask[]>([]);
   // Remember each assignment's expanded description while this screen is mounted,
   // including when returning from a focus session.
   const [expandedDescriptions, setExpandedDescriptions] = useState<
@@ -56,6 +59,7 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
       async function loadAssignment() {
         setStatus('loading');
         setAssignment(null);
+        setSelectedTasks([]);
 
         try {
           const result = await fetchAssignmentById(assignmentId);
@@ -241,19 +245,50 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
           <AssignmentMicrotasks
             key={assignment.id}
             assignment={assignment}
+            onSelectionChange={setSelectedTasks}
           />
           {/* Open the focus screen for this selected assignment. */}
+          <Text style={styles.selectionHint}>
+            {assignment.completed
+              ? 'This assignment is already complete.'
+              : selectedTasks.length === 0
+                ? 'Select at least one task to start studying.'
+                : `${selectedTasks.length} selected · One task at a time`}
+          </Text>
+
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Start study session for ${assignment.title}`}
-            onPress={() =>
+            accessibilityState={{
+              disabled: assignment.completed || selectedTasks.length === 0,
+            }}
+            disabled={assignment.completed || selectedTasks.length === 0}
+            onPress={() => {
+              const sessionTasks = selectedTasks.filter(
+                (task) =>
+                  task.assignmentId === assignment.id &&
+                  !task.completed &&
+                  Number.isInteger(task.estimatedMinutes) &&
+                  task.estimatedMinutes > 0 &&
+                  task.estimatedMinutes <= 6000,
+              );
+
+              if (assignment.completed || sessionTasks.length === 0) return;
+
               navigation.navigate('FocusSession', {
                 assignmentId: assignment.id,
                 assignmentTitle: assignment.title,
-              })
-            }
+                microtasks: sessionTasks.map((task) => ({
+                  id: task.id,
+                  title: task.title,
+                  estimatedMinutes: task.estimatedMinutes,
+                })),
+              });
+            }}
             style={({ pressed }) => [
               styles.startButton,
+              (assignment.completed || selectedTasks.length === 0) &&
+                styles.disabled,
               pressed && styles.pressed,
             ]}
           >
@@ -360,6 +395,14 @@ const styles = StyleSheet.create({
     ...textStyles.link,
     color: colors.deepOlive,
     textAlign: 'center',
+  },
+  selectionHint: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
+    marginTop: 12,
+  },
+  disabled: {
+    opacity: 0.6,
   },
   pressed: {
     opacity: 0.7,
