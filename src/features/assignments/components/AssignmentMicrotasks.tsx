@@ -145,6 +145,54 @@ export function AssignmentMicrotasks({
   const completedCount = tasks.filter((task) => task.completed).length;
   const progressPercent =
     tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
+  async function completeTask(task: Microtask) {
+    if (
+      completionInProgress.current ||
+      task.completed ||
+      assignment.completed ||
+      task.assignmentId !== assignment.id
+    ) {
+      return;
+    }
+
+    completionInProgress.current = true;
+    const version = requestVersion.current;
+
+    setUpdatingTaskId(task.id);
+    setCompletionError('');
+
+    try {
+      await setMicrotaskCompleted(assignment.id, task.id, true);
+
+      if (requestVersion.current !== version) return;
+
+      setTasks((previous) =>
+        previous.map((savedTask) =>
+          savedTask.id === task.id
+            ? { ...savedTask, completed: true }
+            : savedTask,
+        ),
+      );
+
+      // Once completed, it should no longer be queued for studying.
+      setSelectedIds((previous) =>
+        previous.filter((id) => id !== task.id),
+      );
+    } catch {
+      if (requestVersion.current !== version) return;
+
+      setCompletionError(
+        'Couldn’t mark task complete. Please try again.',
+      );
+    } finally {
+      completionInProgress.current = false;
+
+      if (requestVersion.current === version) {
+        setUpdatingTaskId(null);
+      }
+    }
+  }
+
   async function undoCompletion(task: Microtask) {
     if (
       completionInProgress.current ||
@@ -399,107 +447,148 @@ export function AssignmentMicrotasks({
           )}
 
           {tasks.map((task) => {
-            const canSelect =
-              !assignment.completed &&
-              !task.completed &&
-              Number.isInteger(task.estimatedMinutes) &&
-              task.estimatedMinutes > 0 &&
-              task.estimatedMinutes <= 6000;
+              const canSelect =
+                !assignment.completed &&
+                !task.completed &&
+                Number.isInteger(task.estimatedMinutes) &&
+                task.estimatedMinutes > 0 &&
+                task.estimatedMinutes <= 6000;
 
-            const selected = canSelect && selectedIds.includes(task.id);
+              const selected =
+                canSelect && selectedIds.includes(task.id);
 
-            return (
-              <Pressable
-                key={task.id}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel={
-                  `Step ${task.position}. ${task.title}. ` +
-                  `Estimated ${task.estimatedMinutes} minutes. ` +
-                  (task.completed ? 'Completed.' : 'Not completed.')
-                }
-                accessibilityHint={
-                  task.completed
-                    ? 'Marks this task incomplete again'
-                    : canSelect
-                      ? 'Selects or deselects this task for a study session'
-                      : undefined
-                }
-                accessibilityState={{
-                  selected,
-                  disabled:
-                    updatingTaskId !== null ||
-                    (!task.completed && !canSelect),
-                  busy: updatingTaskId === task.id,
-                }}
-                disabled={
-                  updatingTaskId !== null ||
-                  (!task.completed && !canSelect)
-                }
-                onPress={() => {
-                  if (task.completed) {
-                    void undoCompletion(task);
-                  } else {
-                    toggleSelection(task.id);
-                  }
-                }}
-                style={({ pressed }) => [
-                  styles.taskCard,
-                  selected && styles.selectedCard,
-                  task.completed && styles.completedCard,
-                  pressed && styles.pressed,
-                ]}
-              >
-                {/* Checkmarks mean completed, never merely selected. */}
+              const isUpdating = updatingTaskId === task.id;
+
+              return (
                 <View
+                  key={task.id}
                   style={[
-                    styles.taskCircle,
-                    task.completed && styles.completedCircle,
+                    styles.taskCard,
+                    selected && styles.selectedCard,
+                    task.completed && styles.completedCard,
                   ]}
                 >
-                  {task.completed && (
-                    <Svg
-                      width={15}
-                      height={15}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      accessible={false}
-                    >
-                      <Path
-                        d="m5 12 4 4L19 6"
-                        stroke={colors.softWhite}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </Svg>
-                  )}
-                </View>
-
-                <View style={styles.taskText}>
-                  <Text
-                    style={[
-                      styles.taskTitle,
-                      task.completed && styles.completedTitle,
+                  {/* Circle controls completion only. */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      task.completed
+                        ? `Mark Step ${task.position} incomplete`
+                        : `Mark Step ${task.position} complete`
+                    }
+                    accessibilityHint={
+                      task.completed
+                        ? 'Marks this task incomplete again'
+                        : 'Marks this task complete'
+                    }
+                    accessibilityState={{
+                      disabled:
+                        updatingTaskId !== null ||
+                        assignment.completed,
+                      busy: isUpdating,
+                    }}
+                    disabled={
+                      updatingTaskId !== null ||
+                      assignment.completed
+                    }
+                    hitSlop={8}
+                    onPress={() => {
+                      if (task.completed) {
+                        void undoCompletion(task);
+                      } else {
+                        void completeTask(task);
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.taskCircleButton,
+                      pressed && styles.pressed,
                     ]}
                   >
-                    {task.title}
-                  </Text>
+                    <View
+                      style={[
+                        styles.taskCircle,
+                        task.completed &&
+                          styles.completedCircle,
+                      ]}
+                    >
+                      {task.completed && (
+                        <Svg
+                          width={15}
+                          height={15}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          accessible={false}
+                        >
+                          <Path
+                            d="m5 12 4 4L19 6"
+                            stroke={colors.softWhite}
+                            strokeWidth={3}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </Svg>
+                      )}
+                    </View>
+                  </Pressable>
 
-                  <Text style={styles.taskTime}>
-                    Est. {formatEstimate(task.estimatedMinutes)}
-                    {updatingTaskId === task.id
-                      ? ' · Saving…'
-                      : task.completed
-                        ? ' · Tap to undo completion'
-                        : selected
-                          ? ' · Selected'
-                          : ''}
-                  </Text>
+                  {/* Rest of card selects the task for studying. */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      `Step ${task.position}. ${task.title}. ` +
+                      `Estimated ${task.estimatedMinutes} minutes. ` +
+                      (task.completed
+                        ? 'Completed.'
+                        : 'Not completed.')
+                    }
+                    accessibilityHint={
+                      canSelect
+                        ? 'Selects or deselects this task for a study session'
+                        : undefined
+                    }
+                    accessibilityState={{
+                      selected,
+                      disabled:
+                        updatingTaskId !== null || !canSelect,
+                      busy: isUpdating,
+                    }}
+                    disabled={
+                      updatingTaskId !== null || !canSelect
+                    }
+                    onPress={() => toggleSelection(task.id)}
+                    style={({ pressed }) => [
+                      styles.taskSelectionArea,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.taskText}>
+                      <Text
+                        style={[
+                          styles.taskTitle,
+                          task.completed &&
+                            styles.completedTitle,
+                        ]}
+                      >
+                        {task.title}
+                      </Text>
+
+                      <Text style={styles.taskTime}>
+                        Est. {formatEstimate(
+                          task.estimatedMinutes,
+                        )}
+                        {isUpdating
+                          ? ' · Saving…'
+                          : task.completed
+                            ? ' · Tap circle to undo completion'
+                            : selected
+                              ? ' · Selected'
+                              : ''}
+                      </Text>
+                    </View>
+                  </Pressable>
                 </View>
-              </Pressable>
-            );
-          })}
+              );
+            })}
         </View>
       )}
     </View>
@@ -553,13 +642,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.softWhite,
   },
   selectedCard: {
-    borderColor: colors.eucalyptus,
+    borderColor: colors.butterYellow,
     borderWidth: 2,
+    backgroundColor: colors.paleSun,
   },
   completedCard: {
     borderColor: colors.softSage,
     backgroundColor: colors.mistGreen,
   },
+  taskCircleButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   taskCircle: {
     width: 22,
     height: 22,
@@ -573,6 +668,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.eucalyptus,
     borderColor: colors.eucalyptus,
   },
+  taskSelectionArea: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+
   taskText: {
     flex: 1,
     minWidth: 0,

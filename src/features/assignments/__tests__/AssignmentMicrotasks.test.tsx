@@ -342,10 +342,63 @@ describe('AssignmentMicrotasks selection and undo', () => {
     expect(mockSetCompleted).not.toHaveBeenCalled();
   });
 
+  it('marks an unfinished task complete from its circle and removes it from study selection', async () => {
+    const task = savedTask();
+    const onSelectionChange = jest.fn();
+
+    mockFetch.mockResolvedValue([task]);
+    mockSetCompleted.mockResolvedValueOnce(true);
+
+    await render(
+      <AssignmentMicrotasks
+        assignment={assignment}
+        onSelectionChange={onSelectionChange}
+      />,
+    );
+
+    // Select the task for studying first.
+    await fireEvent.press(
+      await screen.findByRole('button', {
+        name: /Step 1\. Organize experimental data/,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onSelectionChange).toHaveBeenLastCalledWith([task]);
+    });
+
+    // The circle is a separate action: mark it completed.
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: 'Mark Step 1 complete',
+      }),
+    );
+
+    expect(mockSetCompleted).toHaveBeenCalledWith(
+      assignment.id,
+      'task-1',
+      true,
+    );
+
+    expect(await screen.findByText('1 / 1 tasks')).toBeTruthy();
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Mark Step 1 incomplete',
+      }),
+    ).toBeTruthy();
+
+    // Completion removes it from the study-session selection.
+    await waitFor(() => {
+      expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+    });
+  });
+
   it('undoes completion after saving and leaves the task unselected', async () => {
     mockFetch.mockResolvedValue([
       savedTask({ completed: true }),
     ]);
+
     const onSelectionChange = jest.fn();
 
     await render(
@@ -359,7 +412,7 @@ describe('AssignmentMicrotasks selection and undo', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: /Step 1\. Organize experimental data/,
+        name: 'Mark Step 1 incomplete',
       }),
     );
 
@@ -391,11 +444,13 @@ describe('AssignmentMicrotasks selection and undo', () => {
       .mockRejectedValueOnce(new Error('Connection failed'))
       .mockResolvedValueOnce(false);
 
-    await render(<AssignmentMicrotasks assignment={assignment} />);
+    await render(
+      <AssignmentMicrotasks assignment={assignment} />,
+    );
 
     await fireEvent.press(
       await screen.findByRole('button', {
-        name: /Step 1\. Organize experimental data/,
+        name: 'Mark Step 1 incomplete',
       }),
     );
 
@@ -405,11 +460,12 @@ describe('AssignmentMicrotasks selection and undo', () => {
       ),
     ).toBeTruthy();
 
+    // The failed save must not change local completion.
     expect(screen.getByText('1 / 1 tasks')).toBeTruthy();
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: /Step 1\. Organize experimental data/,
+        name: 'Mark Step 1 incomplete',
       }),
     );
 
@@ -426,6 +482,10 @@ describe('AssignmentMicrotasks selection and undo', () => {
   it('waits for an undo save before changing progress and blocks repeated taps', async () => {
     let finishSave!: (completed: boolean) => void;
 
+    mockFetch.mockResolvedValue([
+      savedTask({ completed: true }),
+    ]);
+
     mockSetCompleted.mockImplementationOnce(
       () =>
         new Promise<boolean>((resolve) => {
@@ -433,29 +493,29 @@ describe('AssignmentMicrotasks selection and undo', () => {
         }),
     );
 
-    mockFetch.mockResolvedValue([
-      savedTask({ completed: true }),
-    ]);
-
-    await render(<AssignmentMicrotasks assignment={assignment} />);
-
-    await fireEvent.press(
-      await screen.findByRole('button', {
-        name: /Step 1\. Organize experimental data/,
-      }),
+    await render(
+      <AssignmentMicrotasks assignment={assignment} />,
     );
 
+    const undoButton = await screen.findByRole('button', {
+      name: 'Mark Step 1 incomplete',
+    });
+
+    await fireEvent.press(undoButton);
+
+    // Progress stays completed until the database confirms the update.
     expect(screen.getByText('1 / 1 tasks')).toBeTruthy();
 
     expect(
       screen.getByRole('button', {
-        name: /Step 1\. Organize experimental data/,
+        name: 'Mark Step 1 incomplete',
       }).props.accessibilityState.busy,
     ).toBe(true);
 
+    // A second press while saving must not start another request.
     await fireEvent.press(
       screen.getByRole('button', {
-        name: /Step 1\. Organize experimental data/,
+        name: 'Mark Step 1 incomplete',
       }),
     );
 
@@ -469,17 +529,19 @@ describe('AssignmentMicrotasks selection and undo', () => {
   });
 
   it('restores the saved completion state after reopening', async () => {
-    mockFetch
-      .mockResolvedValueOnce([savedTask({ completed: true })])
-      .mockResolvedValueOnce([savedTask({ completed: false })]);
+    const completedTask = savedTask({ completed: true });
+
+    mockFetch.mockResolvedValueOnce([completedTask]);
 
     const firstScreen = await render(
       <AssignmentMicrotasks assignment={assignment} />,
     );
 
+    expect(await screen.findByText('1 / 1 tasks')).toBeTruthy();
+
     await fireEvent.press(
-      await screen.findByRole('button', {
-        name: /Step 1\. Organize experimental data/,
+      screen.getByRole('button', {
+        name: 'Mark Step 1 incomplete',
       }),
     );
 
@@ -487,9 +549,21 @@ describe('AssignmentMicrotasks selection and undo', () => {
 
     await firstScreen.unmount();
 
-    await render(<AssignmentMicrotasks assignment={assignment} />);
+    // Simulate reopening after the saved value has changed.
+    mockFetch.mockResolvedValueOnce([
+      savedTask({ completed: false }),
+    ]);
+
+    await render(
+      <AssignmentMicrotasks assignment={assignment} />,
+    );
 
     expect(await screen.findByText('0 / 1 tasks')).toBeTruthy();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Mark Step 1 complete',
+      }),
+    ).toBeTruthy();
   });
 });

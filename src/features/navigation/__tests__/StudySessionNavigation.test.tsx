@@ -192,7 +192,7 @@ async function endWithoutCompleting() {
 
   await fireEvent.press(
     screen.getByRole('button', {
-      name: 'End study session',
+      name: 'Finish Study Session',
     }),
   );
 }
@@ -264,7 +264,19 @@ describe('returning from a study session (#51)', () => {
         if (action === 'Back') {
           await fireEvent.press(
             screen.getByRole('button', {
-              name: 'Back to assignment',
+              name: 'Back',
+            }),
+          );
+
+          expect(
+            await screen.findByText(
+              'Are you sure you want to go Back?',
+            ),
+          ).toBeTruthy();
+
+          await fireEvent.press(
+            screen.getByRole('button', {
+              name: 'Confirm going back',
             }),
           );
         } else {
@@ -285,6 +297,51 @@ describe('returning from a study session (#51)', () => {
         expect(mockSetCompleted).not.toHaveBeenCalled();
       },
     );
+
+    it('stays in the focus session when back confirmation is cancelled', async () => {
+      const navigationRef = await openAssignment(assignment);
+      await startSession(assignment);
+
+      await fireEvent.press(
+        screen.getByRole('button', {
+          name: 'Back',
+        }),
+      );
+
+      expect(
+        await screen.findByText(
+          'Are you sure you want to go Back?',
+        ),
+      ).toBeTruthy();
+
+      expect(
+        screen.getByText(
+          'If you choose to go back, any unsaved progress from this study session will be lost.',
+        ),
+      ).toBeTruthy();
+
+      await fireEvent.press(
+        screen.getByRole('button', {
+          name: 'Cancel going back',
+        }),
+      );
+
+      await waitFor(() => {
+        expect(navigationRef.getCurrentRoute()).toMatchObject({
+          name: 'FocusSession',
+          params: { assignmentId: assignment.id },
+        });
+      });
+
+      expect(
+        screen.queryByText(
+          'Are you sure you want to go Back?',
+        ),
+      ).toBeNull();
+
+      expect(screen.getByText('Task 1 of 1')).toBeTruthy();
+      expect(mockSetCompleted).not.toHaveBeenCalled();
+    });
 
     it('preserves the original assignment through a break round trip', async () => {
       const navigationRef = await openAssignment(assignment);
@@ -361,7 +418,7 @@ describe('selected task queue and completion (#89, #44)', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -383,7 +440,7 @@ describe('selected task queue and completion (#89, #44)', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -402,7 +459,7 @@ describe('selected task queue and completion (#89, #44)', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: /Step 1\. Organize notes/,
+        name: 'Mark Step 1 incomplete',
       }),
     );
 
@@ -426,7 +483,7 @@ describe('selected task queue and completion (#89, #44)', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -444,7 +501,7 @@ describe('selected task queue and completion (#89, #44)', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -473,7 +530,7 @@ describe('selected task queue and completion (#89, #44)', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'End study session',
+        name: 'Finish Study Session',
       }),
     );
 
@@ -491,5 +548,172 @@ describe('selected task queue and completion (#89, #44)', () => {
     });
 
     expect(await screen.findByText('1 / 2 tasks')).toBeTruthy();
+  });
+});
+
+
+describe('focus timer expiration and session time', () => {
+  const assignment = assignments[0];
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('opens the completion popup at zero and repeatedly adds half the original task time', async () => {
+    jest.useFakeTimers();
+
+    await openAssignment(assignment);
+    await startSession(assignment);
+
+    expect(screen.getByText('15:00')).toBeTruthy();
+    expect(
+      screen.getByText('Total study time: 0:00'),
+    ).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(15 * 60 * 1000);
+    });
+
+    expect(
+      await screen.findByText('Did you finish this task?'),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText('Total study time: 15:00'),
+    ).toBeTruthy();
+
+    expect(mockSetCompleted).not.toHaveBeenCalled();
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: 'I Need More Time',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Did you finish this task?'),
+      ).toBeNull();
+    });
+
+    // Half of the ORIGINAL 15-minute estimate is 7:30.
+    expect(screen.getByText('7:30')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(7 * 60 * 1000 + 30 * 1000);
+    });
+
+    expect(
+      await screen.findByText('Did you finish this task?'),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText('Total study time: 22:30'),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: 'I Need More Time',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Did you finish this task?'),
+      ).toBeNull();
+    });
+
+    // The extension must remain 7:30. It must NOT halve again to 3:45.
+    expect(screen.getByText('7:30')).toBeTruthy();
+
+    expect(mockSetCompleted).not.toHaveBeenCalled();
+  });
+
+  it('tracks actual study time across multiple tasks', async () => {
+    jest.useFakeTimers();
+
+    await openAssignment(assignment);
+    await startSession(assignment, true);
+
+    expect(
+      screen.getByText('Total study time: 0:00'),
+    ).toBeTruthy();
+
+    // Study Task 1 for 30 actual seconds.
+    await act(async () => {
+      jest.advanceTimersByTime(30 * 1000);
+    });
+
+    expect(
+      screen.getByText('Total study time: 0:30'),
+    ).toBeTruthy();
+
+    await openDonePopup();
+
+    // Move on without checking completion.
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: 'Continue To Next Task',
+      }),
+    );
+
+    expect(
+      await screen.findByText('Task 2 of 2'),
+    ).toBeTruthy();
+
+    // The session total carries forward rather than resetting.
+    expect(
+      screen.getByText('Total study time: 0:30'),
+    ).toBeTruthy();
+
+    // Study Task 2 for another 15 actual seconds.
+    await act(async () => {
+      jest.advanceTimersByTime(15 * 1000);
+    });
+
+    expect(
+      screen.getByText('Total study time: 0:45'),
+    ).toBeTruthy();
+
+    expect(mockSetCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not add planned extension time that was never actually studied', async () => {
+    jest.useFakeTimers();
+
+    await openAssignment(assignment);
+    await startSession(assignment);
+
+    await act(async () => {
+      jest.advanceTimersByTime(15 * 60 * 1000);
+    });
+
+    expect(
+      await screen.findByText('Did you finish this task?'),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole('button', {
+        name: 'I Need More Time',
+      }),
+    );
+
+    expect(screen.getByText('7:30')).toBeTruthy();
+
+    // Only five minutes of the 7:30 extension are actually used.
+    await act(async () => {
+      jest.advanceTimersByTime(5 * 60 * 1000);
+    });
+
+    expect(
+      screen.getByText('Total study time: 20:00'),
+    ).toBeTruthy();
+
+    await openDonePopup();
+
+    // The unused 2:30 must never be counted.
+    expect(
+      screen.getByText('Total study time: 20:00'),
+    ).toBeTruthy();
   });
 });
