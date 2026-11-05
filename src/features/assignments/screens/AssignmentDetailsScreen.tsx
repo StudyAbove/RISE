@@ -18,6 +18,7 @@ import {
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { BackButton } from '../../../components/BackButton';
 import { colors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
@@ -101,31 +102,9 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
       ]}
     >
       {/* Return to the page that opened these assignment details. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        onPress={() => navigation.goBack()}
-        style={({ pressed }) => [
-          styles.backButton,
-          pressed && styles.pressed,
-        ]}
-      >
-        <Svg
-          width={22}
-          height={22}
-          viewBox="0 0 24 24"
-          fill="none"
-          accessible={false}
-        >
-          <Path
-            d="M19 12H5m7-7-7 7 7 7"
-            stroke={colors.deepOlive}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </Pressable>
+      <View style={styles.backButtonContainer}>
+        <BackButton />
+      </View>
 
       {status === 'loading' && (
         <View style={styles.statusContainer}>
@@ -311,13 +290,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 26,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mistGreen,
+  backButtonContainer: {
+    marginLeft: -2,
     marginBottom: 16,
   },
   details: {

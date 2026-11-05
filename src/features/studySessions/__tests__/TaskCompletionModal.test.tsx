@@ -21,16 +21,20 @@ import {
 const mockConfirm = jest.fn<
   (choice: TaskCompletionChoice) => Promise<void>
 >();
-const mockKeepStudying = jest.fn();
+const mockNeedMoreTime = jest.fn();
 
-async function renderModal(hasNextTask = true) {
+async function renderModal(
+  hasNextTask = true,
+  timeExpired = false,
+) {
   await render(
     <TaskCompletionModal
       visible
       taskTitle="Organize experimental data"
       hasNextTask={hasNextTask}
+      timeExpired={timeExpired}
       onConfirm={mockConfirm}
-      onKeepStudying={mockKeepStudying}
+      onNeedMoreTime={mockNeedMoreTime}
     />,
   );
 }
@@ -38,7 +42,7 @@ async function renderModal(hasNextTask = true) {
 beforeEach(() => {
   mockConfirm.mockReset();
   mockConfirm.mockResolvedValue(undefined);
-  mockKeepStudying.mockReset();
+  mockNeedMoreTime.mockReset();
 });
 
 describe('TaskCompletionModal', () => {
@@ -51,7 +55,7 @@ describe('TaskCompletionModal', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -61,14 +65,14 @@ describe('TaskCompletionModal', () => {
     });
   });
 
-  it('passes an explicit completion choice before ending the session', async () => {
-    await renderModal();
+  it('passes an explicit completion choice before finishing the session', async () => {
+    await renderModal(false);
 
     await fireEvent.press(screen.getByRole('checkbox'));
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'End study session',
+        name: 'Finish Study Session',
       }),
     );
 
@@ -78,16 +82,40 @@ describe('TaskCompletionModal', () => {
     });
   });
 
+  it('only toggles completion from the circle, not the sentence', async () => {
+    await renderModal();
+
+    expect(
+      screen.getByRole('checkbox').props.accessibilityState.checked,
+    ).toBe(false);
+
+    await fireEvent.press(
+      screen.getByText('Yes, mark this task complete'),
+    );
+
+    expect(
+      screen.getByRole('checkbox').props.accessibilityState.checked,
+    ).toBe(false);
+
+    await fireEvent.press(
+      screen.getByRole('checkbox'),
+    );
+
+    expect(
+      screen.getByRole('checkbox').props.accessibilityState.checked,
+    ).toBe(true);
+  });
+
   it('keeps studying without submitting a completion choice', async () => {
     await renderModal();
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Keep studying this task',
+        name: 'Keep Studying',
       }),
     );
 
-    expect(mockKeepStudying).toHaveBeenCalledTimes(1);
+    expect(mockNeedMoreTime).toHaveBeenCalledTimes(1);
     expect(mockConfirm).not.toHaveBeenCalled();
   });
 
@@ -102,7 +130,7 @@ describe('TaskCompletionModal', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -118,7 +146,7 @@ describe('TaskCompletionModal', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -153,7 +181,7 @@ describe('TaskCompletionModal', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
@@ -163,24 +191,18 @@ describe('TaskCompletionModal', () => {
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     );
 
     await fireEvent.press(
       screen.getByRole('button', {
-        name: 'End study session',
-      }),
-    );
-
-    await fireEvent.press(
-      screen.getByRole('button', {
-        name: 'Keep studying this task',
+        name: 'Keep Studying',
       }),
     );
 
     expect(mockConfirm).toHaveBeenCalledTimes(1);
-    expect(mockKeepStudying).not.toHaveBeenCalled();
+    expect(mockNeedMoreTime).not.toHaveBeenCalled();
 
     await act(async () => {
       finishSave();
@@ -198,14 +220,31 @@ describe('TaskCompletionModal', () => {
 
     expect(
       screen.queryByRole('button', {
-        name: 'Continue to next task',
+        name: 'Continue To Next Task',
       }),
     ).toBeNull();
 
     expect(
       screen.getByRole('button', {
-        name: 'End study session',
+        name: 'Finish Study Session',
       }),
     ).toBeTruthy();
   });
+
+  it('shows I Need More Time when time has expired', async () => {
+    await renderModal(true, true);
+
+    expect(
+      screen.getByRole('button', {
+        name: 'I Need More Time',
+      }),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Keep Studying',
+      }),
+    ).toBeNull();
+  });
+
 });
