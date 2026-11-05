@@ -54,6 +54,7 @@ function assignment(overrides: Partial<Assignment>): Assignment {
     description: null,
     dueAt: new Date(2026, 10, 20, 23, 59),
     completed: false,
+    completedAt: mockNow,
     source: 'canvas',
     courseName: null,
     courseCode: 'EE 381',
@@ -80,7 +81,7 @@ describe('AssignmentsScreen', () => {
   it('lists the most urgent work first and hides past assignments', async () => {
     mockFetchAssignments.mockResolvedValue([
       assignment({ id: 'done', title: 'Finished Lab', completed: true }),
-      assignment({ id: 'old', title: 'Week 1 Reading', dueAt: new Date(2026, 8, 1) }),
+      assignment({ id: 'old', title: 'Week 1 Reading', dueAt: new Date(2026, 10, 6) }),
       assignment({ id: 'later', title: 'Essay', dueAt: new Date(2026, 10, 20) }),
       assignment({ id: 'overdue', title: 'Quiz 3', dueAt: new Date(2026, 10, 8) }),
       assignment({ id: 'soon', title: 'Problem Set 6', dueAt: new Date(2026, 10, 10) }),
@@ -96,7 +97,7 @@ describe('AssignmentsScreen', () => {
 
   it('shows past assignments below current work when asked', async () => {
     mockFetchAssignments.mockResolvedValue([
-      assignment({ id: 'old', title: 'Week 1 Reading', dueAt: new Date(2026, 8, 1) }),
+      assignment({ id: 'old', title: 'Week 1 Reading', dueAt: new Date(2026, 10, 6) }),
       assignment({ id: 'done', title: 'Finished Lab', dueAt: new Date(2026, 10, 6), completed: true }),
       assignment({ id: 'later', title: 'Essay' }),
     ]);

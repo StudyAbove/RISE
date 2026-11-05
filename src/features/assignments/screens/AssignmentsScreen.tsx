@@ -24,10 +24,7 @@ import { getTimeOfDay } from '../../home/utils/greeting';
 import { SettingsButton } from '../../settings/components/SettingsButton';
 import { AssignmentCard } from '../components/AssignmentCard';
 import { SectionHeader } from '../components/SectionHeader';
-import {
-  isPastAssignment,
-  sortByPriority,
-} from '../utils/assignmentPriority';
+import { getAssignmentListSections } from '../utils/assignmentListSections';
 
 type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
 
@@ -48,18 +45,11 @@ export function AssignmentsScreen() {
   // A pull-to-refresh keeps the list on screen while it reloads.
   const isPullRefresh = useRef(false);
 
-  // Most urgent first (#86). Completed work, and work overdue for over a
-  // week, stays hidden unless the student asks to see it.
+  // Completed work enters Past immediately.
+  // Unfinished work enters Past after 2 days overdue.
+  // Both remain in Past for 14 days before being hidden from List.
   const { currentAssignments, pastAssignments } = useMemo(
-    () => ({
-      currentAssignments: sortByPriority(
-        assignments.filter((assignment) => !isPastAssignment(assignment, date)),
-      ),
-      // Most recent first.
-      pastAssignments: sortByPriority(
-        assignments.filter((assignment) => isPastAssignment(assignment, date)),
-      ).reverse(),
-    }),
+    () => getAssignmentListSections(assignments, date),
     [assignments, date],
   );
 

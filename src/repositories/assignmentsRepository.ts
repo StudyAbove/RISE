@@ -12,6 +12,8 @@ export type Assignment = {
   description: string | null;
   dueAt: Date | null;
   completed: boolean;
+  /** When RISE first recorded completion; used for List retention. */
+  completedAt?: Date | null;
   source: 'rise' | 'canvas';
   courseName: string | null;
   courseCode: string | null;
@@ -36,6 +38,7 @@ type AssignmentRow = {
   description: string | null;
   due_at: string | null;
   completed: boolean;
+  completed_at: string | null;
   source: 'rise' | 'canvas';
   points_possible: number | null;
   html_url: string | null;
@@ -50,7 +53,7 @@ type AssignmentRow = {
 };
 
 const ASSIGNMENT_COLUMNS =
-  'id, title, description, due_at, completed, source, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled)';
+  'id, title, description, due_at, completed, completed_at, source, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled)';
 
 // Read up to 500 assignments in each request.
 const PAGE_SIZE = 500;
@@ -106,6 +109,11 @@ export async function fetchAssignments(): Promise<Assignment[]> {
             ? parsedDate
             : null,
         completed: row.completed,
+        completedAt:
+          row.completed_at &&
+          Number.isFinite(Date.parse(row.completed_at))
+            ? new Date(row.completed_at)
+            : null,
         source: row.source,
         // Without the section, e.g. "SEC 01".
         courseName: row.courses?.name ? removeCourseSection(row.courses.name) : null,
@@ -160,6 +168,11 @@ export async function fetchAssignmentById(
         ? parsedDate
         : null,
     completed: row.completed,
+    completedAt:
+      row.completed_at &&
+      Number.isFinite(Date.parse(row.completed_at))
+        ? new Date(row.completed_at)
+        : null,
     source: row.source,
     // Without the section, e.g. "SEC 01".
     courseName: row.courses?.name ? removeCourseSection(row.courses.name) : null,
