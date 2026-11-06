@@ -16,6 +16,9 @@ import {
   useNavigation,
 } from '@react-navigation/native';
 
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
+
 import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
@@ -58,7 +61,9 @@ import type {
 
 export function TakeABreakScreen() {
   const navigation =
-    useNavigation();
+    useNavigation<
+      NativeStackNavigationProp<RootStackParamList, 'TakeABreak'>
+    >();
 
   const [
     isBackConfirmationVisible,
@@ -161,7 +166,14 @@ export function TakeABreakScreen() {
             styles.sliderContainer
           }
         >
-          <StartSessionSlider />
+          <StartSessionSlider
+            key={selectedBreak.id}
+            onComplete={() =>
+              navigation.replace('BreakSession', {
+                breakId: selectedBreak.id,
+              })
+            }
+          />
         </View>
       </View>
 
@@ -218,7 +230,7 @@ export function TakeABreakScreen() {
                 styles.modalMessage
               }
             >
-              If you choose to go back, the focus timer will continue to countdown.
+              If you go back, your focus timer will resume from where you paused.
             </Text>
 
             <View

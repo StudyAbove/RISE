@@ -277,7 +277,7 @@ describe(
 
         expect(
           getByLabelText(
-            'Time: 10–15 min',
+            'Time: 15 min',
           ),
         ).toBeOnTheScreen();
 
@@ -326,7 +326,7 @@ describe(
 
           expect(
             getByLabelText(
-              'Time: 2–5 min',
+              'Time: 5 min',
             ),
           ).toBeOnTheScreen();
 
@@ -376,7 +376,7 @@ describe(
 
           expect(
             getByLabelText(
-              'Time: 10–15 min',
+              'Time: 15 min',
             ),
           ).toBeOnTheScreen();
 
