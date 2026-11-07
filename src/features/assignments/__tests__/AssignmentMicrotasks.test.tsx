@@ -107,8 +107,9 @@ describe('AssignmentMicrotasks', () => {
       screen.getByRole('progressbar').props.accessibilityValue,
     ).toMatchObject({
       min: 0,
-      max: 2,
-      now: 1,
+      max: 100,
+      // The finished task is 65 of the 80 minutes.
+      now: 81,
     });
 
     expect(mockFetch).toHaveBeenCalledWith(assignment.id);

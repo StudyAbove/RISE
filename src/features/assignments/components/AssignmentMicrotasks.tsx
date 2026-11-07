@@ -19,6 +19,7 @@ import {
 import { colors, statusColors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
 import { formatEstimate } from '../utils/assignmentEstimate';
+import { getMicrotaskProgress } from '../utils/assignmentProgress';
 
 type Props = {
   assignment: Assignment;
@@ -142,9 +143,10 @@ export function AssignmentMicrotasks({
     );
   }
 
-  const completedCount = tasks.filter((task) => task.completed).length;
-  const progressPercent =
-    tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
+  // Weighted by each task's time, the same as the assignment's card (#46).
+  const progress = getMicrotaskProgress(tasks);
+  const { completedCount, percent: progressPercent } = progress;
+
   async function completeTask(task: Microtask) {
     if (
       completionInProgress.current ||
@@ -328,9 +330,9 @@ export function AssignmentMicrotasks({
             accessibilityLabel="Microtask completion"
             accessibilityValue={{
               min: 0,
-              max: tasks.length,
-              now: completedCount,
-              text: `${completedCount} of ${tasks.length} tasks completed`,
+              max: 100,
+              now: progressPercent,
+              text: `${progressPercent}% done, ${completedCount} of ${tasks.length} tasks completed`,
             }}
             style={styles.progressRow}
           >
