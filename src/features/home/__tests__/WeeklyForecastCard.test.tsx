@@ -1,6 +1,12 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { WeeklyForecastCard } from '../components/WeeklyForecastCard';
+
+const mockNavigate = jest.fn();
+
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
 import type { WeeklyForecast } from '../utils/weeklyForecast';
 
 // Monday, November 9, 2026 at 9 AM, local time.
@@ -14,6 +20,7 @@ const heavyWeek: WeeklyForecast = {
   recommended: [
     {
       id: 'a1',
+      assignmentId: 'a1',
       title: 'Problem Set #5',
       courseLabel: 'EE 381',
       courseColor: '#8FA8F0',
@@ -23,6 +30,7 @@ const heavyWeek: WeeklyForecast = {
     },
     {
       id: 'a2',
+      assignmentId: 'a2',
       title: 'Osmosis Lab Report',
       courseLabel: 'BIO 200',
       courseColor: '#A8BEA3',
@@ -34,6 +42,20 @@ const heavyWeek: WeeklyForecast = {
 };
 
 describe('WeeklyForecastCard', () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+  });
+
+  it('opens the assignment when its row is tapped', async () => {
+    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
+
+    await fireEvent.press(
+      screen.getByRole('button', { name: /BIO 200 - Osmosis Lab Report/ }),
+    );
+
+    expect(mockNavigate).toHaveBeenCalledWith('AssignmentDetails', { assignmentId: 'a2' });
+  });
+
   it('shows the week, its summary, and what to start first with due times and estimates', async () => {
     await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
 
