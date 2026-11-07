@@ -143,9 +143,10 @@ describe('fetchAssignments', () => {
     mockRows.mockReturnValue([
       {
         ...assignmentRow('a1'),
+        // Out of order, to check they're sorted by position.
         assignment_microtasks: [
-          { estimated_minutes: 30, completed: true },
-          { estimated_minutes: 45, completed: false },
+          { id: 't2', title: 'Write it up', position: 2, estimated_minutes: 45, completed: false },
+          { id: 't1', title: 'Collect data', position: 1, estimated_minutes: 30, completed: true },
         ],
       },
       assignmentRow('a2'),
@@ -154,8 +155,8 @@ describe('fetchAssignments', () => {
     const assignments = await fetchAssignments();
 
     expect(assignments[0].microtasks).toEqual([
-      { estimatedMinutes: 30, completed: true },
-      { estimatedMinutes: 45, completed: false },
+      { id: 't1', title: 'Collect data', position: 1, estimatedMinutes: 30, completed: true },
+      { id: 't2', title: 'Write it up', position: 2, estimatedMinutes: 45, completed: false },
     ]);
     // No microtasks created yet.
     expect(assignments[1].microtasks).toEqual([]);

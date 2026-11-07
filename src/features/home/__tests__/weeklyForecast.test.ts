@@ -2,6 +2,7 @@ import type { Assignment } from '../../../repositories/assignmentsRepository';
 import {
   buildWeeklyForecast,
   formatForecastDue,
+  getClassWeekAssignments,
   getForecastLevel,
   type ForecastItem,
 } from '../utils/weeklyForecast';
@@ -32,8 +33,12 @@ function assignment(overrides: Partial<Assignment>): Assignment {
 }
 
 function item(minutes: number, kind: ForecastItem['kind'] = 'homework'): ForecastItem {
+  const id = `i${nextId++}`;
+
   return {
-    id: `i${nextId++}`,
+    id,
+    assignmentId: id,
+    courseId: null,
     title: 'Work',
     courseLabel: null,
     courseColor: '#8FA8F0',
@@ -168,6 +173,94 @@ describe('buildWeeklyForecast', () => {
       'Cell Biology',
       null,
     ]);
+  });
+});
+
+describe('buildWeeklyForecast with microtasks (#61)', () => {
+  const step = (id: string, position: number, estimatedMinutes: number, completed = false) => ({
+    id,
+    title: `Step ${position}`,
+    position,
+    estimatedMinutes,
+    completed,
+  });
+
+  it('shows an unfinished step over an hour in place of its assignment', () => {
+    const lab = assignment({
+      title: 'Lab Report',
+      estimatedMinutes: 180,
+      microtasks: [step('s1', 1, 30, true), step('s2', 2, 90), step('s3', 3, 120)],
+    });
+
+    const [row] = buildWeeklyForecast([lab], now).recommended;
+
+    // The next big step, which still opens its assignment.
+    expect(row).toMatchObject({
+      id: 's2',
+      assignmentId: lab.id,
+      title: 'Step 2',
+      minutes: 90,
+      courseLabel: 'EE 381',
+    });
+  });
+
+  it('keeps the assignment when no step is over an hour', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({
+          title: 'Problem Set',
+          microtasks: [step('s1', 1, 60), step('s2', 2, 45)],
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.recommended[0]).toMatchObject({ title: 'Problem Set', minutes: 105 });
+  });
+
+  it('takes finished steps off the week', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({
+          estimatedMinutes: 240,
+          microtasks: [step('s1', 1, 60, true), step('s2', 2, 30, true), step('s3', 3, 45)],
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.totalMinutes).toBe(45);
+    expect(forecast.level).toBe('light');
+  });
+
+  it('leaves out an assignment whose steps are all done', () => {
+    const forecast = buildWeeklyForecast(
+      [assignment({ microtasks: [step('s1', 1, 90, true)] })],
+      now,
+    );
+
+    expect(forecast.recommended).toEqual([]);
+    expect(forecast.level).toBe('clear');
+  });
+});
+
+describe('getClassWeekAssignments (#61)', () => {
+  it('lists every unfinished assignment the class has due in the next 7 days, soonest first', () => {
+    const assignments = [
+      assignment({ title: 'Essay', courseId: 'ee381', dueAt: new Date(2026, 10, 14, 9, 0) }),
+      assignment({ title: 'Quiz', courseId: 'ee381', dueAt: new Date(2026, 10, 10, 9, 0) }),
+      assignment({ title: 'Lab', courseId: 'ee381', dueAt: new Date(2026, 10, 12, 9, 0) }),
+      assignment({ title: 'Reading', courseId: 'ee381', dueAt: new Date(2026, 10, 11, 9, 0) }),
+      // Left out: another class, done, already past, and after the 7 days.
+      assignment({ title: 'Other class', courseId: 'bio200' }),
+      assignment({ title: 'Done', courseId: 'ee381', completed: true }),
+      assignment({ title: 'Past', courseId: 'ee381', dueAt: new Date(2026, 10, 8, 9, 0) }),
+      assignment({ title: 'Later', courseId: 'ee381', dueAt: new Date(2026, 10, 17, 9, 0) }),
+    ];
+
+    expect(
+      getClassWeekAssignments(assignments, 'ee381', now).map((entry) => entry.title),
+    ).toEqual(['Quiz', 'Reading', 'Lab', 'Essay']);
   });
 });
 
