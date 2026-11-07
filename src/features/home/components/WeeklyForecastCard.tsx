@@ -1,4 +1,5 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import CalendarIcon from '../../../../assets/icons/home/forecast-calendar.svg';
 import HelpIcon from '../../../../assets/icons/home/help-circle.svg';
@@ -18,15 +19,24 @@ interface WeeklyForecastCardProps {
 }
 
 function ForecastRow({ item, now }: { item: ForecastItem; now: Date }) {
+  const navigation = useNavigation();
   const name = item.courseLabel ? `${item.courseLabel} - ${item.title}` : item.title;
   const due = formatForecastDue(item.dueAt, now);
   const time = formatEstimate(item.minutes);
 
+  // Tapping a row opens its assignment's details (#61).
   return (
-    <View
-      style={styles.row}
-      accessible
+    <Pressable
+      accessibilityRole="button"
       accessibilityLabel={`${name}, due ${due}, about ${time}`}
+      accessibilityHint="Opens assignment details"
+      hitSlop={{ top: 6, bottom: 6 }}
+      onPress={() =>
+        navigation.navigate('AssignmentDetails', {
+          assignmentId: item.assignmentId,
+        })
+      }
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <View style={[styles.dot, { backgroundColor: item.courseColor }]} />
       <Text style={styles.rowTitle} numberOfLines={1}>
@@ -35,7 +45,7 @@ function ForecastRow({ item, now }: { item: ForecastItem; now: Date }) {
       <Text style={styles.rowDetail}>
         {due} • {time}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

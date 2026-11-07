@@ -90,6 +90,10 @@ export const styles = StyleSheet.create({
     color: colors.mutedGrayGreen,
   },
 
+  pressed: {
+    opacity: 0.6,
+  },
+
   // Not tappable yet; the Help story will give it an action.
   helpButton: {
     alignSelf: 'flex-end',

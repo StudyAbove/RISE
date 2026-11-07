@@ -20,6 +20,8 @@ export type ForecastLevel = 'clear' | 'light' | 'medium' | 'heavy';
 
 export type ForecastItem = {
   id: string;
+  /** The assignment this row opens when tapped (#61). */
+  assignmentId: string;
   title: string;
   /** "EE 381" or the class name, when the assignment has a class. */
   courseLabel: string | null;
@@ -69,6 +71,7 @@ function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
     return [
       {
         id: assignment.id,
+        assignmentId: assignment.id,
         title: assignment.title,
         courseLabel: assignment.courseCode ?? assignment.courseName,
         courseColor: assignment.courseColor,

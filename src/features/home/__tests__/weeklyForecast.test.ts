@@ -32,8 +32,11 @@ function assignment(overrides: Partial<Assignment>): Assignment {
 }
 
 function item(minutes: number, kind: ForecastItem['kind'] = 'homework'): ForecastItem {
+  const id = `i${nextId++}`;
+
   return {
-    id: `i${nextId++}`,
+    id,
+    assignmentId: id,
     title: 'Work',
     courseLabel: null,
     courseColor: '#8FA8F0',
