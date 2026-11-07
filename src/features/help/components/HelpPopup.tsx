@@ -3,8 +3,17 @@ import { Modal, Pressable, Text, View } from 'react-native';
 import LightbulbIcon from '../../../../assets/icons/help/lightbulb.svg';
 import { styles } from './HelpPopup.styles';
 
+import type { RootStackParamList } from '../../navigation/types';
+
 /** The tools the help menu can open (#70). */
 export type HelpOption = 'breathing' | 'extension' | 'officeHours';
+
+/** The screen each option opens. */
+export const HELP_OPTION_SCREENS = {
+  breathing: 'Breathing',
+  extension: 'ExtensionEmail',
+  officeHours: 'OfficeHours',
+} as const satisfies Record<HelpOption, keyof RootStackParamList>;
 
 // In the order shown in the Figma.
 const OPTIONS: { option: HelpOption; label: string }[] = [

@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent, type Text } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
-import { HelpPopup } from '../../help/components/HelpPopup';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { HELP_OPTION_SCREENS, HelpPopup, type HelpOption } from '../../help/components/HelpPopup';
 import { HighPriorityTasks } from '../components/HighPriorityTasks';
 import { HomeHeader } from '../components/HomeHeader';
 import { HomeSkyBackdrop } from '../components/HomeSkyBackdrop';
@@ -37,7 +38,14 @@ export function HomeScreen() {
   // Where the header (and so the date line) ends, so the sky can line up with it.
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
 
+  const navigation = useNavigation();
   const [helpVisible, setHelpVisible] = useState(false);
+
+  // Close the help menu and open the tool the student picked.
+  const openHelpOption = (option: HelpOption) => {
+    setHelpVisible(false);
+    navigation.navigate(HELP_OPTION_SCREENS[option]);
+  };
 
   const handleHeaderLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent) => {
     setHeaderBottom(layout.y + layout.height);
@@ -68,10 +76,9 @@ export function HomeScreen() {
         <HighPriorityTasks tasks={highPriorityTasks} now={date} />
       )}
 
-      {/* Each option will open its tool (#71, #72, #74). */}
       <HelpPopup
         visible={helpVisible}
-        onSelect={() => setHelpVisible(false)}
+        onSelect={openHelpOption}
         onClose={() => setHelpVisible(false)}
       />
     </TabScreenScrollView>
