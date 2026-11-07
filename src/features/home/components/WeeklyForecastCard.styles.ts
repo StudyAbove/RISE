@@ -90,7 +90,11 @@ export const styles = StyleSheet.create({
     color: colors.mutedGrayGreen,
   },
 
-  // Not tappable yet; the Help story will give it an action.
+  pressed: {
+    opacity: 0.6,
+  },
+
+  // Opens the "Feeling stuck?" help menu (#70).
   helpButton: {
     alignSelf: 'flex-end',
     flexDirection: 'row',

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent, type Text } from 'react-native';
 
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
+import { HelpPopup } from '../../help/components/HelpPopup';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { HighPriorityTasks } from '../components/HighPriorityTasks';
 import { HomeHeader } from '../components/HomeHeader';
@@ -36,6 +37,8 @@ export function HomeScreen() {
   // Where the header (and so the date line) ends, so the sky can line up with it.
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
 
+  const [helpVisible, setHelpVisible] = useState(false);
+
   const handleHeaderLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent) => {
     setHeaderBottom(layout.y + layout.height);
   };
@@ -53,12 +56,24 @@ export function HomeScreen() {
         <HomeHeader date={date} firstName={firstName} greetingRef={greetingRef} />
       </View>
       {status !== 'signedOut' && (
-        <WeeklyForecastCard status={status} forecast={forecast} now={date} />
+        <WeeklyForecastCard
+          status={status}
+          forecast={forecast}
+          now={date}
+          onHelpPress={() => setHelpVisible(true)}
+        />
       )}
       {/* The forecast card shows loading and errors for both sections. */}
       {status === 'ready' && (
         <HighPriorityTasks tasks={highPriorityTasks} now={date} />
       )}
+
+      {/* Each option will open its tool (#71, #72, #74). */}
+      <HelpPopup
+        visible={helpVisible}
+        onSelect={() => setHelpVisible(false)}
+        onClose={() => setHelpVisible(false)}
+      />
     </TabScreenScrollView>
   );
 }
