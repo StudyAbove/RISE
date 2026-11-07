@@ -19,7 +19,10 @@ import {
 import { colors, statusColors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
 import { formatEstimate } from '../utils/assignmentEstimate';
-import { getMicrotaskProgress } from '../utils/assignmentProgress';
+import {
+  getMicrotaskProgress,
+  getRemainingWorkLabel,
+} from '../utils/assignmentProgress';
 
 type Props = {
   assignment: Assignment;
@@ -324,30 +327,40 @@ export function AssignmentMicrotasks({
           </Text>
 
           {/* Progress reflects saved completion, not session selection. */}
-          <View
-            accessible
-            accessibilityRole="progressbar"
-            accessibilityLabel="Microtask completion"
-            accessibilityValue={{
-              min: 0,
-              max: 100,
-              now: progressPercent,
-              text: `${progressPercent}% done, ${completedCount} of ${tasks.length} tasks completed`,
-            }}
-            style={styles.progressRow}
-          >
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${progressPercent}%` },
-                ]}
-              />
+          <View style={styles.progressGroup}>
+            <View
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel="Microtask completion"
+              accessibilityValue={{
+                min: 0,
+                max: 100,
+                now: progressPercent,
+                text: `${progressPercent}% done, ${completedCount} of ${tasks.length} tasks completed`,
+              }}
+              style={styles.progressRow}
+            >
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${progressPercent}%` },
+                  ]}
+                />
+              </View>
+
+              <Text style={styles.progressText}>
+                {completedCount} / {tasks.length} tasks
+              </Text>
             </View>
 
-            <Text style={styles.progressText}>
-              {completedCount} / {tasks.length} tasks
-            </Text>
+            {/* What's still left to do (#46). Hidden once the whole
+                assignment is marked complete. */}
+            {!assignment.completed && (
+              <Text style={styles.remainingText}>
+                {getRemainingWorkLabel(progress)}
+              </Text>
+            )}
           </View>
         </>
       )}
@@ -606,11 +619,14 @@ const styles = StyleSheet.create({
     ...textStyles.sectionTitle,
     color: colors.deepOlive,
   },
+  progressGroup: {
+    gap: 6,
+    marginBottom: 8,
+  },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 8,
   },
   progressTrack: {
     flex: 1,
@@ -627,6 +643,10 @@ const styles = StyleSheet.create({
   progressText: {
     ...textStyles.caption,
     color: colors.deepOlive,
+  },
+  remainingText: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
   },
   taskList: {
     gap: 10,

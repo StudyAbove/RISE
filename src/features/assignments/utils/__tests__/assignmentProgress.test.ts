@@ -1,6 +1,7 @@
 import {
   getAssignmentProgressPercent,
   getMicrotaskProgress,
+  getRemainingWorkLabel,
 } from '../assignmentProgress';
 
 const task = (estimatedMinutes: number, completed = false) => ({
@@ -71,5 +72,25 @@ describe('getAssignmentProgressPercent', () => {
         microtasks: [task(15, true), task(45)],
       }),
     ).toBe(25);
+  });
+});
+
+describe('getRemainingWorkLabel', () => {
+  it('shows how many tasks and how much time are left', () => {
+    const progress = getMicrotaskProgress([task(20, true), task(30), task(45)]);
+
+    expect(getRemainingWorkLabel(progress)).toBe('2 tasks left · about 1h 15m');
+  });
+
+  it('uses "task" for one task left', () => {
+    const progress = getMicrotaskProgress([task(20, true), task(25)]);
+
+    expect(getRemainingWorkLabel(progress)).toBe('1 task left · about 25m');
+  });
+
+  it('says all tasks are done when none are left', () => {
+    const progress = getMicrotaskProgress([task(20, true)]);
+
+    expect(getRemainingWorkLabel(progress)).toBe('All tasks done');
   });
 });

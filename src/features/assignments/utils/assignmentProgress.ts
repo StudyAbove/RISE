@@ -5,6 +5,8 @@
  * the bar further than finishing a 10-minute one.
  */
 
+import { formatEstimate } from './assignmentEstimate';
+
 /** The parts of a microtask that progress is calculated from. */
 export type MicrotaskProgressInput = {
   estimatedMinutes: number;
@@ -80,4 +82,16 @@ export function getAssignmentProgressPercent(assignment: {
   if (assignment.completed) return 100;
 
   return getMicrotaskProgress(assignment.microtasks ?? []).percent;
+}
+
+/**
+ * What's left of an assignment, shown under its progress bar (#46), e.g.
+ * "3 tasks left · about 45m" or "All tasks done".
+ */
+export function getRemainingWorkLabel(progress: MicrotaskProgress) {
+  if (progress.remainingCount === 0) return 'All tasks done';
+
+  const tasks = progress.remainingCount === 1 ? 'task' : 'tasks';
+
+  return `${progress.remainingCount} ${tasks} left · about ${formatEstimate(progress.remainingMinutes)}`;
 }
