@@ -24,28 +24,48 @@ function ForecastRow({ item, now }: { item: ForecastItem; now: Date }) {
   const due = formatForecastDue(item.dueAt, now);
   const time = formatEstimate(item.minutes);
 
-  // Tapping a row opens its assignment's details (#61).
+  const openAssignment = () =>
+    navigation.navigate('AssignmentDetails', { assignmentId: item.assignmentId });
+
+  // The class (dot and code) opens that class's week; the rest of the row
+  // opens the assignment (#61).
+  const { courseId, courseLabel } = item;
+  const canOpenClass = courseId !== null && courseLabel !== null;
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${name}, due ${due}, about ${time}`}
-      accessibilityHint="Opens assignment details"
-      hitSlop={{ top: 6, bottom: 6 }}
-      onPress={() =>
-        navigation.navigate('AssignmentDetails', {
-          assignmentId: item.assignmentId,
-        })
-      }
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-    >
-      <View style={[styles.dot, { backgroundColor: item.courseColor }]} />
-      <Text style={styles.rowTitle} numberOfLines={1}>
-        {name}
-      </Text>
-      <Text style={styles.rowDetail}>
-        {due} • {time}
-      </Text>
-    </Pressable>
+    <View style={styles.row}>
+      {courseId !== null && courseLabel !== null ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${courseLabel} this week`}
+          accessibilityHint="Shows this class’s assignments due in the next 7 days"
+          hitSlop={{ top: 6, bottom: 6 }}
+          onPress={() => navigation.navigate('ClassWeek', { courseId, courseLabel })}
+          style={({ pressed }) => [styles.classLink, pressed && styles.pressed]}
+        >
+          <View style={[styles.dot, { backgroundColor: item.courseColor }]} />
+          <Text style={styles.classLabel}>{courseLabel}</Text>
+        </Pressable>
+      ) : (
+        <View style={[styles.dot, { backgroundColor: item.courseColor }]} />
+      )}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${name}, due ${due}, about ${time}`}
+        accessibilityHint="Opens assignment details"
+        hitSlop={{ top: 6, bottom: 6 }}
+        onPress={openAssignment}
+        style={({ pressed }) => [styles.assignmentLink, pressed && styles.pressed]}
+      >
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {canOpenClass ? `- ${item.title}` : name}
+        </Text>
+        <Text style={styles.rowDetail}>
+          {due} • {time}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
