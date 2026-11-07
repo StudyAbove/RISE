@@ -109,6 +109,25 @@ describe('AssignmentsScreen', () => {
     expect(screen.getByLabelText('Hide past assignments')).toBeTruthy();
   });
 
+  it('shows saved microtask progress on each card', async () => {
+    mockFetchAssignments.mockResolvedValue([
+      assignment({
+        id: 'started',
+        title: 'Lab Report',
+        microtasks: [
+          { estimatedMinutes: 15, completed: true },
+          { estimatedMinutes: 45, completed: false },
+        ],
+      }),
+    ]);
+
+    await render(<AssignmentsScreen />);
+
+    // 15 of the 60 minutes are done.
+    expect(await screen.findByText('25%')).toBeTruthy();
+    expect(screen.getByLabelText(/Lab Report\..*25% complete\./)).toBeTruthy();
+  });
+
   it('says when everything is done', async () => {
     mockFetchAssignments.mockResolvedValue([assignment({ completed: true })]);
 
