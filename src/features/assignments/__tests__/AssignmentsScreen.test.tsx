@@ -92,7 +92,7 @@ describe('AssignmentsScreen', () => {
     expect(await screen.findByLabelText('Show 2 past assignments')).toBeTruthy();
     expect(titlesOnScreen()).toEqual(['Quiz 3', 'Problem Set 6', 'Essay']);
     expect(screen.getByText('Overdue')).toBeTruthy();
-    expect(screen.getByText('High Priority')).toBeTruthy();
+    expect(screen.getByText('High')).toBeTruthy();
   });
 
   it('shows past assignments below current work when asked', async () => {

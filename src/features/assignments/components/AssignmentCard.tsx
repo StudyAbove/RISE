@@ -4,7 +4,7 @@ import { format, isSameYear } from 'date-fns';
 import { isAssignmentUrgent } from '../utils/isAssignmentUrgent';
 import { getPriorityLevel } from '../utils/assignmentPriority';
 import Svg, { Path, Rect } from 'react-native-svg';
-import { PRIORITY_LABELS, PriorityPill } from './PriorityPill';
+import { PRIORITY_ACCESSIBILITY_LABELS, PriorityPill } from './PriorityPill';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 import { colors, statusColors } from '../../../theme/colors';
@@ -107,7 +107,7 @@ export function AssignmentCard({
       accessibilityLabel={
         isHome
           ? `${assignment.title}. Course: ${courseLabel}. ${getAhead ? 'Get ahead. ' : ''}${dueLabel}.`
-          : `${assignment.title}. ${priority ? `${PRIORITY_LABELS[priority]}. ` : ''}Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`
+          : `${assignment.title}. ${priority ? `${PRIORITY_ACCESSIBILITY_LABELS[priority]}. ` : ''}Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`
       }
       accessibilityHint="Opens assignment details"
       onPress={() =>
