@@ -139,6 +139,28 @@ describe('fetchAssignments', () => {
     expect(assignments[1]).toMatchObject({ estimatedMinutes: null, kind: null });
   });
 
+  it('includes saved microtask completion for the progress bar, so it stays after reopening', async () => {
+    mockRows.mockReturnValue([
+      {
+        ...assignmentRow('a1'),
+        assignment_microtasks: [
+          { estimated_minutes: 30, completed: true },
+          { estimated_minutes: 45, completed: false },
+        ],
+      },
+      assignmentRow('a2'),
+    ]);
+
+    const assignments = await fetchAssignments();
+
+    expect(assignments[0].microtasks).toEqual([
+      { estimatedMinutes: 30, completed: true },
+      { estimatedMinutes: 45, completed: false },
+    ]);
+    // No microtasks created yet.
+    expect(assignments[1].microtasks).toEqual([]);
+  });
+
   it('loads assignments beyond the first batch', async () => {
     mockRows.mockReturnValue(
       Array.from({ length: 501 }, (_, index) =>

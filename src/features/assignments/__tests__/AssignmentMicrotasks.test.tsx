@@ -107,9 +107,13 @@ describe('AssignmentMicrotasks', () => {
       screen.getByRole('progressbar').props.accessibilityValue,
     ).toMatchObject({
       min: 0,
-      max: 2,
-      now: 1,
+      max: 100,
+      // The finished task is 65 of the 80 minutes.
+      now: 81,
     });
+
+    // What's left: the unfinished 15-minute task.
+    expect(screen.getByText('1 task left · about 15m')).toBeTruthy();
 
     expect(mockFetch).toHaveBeenCalledWith(assignment.id);
   });
@@ -381,6 +385,7 @@ describe('AssignmentMicrotasks selection and undo', () => {
     );
 
     expect(await screen.findByText('1 / 1 tasks')).toBeTruthy();
+    expect(screen.getByText('All tasks done')).toBeTruthy();
 
     expect(
       screen.getByRole('button', {

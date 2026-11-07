@@ -30,6 +30,17 @@ export type Assignment = {
    */
   estimatedMinutes: number | null;
   kind: AssignmentKind | null;
+  /**
+   * The assignment's saved microtasks, for its progress bar (#46). Empty
+   * until microtasks are created.
+   */
+  microtasks?: MicrotaskSummary[];
+};
+
+/** Just what an assignment's progress bar needs from each microtask. */
+export type MicrotaskSummary = {
+  estimatedMinutes: number;
+  completed: boolean;
 };
 
 type AssignmentRow = {
@@ -50,10 +61,21 @@ type AssignmentRow = {
     color: string | null;
     sync_enabled: boolean;
   } | null;
+  assignment_microtasks: {
+    estimated_minutes: number;
+    completed: boolean;
+  }[] | null;
 };
 
 const ASSIGNMENT_COLUMNS =
-  'id, title, description, due_at, completed, completed_at, source, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled)';
+  'id, title, description, due_at, completed, completed_at, source, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled), assignment_microtasks(estimated_minutes, completed)';
+
+function toMicrotaskSummaries(row: AssignmentRow): MicrotaskSummary[] {
+  return (row.assignment_microtasks ?? []).map((task) => ({
+    estimatedMinutes: task.estimated_minutes,
+    completed: task.completed,
+  }));
+}
 
 // Read up to 500 assignments in each request.
 const PAGE_SIZE = 500;
@@ -124,6 +146,7 @@ export async function fetchAssignments(): Promise<Assignment[]> {
         htmlUrl: row.html_url,
         estimatedMinutes: row.estimated_minutes,
         kind: row.kind,
+        microtasks: toMicrotaskSummaries(row),
       };
     });
 }
@@ -183,6 +206,7 @@ export async function fetchAssignmentById(
     htmlUrl: row.html_url,
     estimatedMinutes: row.estimated_minutes,
     kind: row.kind,
+    microtasks: toMicrotaskSummaries(row),
   };
 }
 // Each call estimates up to 25 assignments; stop after this many calls.
