@@ -6,10 +6,10 @@ import {
   StyleSheet,
   Text,
   View,
-  type LayoutChangeEvent,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { TabPageHeader } from '../../../components/TabPageHeader';
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { supabase } from '../../../lib/supabase';
@@ -19,17 +19,11 @@ import {
 } from '../../../repositories/assignmentsRepository';
 import { colors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
-import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
-import { getTimeOfDay } from '../../home/utils/greeting';
-import { SettingsButton } from '../../settings/components/SettingsButton';
 import { AssignmentCard } from '../components/AssignmentCard';
 import { SectionHeader } from '../components/SectionHeader';
 import { getAssignmentListSections } from '../utils/assignmentListSections';
 
 type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
-
-// Let the hills extend slightly below the subtitle.
-const SKY_OVERLAP_BELOW_HEADER = 8;
 
 export function AssignmentsScreen() {
   const titleRef = useRef<Text>(null);
@@ -38,7 +32,6 @@ export function AssignmentsScreen() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
-  const [headerBottom, setHeaderBottom] = useState<number | null>(null);
   const [showPast, setShowPast] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -102,12 +95,6 @@ export function AssignmentsScreen() {
     }, [reloadCount]),
   );
 
-  const handleHeaderLayout = ({
-    nativeEvent: { layout },
-  }: LayoutChangeEvent) => {
-    setHeaderBottom(layout.y + layout.height);
-  };
-
   const refreshAssignments = () => {
     setReloadCount((count) => count + 1);
   };
@@ -131,33 +118,13 @@ export function AssignmentsScreen() {
         />
       }
     >
-      {/* Draw the artwork behind the header. */}
-      {headerBottom !== null && (
-        <HomeSkyBackdrop
-          timeOfDay={getTimeOfDay(date)}
-          bottom={headerBottom + SKY_OVERLAP_BELOW_HEADER}
-        />
-      )}
-
-      <View onLayout={handleHeaderLayout}>
-        <View style={styles.headerRow}>
-          <SettingsButton />
-        </View>
-
-        <View style={styles.header}>
-          <Text
-            ref={titleRef}
-            accessibilityRole="header"
-            style={styles.title}
-          >
-            List
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Look at an overview of the future
-          </Text>
-        </View>
-      </View>
+      {/* The sky, settings button, title and subtitle, shared with Study
+          Plan and Analytics. */}
+      <TabPageHeader
+        title="List"
+        subtitle="Look at an overview of the future"
+        titleRef={titleRef}
+      />
 
       <View style={styles.list}>
         {status === 'loading' && (
@@ -267,26 +234,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 36,
   },
-  headerRow: {
-    minHeight: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  header: {
-    paddingBottom: 8,
-  },
-  title: {
-    ...textStyles.screenHeading,
-    color: colors.deepOlive,
-  },
-  subtitle: {
-    ...textStyles.subtitle,
-    color: colors.mutedGrayGreen,
-    marginTop: 2,
-  },
+  // Same gap below the subtitle as before the shared header (8 + 12).
   list: {
     gap: 8,
-    marginTop: 12,
+    marginTop: 20,
   },
   statusCard: {
     padding: 20,
