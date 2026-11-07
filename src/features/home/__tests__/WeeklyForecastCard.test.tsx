@@ -1,6 +1,12 @@
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { WeeklyForecastCard } from '../components/WeeklyForecastCard';
+
+const mockNavigate = jest.fn();
+
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
 import type { WeeklyForecast } from '../utils/weeklyForecast';
 
 // Monday, November 9, 2026 at 9 AM, local time.
@@ -14,6 +20,8 @@ const heavyWeek: WeeklyForecast = {
   recommended: [
     {
       id: 'a1',
+      assignmentId: 'a1',
+      courseId: 'ee381',
       title: 'Problem Set #5',
       courseLabel: 'EE 381',
       courseColor: '#8FA8F0',
@@ -23,6 +31,8 @@ const heavyWeek: WeeklyForecast = {
     },
     {
       id: 'a2',
+      assignmentId: 'a2',
+      courseId: 'bio200',
       title: 'Osmosis Lab Report',
       courseLabel: 'BIO 200',
       courseColor: '#A8BEA3',
@@ -34,13 +44,39 @@ const heavyWeek: WeeklyForecast = {
 };
 
 describe('WeeklyForecastCard', () => {
+  beforeEach(() => {
+    mockNavigate.mockReset();
+  });
+
+  it('opens the class’s week when its class is tapped', async () => {
+    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'EE 381 this week' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('ClassWeek', {
+      courseId: 'ee381',
+      courseLabel: 'EE 381',
+    });
+  });
+
+  it('opens the assignment when its row is tapped', async () => {
+    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
+
+    await fireEvent.press(
+      screen.getByRole('button', { name: /BIO 200 - Osmosis Lab Report/ }),
+    );
+
+    expect(mockNavigate).toHaveBeenCalledWith('AssignmentDetails', { assignmentId: 'a2' });
+  });
+
   it('shows the week, its summary, and what to start first with due times and estimates', async () => {
     await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
 
     expect(screen.getByText('Heavy week ahead')).toBeOnTheScreen();
     expect(screen.getByText(heavyWeek.summary)).toBeOnTheScreen();
     expect(screen.getByText('Recommended to get ahead')).toBeOnTheScreen();
-    expect(screen.getByText('EE 381 - Problem Set #5')).toBeOnTheScreen();
+    expect(screen.getByText('EE 381')).toBeOnTheScreen();
+    expect(screen.getByText('- Problem Set #5')).toBeOnTheScreen();
     expect(screen.getByText('Fri 11:59 PM • 45m')).toBeOnTheScreen();
     expect(screen.getByText('Fri 5:00 PM • 1h 20m')).toBeOnTheScreen();
     expect(
