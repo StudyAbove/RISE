@@ -12,8 +12,9 @@ import type { Assignment } from '../../../repositories/assignmentsRepository';
  * The Weekly Forecast card on Home (#57): how busy the next 7 days look and
  * which assignments to start first.
  *
- * Works on assignments for now. Once microtasks exist (#42, #43), they can
- * become work items here instead, with their own times and due dates.
+ * Microtasks (#61): finished ones take their time off the assignment, and an
+ * unfinished one over an hour long is recommended in place of its assignment,
+ * so the card names the big step to start.
  */
 
 export type ForecastLevel = 'clear' | 'light' | 'medium' | 'heavy';
@@ -43,6 +44,9 @@ export type WeeklyForecast = {
 const FORECAST_DAYS = 7;
 const MAX_RECOMMENDED = 3;
 
+// A microtask longer than this is shown in the forecast on its own.
+const BIG_STEP_MINUTES = 60;
+
 // Week levels, in hours of work due in the next 7 days.
 const MEDIUM_WEEK_MINUTES = 5 * 60;
 const HEAVY_WEEK_MINUTES = 10 * 60;
@@ -53,6 +57,34 @@ const LEVEL_TITLES: Record<ForecastLevel, string> = {
   medium: 'Medium week ahead',
   heavy: 'Heavy week ahead',
 };
+
+/**
+ * How much work is left: the unfinished microtasks' time once the assignment
+ * has microtasks, or else its whole estimate.
+ */
+function getRemainingMinutes(assignment: Assignment) {
+  const tasks = assignment.microtasks ?? [];
+
+  if (tasks.length === 0) return getAssignmentEstimate(assignment).minutes;
+
+  return tasks
+    .filter((task) => !task.completed)
+    .reduce((sum, task) => sum + task.estimatedMinutes, 0);
+}
+
+/**
+ * The assignment's next unfinished microtask over an hour long, shown in the
+ * assignment's place under "Recommended to get ahead".
+ */
+function toRecommendedRow(item: ForecastItem, assignment: Assignment | undefined): ForecastItem {
+  const bigStep = assignment?.microtasks?.find(
+    (task) => !task.completed && task.estimatedMinutes > BIG_STEP_MINUTES,
+  );
+
+  if (!bigStep) return item;
+
+  return { ...item, id: bigStep.id, title: bigStep.title, minutes: bigStep.estimatedMinutes };
+}
 
 /** Unfinished assignments due in the next 7 days, counting their due times. */
 function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
@@ -66,7 +98,11 @@ function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
     const dueTime = dueAt.getTime();
     if (dueTime <= now.getTime() || dueTime > weekEnd) return [];
 
-    const { minutes, kind } = getAssignmentEstimate(assignment);
+    const { kind } = getAssignmentEstimate(assignment);
+    const minutes = getRemainingMinutes(assignment);
+
+    // Every step is done; only marking the assignment complete is left.
+    if (minutes === 0) return [];
 
     return [
       {
@@ -200,6 +236,7 @@ export function buildWeeklyForecast(
   eventMinutesByDay: Map<number, number> = new Map(),
 ): WeeklyForecast {
   const items = getWeekItems(assignments, now);
+  const assignmentsById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
   const level = getForecastLevel(items);
   const studyMinutesOn = getStudyMinutesOn(eventMinutesByDay);
 
@@ -207,7 +244,11 @@ export function buildWeeklyForecast(
     level,
     title: LEVEL_TITLES[level],
     summary: getSummary(items, eventMinutesByDay, now),
-    recommended: rankForecastItems(items, studyMinutesOn).slice(0, MAX_RECOMMENDED),
+    // Ranked by the whole assignment's remaining work, then shown as its big
+    // step when it has one.
+    recommended: rankForecastItems(items, studyMinutesOn)
+      .slice(0, MAX_RECOMMENDED)
+      .map((item) => toRecommendedRow(item, assignmentsById.get(item.assignmentId))),
     totalMinutes: items.reduce((sum, item) => sum + item.minutes, 0),
   };
 }

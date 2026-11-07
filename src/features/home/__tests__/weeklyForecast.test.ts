@@ -174,6 +174,74 @@ describe('buildWeeklyForecast', () => {
   });
 });
 
+describe('buildWeeklyForecast with microtasks (#61)', () => {
+  const step = (id: string, position: number, estimatedMinutes: number, completed = false) => ({
+    id,
+    title: `Step ${position}`,
+    position,
+    estimatedMinutes,
+    completed,
+  });
+
+  it('shows an unfinished step over an hour in place of its assignment', () => {
+    const lab = assignment({
+      title: 'Lab Report',
+      estimatedMinutes: 180,
+      microtasks: [step('s1', 1, 30, true), step('s2', 2, 90), step('s3', 3, 120)],
+    });
+
+    const [row] = buildWeeklyForecast([lab], now).recommended;
+
+    // The next big step, which still opens its assignment.
+    expect(row).toMatchObject({
+      id: 's2',
+      assignmentId: lab.id,
+      title: 'Step 2',
+      minutes: 90,
+      courseLabel: 'EE 381',
+    });
+  });
+
+  it('keeps the assignment when no step is over an hour', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({
+          title: 'Problem Set',
+          microtasks: [step('s1', 1, 60), step('s2', 2, 45)],
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.recommended[0]).toMatchObject({ title: 'Problem Set', minutes: 105 });
+  });
+
+  it('takes finished steps off the week', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({
+          estimatedMinutes: 240,
+          microtasks: [step('s1', 1, 60, true), step('s2', 2, 30, true), step('s3', 3, 45)],
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.totalMinutes).toBe(45);
+    expect(forecast.level).toBe('light');
+  });
+
+  it('leaves out an assignment whose steps are all done', () => {
+    const forecast = buildWeeklyForecast(
+      [assignment({ microtasks: [step('s1', 1, 90, true)] })],
+      now,
+    );
+
+    expect(forecast.recommended).toEqual([]);
+    expect(forecast.level).toBe('clear');
+  });
+});
+
 describe('buildWeeklyForecast with the calendar (#67)', () => {
   const midnight = (date: number) => new Date(2026, 10, date).getTime();
 

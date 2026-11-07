@@ -115,8 +115,8 @@ describe('AssignmentsScreen', () => {
         id: 'started',
         title: 'Lab Report',
         microtasks: [
-          { estimatedMinutes: 15, completed: true },
-          { estimatedMinutes: 45, completed: false },
+          { id: 't1', title: 'Collect data', position: 1, estimatedMinutes: 15, completed: true },
+          { id: 't2', title: 'Write it up', position: 2, estimatedMinutes: 45, completed: false },
         ],
       }),
     ]);

@@ -31,14 +31,17 @@ export type Assignment = {
   estimatedMinutes: number | null;
   kind: AssignmentKind | null;
   /**
-   * The assignment's saved microtasks, for its progress bar (#46). Empty
-   * until microtasks are created.
+   * The assignment's saved microtasks in order, for its progress bar (#46)
+   * and the Weekly Forecast (#61). Empty until microtasks are created.
    */
   microtasks?: MicrotaskSummary[];
 };
 
-/** Just what an assignment's progress bar needs from each microtask. */
+/** What List, Study and Home need from each of an assignment's microtasks. */
 export type MicrotaskSummary = {
+  id: string;
+  title: string;
+  position: number;
   estimatedMinutes: number;
   completed: boolean;
 };
@@ -62,19 +65,27 @@ type AssignmentRow = {
     sync_enabled: boolean;
   } | null;
   assignment_microtasks: {
+    id: string;
+    title: string;
+    position: number;
     estimated_minutes: number;
     completed: boolean;
   }[] | null;
 };
 
 const ASSIGNMENT_COLUMNS =
-  'id, title, description, due_at, completed, completed_at, source, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled), assignment_microtasks(estimated_minutes, completed)';
+  'id, title, description, due_at, completed, completed_at, source, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled), assignment_microtasks(id, title, position, estimated_minutes, completed)';
 
 function toMicrotaskSummaries(row: AssignmentRow): MicrotaskSummary[] {
-  return (row.assignment_microtasks ?? []).map((task) => ({
-    estimatedMinutes: task.estimated_minutes,
-    completed: task.completed,
-  }));
+  return (row.assignment_microtasks ?? [])
+    .map((task) => ({
+      id: task.id,
+      title: task.title,
+      position: task.position,
+      estimatedMinutes: task.estimated_minutes,
+      completed: task.completed,
+    }))
+    .sort((a, b) => a.position - b.position);
 }
 
 // Read up to 500 assignments in each request.
