@@ -23,6 +23,8 @@ export type ForecastItem = {
   id: string;
   /** The assignment this row opens when tapped (#61). */
   assignmentId: string;
+  /** The class its label opens, for that class's week (#61). */
+  courseId: string | null;
   title: string;
   /** "EE 381" or the class name, when the assignment has a class. */
   courseLabel: string | null;
@@ -86,17 +88,36 @@ function toRecommendedRow(item: ForecastItem, assignment: Assignment | undefined
   return { ...item, id: bigStep.id, title: bigStep.title, minutes: bigStep.estimatedMinutes };
 }
 
-/** Unfinished assignments due in the next 7 days, counting their due times. */
-function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
+/** Unfinished work due after now and within the next 7 days. */
+function isDueThisWeek(assignment: Assignment, now: Date) {
+  if (assignment.completed || !assignment.dueAt) return false;
+
+  const dueTime = assignment.dueAt.getTime();
   const weekEnd = now.getTime() + FORECAST_DAYS * 24 * 60 * 60 * 1000;
 
+  return dueTime > now.getTime() && dueTime <= weekEnd;
+}
+
+/**
+ * All of one class's unfinished assignments due in the forecast's 7 days,
+ * for the screen its label opens (#61). Soonest due first.
+ */
+export function getClassWeekAssignments(
+  assignments: Assignment[],
+  courseId: string,
+  now: Date,
+): Assignment[] {
+  return assignments
+    .filter((assignment) => assignment.courseId === courseId && isDueThisWeek(assignment, now))
+    .sort((a, b) => a.dueAt!.getTime() - b.dueAt!.getTime() || a.title.localeCompare(b.title));
+}
+
+/** Unfinished assignments due in the next 7 days, counting their due times. */
+function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
   return assignments.flatMap((assignment) => {
     const { dueAt } = assignment;
 
-    if (assignment.completed || !dueAt) return [];
-
-    const dueTime = dueAt.getTime();
-    if (dueTime <= now.getTime() || dueTime > weekEnd) return [];
+    if (!dueAt || !isDueThisWeek(assignment, now)) return [];
 
     const { kind } = getAssignmentEstimate(assignment);
     const minutes = getRemainingMinutes(assignment);
@@ -108,6 +129,7 @@ function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
       {
         id: assignment.id,
         assignmentId: assignment.id,
+        courseId: assignment.courseId ?? null,
         title: assignment.title,
         courseLabel: assignment.courseCode ?? assignment.courseName,
         courseColor: assignment.courseColor,

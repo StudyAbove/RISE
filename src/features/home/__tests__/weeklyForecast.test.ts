@@ -2,6 +2,7 @@ import type { Assignment } from '../../../repositories/assignmentsRepository';
 import {
   buildWeeklyForecast,
   formatForecastDue,
+  getClassWeekAssignments,
   getForecastLevel,
   type ForecastItem,
 } from '../utils/weeklyForecast';
@@ -37,6 +38,7 @@ function item(minutes: number, kind: ForecastItem['kind'] = 'homework'): Forecas
   return {
     id,
     assignmentId: id,
+    courseId: null,
     title: 'Work',
     courseLabel: null,
     courseColor: '#8FA8F0',
@@ -239,6 +241,26 @@ describe('buildWeeklyForecast with microtasks (#61)', () => {
 
     expect(forecast.recommended).toEqual([]);
     expect(forecast.level).toBe('clear');
+  });
+});
+
+describe('getClassWeekAssignments (#61)', () => {
+  it('lists every unfinished assignment the class has due in the next 7 days, soonest first', () => {
+    const assignments = [
+      assignment({ title: 'Essay', courseId: 'ee381', dueAt: new Date(2026, 10, 14, 9, 0) }),
+      assignment({ title: 'Quiz', courseId: 'ee381', dueAt: new Date(2026, 10, 10, 9, 0) }),
+      assignment({ title: 'Lab', courseId: 'ee381', dueAt: new Date(2026, 10, 12, 9, 0) }),
+      assignment({ title: 'Reading', courseId: 'ee381', dueAt: new Date(2026, 10, 11, 9, 0) }),
+      // Left out: another class, done, already past, and after the 7 days.
+      assignment({ title: 'Other class', courseId: 'bio200' }),
+      assignment({ title: 'Done', courseId: 'ee381', completed: true }),
+      assignment({ title: 'Past', courseId: 'ee381', dueAt: new Date(2026, 10, 8, 9, 0) }),
+      assignment({ title: 'Later', courseId: 'ee381', dueAt: new Date(2026, 10, 17, 9, 0) }),
+    ];
+
+    expect(
+      getClassWeekAssignments(assignments, 'ee381', now).map((entry) => entry.title),
+    ).toEqual(['Quiz', 'Reading', 'Lab', 'Essay']);
   });
 });
 
