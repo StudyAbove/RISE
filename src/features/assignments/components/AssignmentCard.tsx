@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { format, isSameYear } from 'date-fns';
 import { isAssignmentUrgent } from '../utils/isAssignmentUrgent';
 import { getPriorityLevel } from '../utils/assignmentPriority';
+import { getAssignmentProgressPercent } from '../utils/assignmentProgress';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { PRIORITY_LABELS, PriorityPill } from './PriorityPill';
 
@@ -60,8 +61,8 @@ export function AssignmentCard({
 
   const navigation = useNavigation();
 
-  // This is assignment completion, not microtask progress.
-  const completionPercent = assignment.completed ? 100 : 0;
+  // Microtask progress, weighted by each task's time (#46).
+  const completionPercent = getAssignmentProgressPercent(assignment);
 
   // Highlight incomplete assignments due within 24 hours or already overdue.
   const needsAttention = isAssignmentUrgent(
@@ -160,7 +161,6 @@ export function AssignmentCard({
           </Text>
         </View>
 
-        {/* Until microtasks are available, completion is 0% or 100%. */}
         {!isHome && (
           <View style={styles.progressRow}>
             <View style={styles.progressTrack}>
