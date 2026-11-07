@@ -21,6 +21,10 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
   AssignmentDetails: { assignmentId: string };
+  // The tools in the "Feeling stuck?" help menu (#70).
+  Breathing: undefined;
+  ExtensionEmail: undefined;
+  OfficeHours: undefined;
   FocusSession: {
     assignmentId: string;
     assignmentTitle: string;

@@ -1,4 +1,4 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import CalendarIcon from '../../../../assets/icons/home/forecast-calendar.svg';
 import HelpIcon from '../../../../assets/icons/home/help-circle.svg';
@@ -15,6 +15,8 @@ interface WeeklyForecastCardProps {
   status: 'loading' | 'ready' | 'error';
   forecast: WeeklyForecast | null;
   now: Date;
+  /** Opens the "Feeling stuck?" help menu (#70). */
+  onHelpPress: () => void;
 }
 
 function ForecastRow({ item, now }: { item: ForecastItem; now: Date }) {
@@ -40,7 +42,7 @@ function ForecastRow({ item, now }: { item: ForecastItem; now: Date }) {
 }
 
 /** The "Weekly forecast" card at the top of Home (#57). */
-export function WeeklyForecastCard({ status, forecast, now }: WeeklyForecastCardProps) {
+export function WeeklyForecastCard({ status, forecast, now, onHelpPress }: WeeklyForecastCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -89,11 +91,17 @@ export function WeeklyForecastCard({ status, forecast, now }: WeeklyForecastCard
         </>
       )}
 
-      {/* Shown for now; the Help story will make it do something. */}
-      <View style={styles.helpButton}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Help"
+        accessibilityHint="Opens breathing, extension, and office hours support"
+        hitSlop={{ top: 9, bottom: 9 }}
+        onPress={onHelpPress}
+        style={({ pressed }) => [styles.helpButton, pressed && styles.pressed]}
+      >
         <HelpIcon />
         <Text style={styles.helpLabel}>Help</Text>
-      </View>
+      </Pressable>
     </View>
   );
 }
