@@ -3093,7 +3093,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('hides a type that is turned off, says so, and remembers it (AC1, AC2, AC6)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
@@ -3111,7 +3111,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('hides events with no type, and a source, together (AC5)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('switch', { name: 'No type' }));
@@ -3125,7 +3125,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('changes nothing when the sheet is closed with ✕', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
@@ -3137,7 +3137,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('shows only events within the chosen dates (AC4)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('button', { name: 'From, Any date' }));
@@ -3150,7 +3150,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('says when nothing matches, in the calendar and today\'s card (AC8)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     for (const name of ['RISE', 'Google Calendar', 'Apple Calendar']) {
