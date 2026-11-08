@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "RISE Syllabus Pull Prototype",
+  "version": "0.1.0",
+  "description": "Automatically discover active Canvas courses and pull their syllabus text for mechanics testing.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://imsydzsbicbnfzbuscbe.supabase.co/*"],
+  "action": {
+    "default_title": "Pull Canvas syllabi",
+    "default_popup": "popup.html"
+  }
+}

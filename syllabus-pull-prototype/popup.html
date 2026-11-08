@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RISE Syllabus Pull Prototype</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">MECHANICS PROTOTYPE</p>
+        <h1>Canvas syllabi</h1>
+        <p class="intro">Open Canvas in this tab. This prototype finds your active classes and pulls each syllabus automatically.</p>
+      </header>
+
+      <details id="connection-panel" class="connection-panel">
+        <summary>Connect your RISE account</summary>
+        <div class="connection-form">
+          <label>RISE account email
+            <input id="pair-email" type="email" autocomplete="email">
+          </label>
+          <label>Pairing code from the RISE app
+            <input id="pair-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          </label>
+          <button id="pair-extension" class="button button--secondary" type="button">Connect</button>
+          <p id="connection-status" class="connection-status" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+
+      <section id="status" class="status" role="status" aria-live="polite">Connecting to Canvas…</section>
+      <section id="summary" class="summary" hidden></section>
+      <section id="courses" class="courses" aria-label="Courses"></section>
+
+      <footer>
+        <button id="pull-again" class="button button--secondary" type="button">Pull again</button>
+        <button id="download" class="button" type="button" hidden>Download JSON</button>
+      </footer>
+      <p class="privacy">Syllabus text and selected PDF/DOCX files are sent to Supabase for extraction. Your RISE pairing token authorizes requests; the OpenAI key stays server-side. Extracted fields are saved as isolated prototype runs.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

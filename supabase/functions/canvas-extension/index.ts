@@ -4,6 +4,8 @@
 // POST { action: 'courses', canvasDomain, courses } → { courses } with colors and sync choices
 // POST { action: 'saveCourseChoices', choices }     → { saved }
 // POST { action: 'sync', ...canvas data }           → { courses, assignments, removed, syncedAt }
+// multipart + x-rise-extension-action: extractSyllabusDocument → { syllabusInfo }
+// Prototype actions require the paired extension token and save isolated test runs.
 // POST { action: 'disconnect' }                     → { disconnected: true }
 //
 // After pairing, the extension sends its token in the x-rise-extension-token
@@ -17,10 +19,13 @@ import {
   InvalidPayloadError,
   isPairingCode,
   parseCourseChoices,
+  parseSyllabusReview,
   parseSyncPayload,
   pickColorsForNewCourses,
+  type SavedSyllabusReview,
   type SyncedCourse,
 } from './canvasSync.ts';
+import { extractSyllabusDocument as extractSyllabusFile, extractSyllabusInfo } from './syllabusAi.ts';
 
 // A code stops working after this many wrong guesses.
 const MAX_PAIRING_ATTEMPTS = 5;
@@ -33,8 +38,8 @@ const PAIRING_FAILED_MESSAGE =
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-rise-extension-token',
+    'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-rise-extension-token, x-rise-extension-action',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -348,6 +353,13 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
       savedCourses.filter((course) => course.sync_enabled).map((course) => course.canvas_course_id),
     );
 
+    const syllabusReviews = await getSyllabusReviews(
+      supabase,
+      userId,
+      savedCourses.filter((course) => course.sync_enabled),
+      payload.courses,
+    );
+
     // Only the classes the student chose to sync.
     const assignments = payload.assignments.filter((assignment) =>
       enabledCanvasIds.has(assignment.canvasCourseId),
@@ -434,6 +446,7 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
       assignments: assignments.length,
       removed: removedIds.length,
       syncedAt,
+      syllabusReviews,
     });
   } catch (error) {
     await supabase.from('canvas_connections').upsert({
@@ -447,6 +460,252 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
   }
 }
 
+type ReviewCourse = Pick<SavedCourse, 'id' | 'canvas_course_id' | 'name'>;
+
+async function mapWithLimit<T, R>(items: T[], limit: number, mapItem: (item: T) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex++;
+        results[index] = await mapItem(items[index]);
+      }
+    }),
+  );
+
+  return results;
+}
+
+/** Returns AI suggestions only for courses the student has not confirmed yet. */
+async function getSyllabusReviews(
+  supabase: SupabaseClient,
+  userId: string,
+  courses: ReviewCourse[],
+  incomingCourses: SyncedCourse[],
+) {
+  if (courses.length === 0) {
+    return [];
+  }
+
+  const { data: reviewState, error } = await supabase
+    .from('courses')
+    .select('id, canvas_course_id, syllabus_info_confirmed_at')
+    .eq('user_id', userId)
+    .in('id', courses.map((course) => course.id));
+
+  if (error) {
+    throw error;
+  }
+
+  const incomingByCanvasId = new Map(incomingCourses.map((course) => [course.canvasCourseId, course]));
+  const confirmedIds = new Set(
+    (reviewState ?? [])
+      .filter((course) => course.syllabus_info_confirmed_at)
+      .map((course) => course.canvas_course_id),
+  );
+
+  return await mapWithLimit(
+    courses.filter((course) => !confirmedIds.has(course.canvas_course_id)),
+    4,
+    async (course) => {
+        const incoming = incomingByCanvasId.get(course.canvas_course_id);
+        const syllabusText = incoming?.syllabusText;
+        let syllabusInfo = null;
+        let processingError: string | null = null;
+
+        if (syllabusText) {
+          try {
+            syllabusInfo = await extractSyllabusInfo(syllabusText, course.name);
+          } catch {
+            processingError = 'RISE could not process this syllabus. Add or correct the details below.';
+          }
+        }
+
+        return {
+          courseId: course.id,
+          courseName: course.name,
+          hasSyllabus: Boolean(syllabusText),
+          syllabusInfo,
+          ...(processingError ? { processingError } : {}),
+        };
+    },
+  );
+}
+
+/** Writes only a student-confirmed review to that student's own course. */
+async function saveSyllabusReview(
+  supabase: SupabaseClient,
+  userId: string,
+  body: unknown,
+) {
+  const review: SavedSyllabusReview = parseSyllabusReview(body);
+  const { error } = await supabase.rpc('save_course_syllabus_review', {
+    p_user_id: userId,
+    p_course_id: review.courseId,
+    p_review: {
+      course_overview: review.course_overview,
+      professor_name: review.professor_name,
+      professor_email: review.professor_email,
+      grading_mode: review.grading_mode,
+      late_work: review.late_work,
+      office_hours: review.office_hours,
+      topics: review.topics,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return jsonResponse({ saved: true });
+}
+
+/** Parses an uploaded Canvas syllabus document without storing the file. */
+async function extractSyllabusDocument(
+  supabase: SupabaseClient,
+  userId: string,
+  form: FormData,
+) {
+  const canvasCourseId = form.get('canvasCourseId');
+  const uploadedFile = form.get('file');
+  if (typeof canvasCourseId !== 'string' || !/^\d+$/.test(canvasCourseId)) {
+    return jsonResponse({ error: 'A valid Canvas course ID is required.' }, 400);
+  }
+  if (!(uploadedFile instanceof File)) {
+    return jsonResponse({ error: 'Upload a PDF or DOCX syllabus file.' }, 400);
+  }
+  if (uploadedFile.size === 0 || uploadedFile.size > 8 * 1024 * 1024) {
+    return jsonResponse({ error: 'The syllabus document must be between 1 byte and 8 MB.' }, 413);
+  }
+
+  const filename = uploadedFile.name.replace(/[\\/\0]/g, '_').slice(0, 120);
+  const extension = filename.toLowerCase().split('.').pop();
+  const contentType = extension === 'pdf'
+    ? 'application/pdf'
+    : extension === 'docx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : null;
+  if (!contentType) {
+    return jsonResponse({ error: 'Only PDF and DOCX syllabus documents are supported.' }, 415);
+  }
+
+  const bytes = new Uint8Array(await uploadedFile.arrayBuffer());
+  const isPdf = contentType === 'application/pdf' && new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-';
+  const isDocx = contentType.includes('wordprocessingml') && bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (!isPdf && !isDocx) {
+    return jsonResponse({ error: 'The file contents do not match a PDF or DOCX document.' }, 415);
+  }
+
+  const { data: course, error: courseError } = await supabase
+    .from('courses')
+    .select('id, name')
+    .eq('user_id', userId)
+    .eq('canvas_course_id', canvasCourseId)
+    .maybeSingle();
+  if (courseError) throw courseError;
+  if (!course) return jsonResponse({ error: 'That Canvas course is not connected to this RISE account.' }, 404);
+
+  const document = new File([bytes], filename, { type: contentType });
+  const syllabusInfo = await extractSyllabusFile(document, course.name);
+  return jsonResponse({ syllabusInfo });
+}
+
+async function savePrototypeRun(
+  supabase: SupabaseClient,
+  values: {
+    canvasCourseId: string | null;
+    courseName: string;
+    sourceType: 'text' | 'pdf' | 'docx';
+    sourceName: string | null;
+    inputCharacterCount: number;
+    syllabusInfo: Awaited<ReturnType<typeof extractSyllabusInfo>>;
+  },
+) {
+  const { data, error } = await supabase
+    .from('syllabus_prototype_runs')
+    .insert({
+      canvas_course_id: values.canvasCourseId,
+      course_name: values.courseName,
+      source_type: values.sourceType,
+      source_name: values.sourceName,
+      input_character_count: values.inputCharacterCount,
+      extracted_info: values.syllabusInfo,
+    })
+    .select('id, created_at')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function extractPrototypeText(supabase: SupabaseClient, body: Record<string, unknown>) {
+  const syllabusText = body.syllabusText;
+  const courseName = typeof body.courseName === 'string' ? body.courseName.trim().slice(0, 500) : '';
+  const canvasCourseId = typeof body.canvasCourseId === 'string'
+    ? body.canvasCourseId.slice(0, 100)
+    : null;
+  const sourceName = typeof body.sourceName === 'string' ? body.sourceName.slice(0, 120) : null;
+  if (typeof syllabusText !== 'string' || !syllabusText.trim() || syllabusText.length > 50_000) {
+    return jsonResponse({ error: 'Provide syllabus text between 1 and 50,000 characters.' }, 400);
+  }
+  if (!courseName) return jsonResponse({ error: 'A course name is required.' }, 400);
+
+  const syllabusInfo = await extractSyllabusInfo(syllabusText, courseName);
+  const run = await savePrototypeRun(supabase, {
+    canvasCourseId,
+    courseName,
+    sourceType: 'text',
+    sourceName,
+    inputCharacterCount: syllabusText.length,
+    syllabusInfo,
+  });
+  return jsonResponse({ run, syllabusInfo });
+}
+
+async function extractPrototypeDocument(supabase: SupabaseClient, form: FormData) {
+  const courseNameValue = form.get('courseName');
+  const courseName = typeof courseNameValue === 'string' ? courseNameValue.trim().slice(0, 500) : '';
+  const courseIdValue = form.get('canvasCourseId');
+  const canvasCourseId = typeof courseIdValue === 'string' ? courseIdValue.slice(0, 100) : null;
+  const uploadedFile = form.get('file');
+  if (!courseName) return jsonResponse({ error: 'A course name is required.' }, 400);
+  if (!(uploadedFile instanceof File)) {
+    return jsonResponse({ error: 'Upload a PDF or DOCX syllabus file.' }, 400);
+  }
+  if (uploadedFile.size === 0 || uploadedFile.size > 8 * 1024 * 1024) {
+    return jsonResponse({ error: 'The syllabus document must be between 1 byte and 8 MB.' }, 413);
+  }
+
+  const filename = uploadedFile.name.replace(/[\\/\0]/g, '_').slice(0, 120);
+  const extension = filename.toLowerCase().split('.').pop();
+  const contentType = extension === 'pdf'
+    ? 'application/pdf'
+    : extension === 'docx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : null;
+  if (!contentType) return jsonResponse({ error: 'Only PDF and DOCX files are supported.' }, 415);
+
+  const bytes = new Uint8Array(await uploadedFile.arrayBuffer());
+  const isPdf = contentType === 'application/pdf' && new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-';
+  const isDocx = contentType.includes('wordprocessingml') && bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (!isPdf && !isDocx) {
+    return jsonResponse({ error: 'The file contents do not match a PDF or DOCX document.' }, 415);
+  }
+
+  const document = new File([bytes], filename, { type: contentType });
+  const syllabusInfo = await extractSyllabusFile(document, courseName);
+  const run = await savePrototypeRun(supabase, {
+    canvasCourseId,
+    courseName,
+    sourceType: extension as 'pdf' | 'docx',
+    sourceName: filename,
+    inputCharacterCount: 0,
+    syllabusInfo,
+  });
+  return jsonResponse({ run, syllabusInfo });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -457,8 +716,48 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
     const supabase = createAdminClient();
+    const documentAction = req.headers.get('x-rise-extension-action');
+    if (documentAction === 'prototypeExtractSyllabusDocument') {
+      if (!(await findTokenUser(supabase, req.headers.get('x-rise-extension-token')))) {
+        return jsonResponse({ error: 'Reconnect the extension to your Rise account.', code: 'reconnect_required' }, 401);
+      }
+      if (!req.headers.get('content-type')?.includes('multipart/form-data')) {
+        return jsonResponse({ error: 'Upload the document as multipart form data.' }, 400);
+      }
+      const contentLength = Number(req.headers.get('content-length') || 0);
+      if (contentLength > 9 * 1024 * 1024) {
+        return jsonResponse({ error: 'The document upload exceeds the 8 MB limit.' }, 413);
+      }
+      return await extractPrototypeDocument(supabase, await req.formData());
+    }
+    if (documentAction === 'extractSyllabusDocument') {
+      if (!req.headers.get('content-type')?.includes('multipart/form-data')) {
+        return jsonResponse({ error: 'Upload the document as multipart form data.' }, 400);
+      }
+      const contentLength = Number(req.headers.get('content-length') || 0);
+      if (contentLength > 9 * 1024 * 1024) {
+        return jsonResponse({ error: 'The document upload exceeds the 8 MB limit.' }, 413);
+      }
+      const tokenUser = await findTokenUser(supabase, req.headers.get('x-rise-extension-token'));
+      if (!tokenUser) {
+        return jsonResponse(
+          { error: 'Reconnect the extension to your Rise account.', code: 'reconnect_required' },
+          401,
+        );
+      }
+      return await extractSyllabusDocument(supabase, tokenUser.userId, await req.formData());
+    }
+
+    const body = await req.json();
+
+    if (body?.action === 'prototypeExtractSyllabusText') {
+      const tokenUser = await findTokenUser(supabase, req.headers.get('x-rise-extension-token'));
+      if (!tokenUser) {
+        return jsonResponse({ error: 'Reconnect the extension to your Rise account.', code: 'reconnect_required' }, 401);
+      }
+      return await extractPrototypeText(supabase, body);
+    }
 
     if (body?.action === 'pair') {
       return await pairExtension(supabase, body);
@@ -483,6 +782,10 @@ Deno.serve(async (req) => {
 
     if (body?.action === 'saveCourseChoices') {
       return await saveCourseChoices(supabase, tokenUser.userId, body);
+    }
+
+    if (body?.action === 'saveSyllabusReview') {
+      return await saveSyllabusReview(supabase, tokenUser.userId, body);
     }
 
     if (body?.action === 'disconnect') {
