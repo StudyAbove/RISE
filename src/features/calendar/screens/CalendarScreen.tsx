@@ -1356,6 +1356,14 @@ export function CalendarScreen() {
       }
     }
 
+    // An assignment's event (#159) follows the assignment, so it's never
+    // editable here.
+    if (
+      event.assignmentId
+    ) {
+      readOnly = true;
+    }
+
     openEditAfterDetailsRef.current =
       false;
 

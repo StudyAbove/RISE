@@ -41,7 +41,10 @@ interface EventDetailsSheetProps {
   event: CalendarEvent | null;
   /** An unresolved provider conflict must be resolved before editing/deleting. */
   hasUnresolvedConflict: boolean;
-  /** Provider permissions do not allow this event to be changed in RISE. */
+  /**
+   * The event can't be changed in RISE: provider permissions don't allow it,
+   * or it shows an assignment (#159).
+   */
   readOnly: boolean;
   /** Provider sources for an imported Apple/Google event after deduplication. */
   providerSources: Array<'apple' | 'google'>;
@@ -225,6 +228,10 @@ export function EventDetailsSheet({
                 <DetailRow icon={<FileTextIcon width={25} height={25} />}>{EVENT_TYPE_LABELS[event.eventType]}</DetailRow>
               )}
 
+              {event.course && (
+                <DetailRow icon={<ClassIcon width={25} height={25} />}>{event.course.name}</DetailRow>
+              )}
+
               {event.location ? (
                 <DetailRow icon={<MapPinIcon width={25} height={25} />}>{event.location}</DetailRow>
               ) : null}
@@ -285,7 +292,9 @@ export function EventDetailsSheet({
                 </Text>
 
                 <Text style={styles.readOnlyText}>
-                  This event is controlled by a connected calendar and cannot be edited or deleted in RISE.
+                  {event.assignmentId
+                    ? 'This event shows an assignment\'s due date, so it updates with the assignment and cannot be edited or deleted here.'
+                    : 'This event is controlled by a connected calendar and cannot be edited or deleted in RISE.'}
                 </Text>
               </View>
             ) : (

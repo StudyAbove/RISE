@@ -32,6 +32,12 @@ jest.mock('expo-sqlite/kv-store', () => ({
   },
 }));
 
+// The student's synced classes, for the filter sheet's Courses rows (#159).
+const mockFetchCanvasCourses = jest.fn(() => Promise.resolve([] as unknown[]));
+jest.mock('../../../repositories/canvasRepository', () => ({
+  fetchCanvasCourses: () => mockFetchCanvasCourses(),
+}));
+
 const mockGetCalendarEventsInRange =
   jest.fn();
 
@@ -3106,6 +3112,7 @@ describe('CalendarScreen: filters (#79)', () => {
     expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
       hiddenTypes: ['class'],
       hiddenSources: [],
+      hiddenCourses: [],
     });
   });
 
@@ -3175,6 +3182,74 @@ describe('CalendarScreen: filters (#79)', () => {
     expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
       hiddenTypes: [],
       hiddenSources: [],
+      hiddenCourses: [],
     });
+  });
+});
+
+describe('CalendarScreen: assignment events (#159)', () => {
+  it('opens an assignment read-only, with its course and no Edit or Delete', async () => {
+    const assignmentEvent: CalendarEvent = {
+      ...makeEvent('Project 1', new Date(2026, 10, 13, 22, 59), new Date(2026, 10, 13, 23, 59)),
+      source: 'canvas',
+      eventType: 'assignment',
+      assignmentId: 'assignment-1',
+      course: { id: 'course-1', name: 'Software Engineering', code: 'CECS 491B' },
+    };
+    mockGetCalendarEventsInRange.mockResolvedValue([assignmentEvent]);
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+
+    await render(<CalendarScreen />);
+    await fireEvent.press((await screen.findAllByLabelText(/^Project 1, (Assignment, )?Canvas, /))[0]);
+
+    expect(await screen.findByRole('header', { name: 'Read-only calendar event' })).toBeOnTheScreen();
+    expect(screen.getByText('Software Engineering')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+});
+
+describe('CalendarScreen: course filters (#159)', () => {
+  const at = (hour: number) => new Date(2026, 10, 13, hour).toISOString();
+  const project: CalendarEvent = {
+    id: 'project', userId: 'user-1', title: 'Project 1', startAt: at(9), endAt: at(10), source: 'canvas',
+    eventType: 'assignment', assignmentId: 'assignment-1',
+    course: { id: 'cecs-491b', name: 'Software Engineering', code: 'CECS 491B' },
+  };
+  const gym: CalendarEvent = {
+    id: 'gym', userId: 'user-1', title: 'Gym', startAt: at(13), endAt: at(14), source: 'rise', eventType: 'wellness',
+  };
+  const chip = (title: string) => screen.queryAllByLabelText(new RegExp(`^${title}, .*, \\d+:\\d+ [AP]M to `));
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([project, gym]);
+    mockFetchCanvasCourses.mockResolvedValue([
+      { id: 'cecs-491b', name: 'Software Engineering', code: 'CECS 491B', color: 'sunbeam', syncEnabled: true },
+    ]);
+  });
+
+  it('hides a course that is unchecked, keeping events with no course', async () => {
+    await render(<CalendarScreen />);
+    expect((await screen.findAllByLabelText(/^Project 1, /)).length).toBeGreaterThan(0);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'CECS 491B' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Project 1')).toHaveLength(0);
+    expect(chip('Gym').length).toBeGreaterThan(0);
+    expect(screen.getByText('Some events are hidden')).toBeOnTheScreen();
+  });
+
+  it('shows only course work when All other courses is unchecked', async () => {
+    await render(<CalendarScreen />);
+    await screen.findAllByLabelText(/^Gym, /);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'All other courses' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Gym')).toHaveLength(0);
+    expect(chip('Project 1').length).toBeGreaterThan(0);
   });
 });

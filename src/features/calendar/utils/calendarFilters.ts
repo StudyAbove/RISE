@@ -6,14 +6,23 @@ import type { CalendarEvent, CalendarEventType, CalendarSource } from '../../../
 export type EventTypeFilter = CalendarEventType | 'none';
 
 /**
+ * A course checkbox on the filter sheet (#159): a course's id, or
+ * NO_COURSE for the "All other courses" row (events with no course).
+ */
+export type CourseFilter = string;
+
+export const NO_COURSE = 'none';
+
+/**
  * What the student chose to show on the calendar (#79).
  *
- * Types and sources are stored as what's hidden, so everything shows by
- * default and a type or source added later shows until it's turned off.
+ * Types, sources, and courses are stored as what's hidden, so everything
+ * shows by default and one added later shows until it's turned off.
  */
 export interface CalendarFilters {
   hiddenTypes: EventTypeFilter[];
   hiddenSources: CalendarSource[];
+  hiddenCourses: CourseFilter[];
   /** The first day to show, or null for no limit. */
   fromDate: Date | null;
   /** The last day to show (the whole day), or null for no limit. */
@@ -23,6 +32,7 @@ export interface CalendarFilters {
 export const DEFAULT_CALENDAR_FILTERS: CalendarFilters = {
   hiddenTypes: [],
   hiddenSources: [],
+  hiddenCourses: [],
   fromDate: null,
   toDate: null,
 };
@@ -32,6 +42,7 @@ export function isFiltering(filters: CalendarFilters): boolean {
   return (
     filters.hiddenTypes.length > 0 ||
     filters.hiddenSources.length > 0 ||
+    filters.hiddenCourses.length > 0 ||
     filters.fromDate !== null ||
     filters.toDate !== null
   );
@@ -51,8 +62,8 @@ function isWithinDates(event: CalendarEvent, filters: CalendarFilters): boolean 
 }
 
 /**
- * The events to draw on the calendar. An event shows only when its type is
- * on, its source is on, and it falls within the chosen dates.
+ * The events to draw on the calendar. An event shows only when its type,
+ * source, and course are on, and it falls within the chosen dates.
  */
 export function filterCalendarEvents(events: CalendarEvent[], filters: CalendarFilters): CalendarEvent[] {
   if (!isFiltering(filters)) {
@@ -63,6 +74,7 @@ export function filterCalendarEvents(events: CalendarEvent[], filters: CalendarF
     (event) =>
       !filters.hiddenTypes.includes(event.eventType ?? 'none') &&
       !filters.hiddenSources.includes(event.source) &&
+      !filters.hiddenCourses.includes(event.course?.id ?? NO_COURSE) &&
       isWithinDates(event, filters)
   );
 }

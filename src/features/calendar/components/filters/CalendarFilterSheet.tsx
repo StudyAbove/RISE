@@ -10,11 +10,14 @@ import StudyIcon from '../../../../../assets/icons/calendar/event-types/study.sv
 import WellnessIcon from '../../../../../assets/icons/calendar/event-types/wellness.svg';
 import CloseIcon from '../../../../../assets/icons/calendar/close.svg';
 import type { CalendarSource } from '../../../../models/CalendarEvent';
-import type { CalendarFilters, EventTypeFilter } from '../../utils/calendarFilters';
+import { fetchCanvasCourses, type CanvasCourse } from '../../../../repositories/canvasRepository';
+import { getCourseColor } from '../../../../theme/courseColors';
+import { NO_COURSE, type CalendarFilters, type CourseFilter, type EventTypeFilter } from '../../utils/calendarFilters';
 import { EVENT_SOURCE_LABELS } from '../../utils/eventLabels';
 import { DatePickerPanel } from '../addEvent/DatePickerPanel';
 import { SourceLogo } from '../SourceLogo';
 import { styles } from './CalendarFilterSheet.styles';
+import { CourseCheckbox } from './CourseCheckbox';
 import { FilterToggle } from './FilterToggle';
 
 // Order, names, and icon sizes from the Figma "Calendar settings" rows (wellness
@@ -55,6 +58,9 @@ interface CalendarFilterSheetProps {
 export function CalendarFilterSheet({ visible, filters, onApply, onClose }: CalendarFilterSheetProps) {
   const [draft, setDraft] = useState(filters);
   const [openDate, setOpenDate] = useState<DateEnd | null>(null);
+  // The student's synced classes for the Courses rows (#159); none until
+  // they load, and the section stays hidden if there are none.
+  const [courses, setCourses] = useState<CanvasCourse[]>([]);
 
   // Start fresh from the calendar's filters each time the sheet opens.
   useEffect(() => {
@@ -63,6 +69,29 @@ export function CalendarFilterSheet({ visible, filters, onApply, onClose }: Cale
       setOpenDate(null);
     }
   }, [visible, filters]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    fetchCanvasCourses()
+      .then((loaded) => {
+        if (isCurrent) {
+          setCourses(loaded.filter((course) => course.syncEnabled));
+        }
+      })
+      .catch((error) => console.log('Could not load courses for the calendar filters:', error));
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [visible]);
+
+  const toggleCourse = (course: CourseFilter) =>
+    setDraft((current) => ({ ...current, hiddenCourses: toggled(current.hiddenCourses, course) }));
 
   const pickDate = (end: DateEnd, picked: Date) => {
     const day = startOfDay(picked);
@@ -115,6 +144,38 @@ export function CalendarFilterSheet({ visible, filters, onApply, onClose }: Cale
               />
             ))}
           </Rows>
+
+          {courses.length > 0 && (
+            <View style={styles.section}>
+              <Text accessibilityRole="header" style={styles.sectionHeading}>
+                Courses
+              </Text>
+              <Rows>
+                {[
+                  ...courses.map((course) => (
+                    <CheckRow
+                      key={course.id}
+                      label={course.code ?? course.name}
+                      checked={!draft.hiddenCourses.includes(course.id)}
+                      onPress={() => toggleCourse(course.id)}
+                      icon={
+                        <View style={[styles.courseChip, { backgroundColor: getCourseColor(course.color).tint }]}>
+                          <ClassIcon width={19} height={19} />
+                        </View>
+                      }
+                    />
+                  )),
+                  <CheckRow
+                    key={NO_COURSE}
+                    label="All other courses"
+                    checked={!draft.hiddenCourses.includes(NO_COURSE)}
+                    onPress={() => toggleCourse(NO_COURSE)}
+                    icon={<View style={styles.noTypeIcon} />}
+                  />,
+                ]}
+              </Rows>
+            </View>
+          )}
 
           <View style={styles.section}>
             <Text accessibilityRole="header" style={styles.sectionHeading}>
@@ -220,6 +281,23 @@ function ToggleRow({ label, on, icon, onPress }: { label: string; on: boolean; i
       <View style={styles.iconBox}>{icon}</View>
       <Text style={styles.label}>{label}</Text>
       <FilterToggle on={on} />
+    </Pressable>
+  );
+}
+
+/** A course row (#159): checked when the course's events show. */
+function CheckRow({ label, checked, icon, onPress }: { label: string; checked: boolean; icon: ReactNode; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, styles.courseRow, pressed && styles.rowPressed]}
+    >
+      <View style={styles.courseIconBox}>{icon}</View>
+      <Text style={styles.label}>{label}</Text>
+      <CourseCheckbox checked={checked} />
     </Pressable>
   );
 }

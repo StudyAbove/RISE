@@ -331,6 +331,41 @@ describe('EventDetailsSheet', () => {
     ).toBeNull();
   });
 
+  describe('assignment events (#159)', () => {
+    const assignmentEvent: CalendarEvent = {
+      ...basicEvent,
+      source: 'canvas',
+      eventType: 'assignment',
+      assignmentId: 'assignment-1',
+      course: { id: 'course-1', name: 'Software Engineering', code: 'CECS 491B' },
+    };
+
+    it('shows the course', async () => {
+      await renderSheet(assignmentEvent, false, true);
+
+      expect(screen.getByText('Software Engineering')).toBeOnTheScreen();
+    });
+
+    it('explains it follows the assignment, with no Edit or Delete', async () => {
+      await renderSheet(assignmentEvent, false, true);
+
+      expect(screen.getByRole('header', { name: 'Read-only calendar event' })).toBeOnTheScreen();
+      expect(
+        screen.getByText(
+          'This event shows an assignment\'s due date, so it updates with the assignment and cannot be edited or deleted here.',
+        ),
+      ).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    });
+
+    it('shows no course row for an event without one', async () => {
+      await renderSheet(fullEvent);
+
+      expect(screen.queryByText('Software Engineering')).toBeNull();
+    });
+  });
+
   it('shows both providers for a deduplicated Apple and Google event', async () => {
     await renderSheet(
       {

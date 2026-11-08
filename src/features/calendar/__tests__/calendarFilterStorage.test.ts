@@ -45,6 +45,20 @@ describe('calendar filter storage (#79)', () => {
     });
   });
 
+  it('brings back the saved course toggles (#159)', () => {
+    saveCalendarFilters({ ...DEFAULT_CALENDAR_FILTERS, hiddenCourses: ['course-1', 'none'] });
+
+    expect(loadCalendarFilters()).toEqual({ ...DEFAULT_CALENDAR_FILTERS, hiddenCourses: ['course-1', 'none'] });
+  });
+
+  it('keeps only text course ids, and loads older saves without courses', () => {
+    mockStore.set('rise.calendarFilters', JSON.stringify({ hiddenTypes: [], hiddenSources: [], hiddenCourses: ['course-1', 7, null] }));
+    expect(loadCalendarFilters().hiddenCourses).toEqual(['course-1']);
+
+    mockStore.set('rise.calendarFilters', JSON.stringify({ hiddenTypes: ['class'], hiddenSources: [] }));
+    expect(loadCalendarFilters()).toEqual({ ...DEFAULT_CALENDAR_FILTERS, hiddenTypes: ['class'] });
+  });
+
   it('does not save the date range', () => {
     saveCalendarFilters({
       ...DEFAULT_CALENDAR_FILTERS,

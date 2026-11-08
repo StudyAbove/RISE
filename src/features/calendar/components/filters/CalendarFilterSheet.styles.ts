@@ -66,6 +66,38 @@ export const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: calendarColors.typeIcon,
   },
+  // Figma "Course Rows" (#159): taller rows with a round chip in the course's
+  // color, and a checkmark instead of a toggle.
+  courseRow: {
+    height: 56,
+  },
+  courseIconBox: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  courseChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.softSage,
+  },
+  checkboxUnchecked: {
+    borderWidth: 1.5,
+    borderColor: colors.mutedGrayGreen,
+  },
   label: {
     flex: 1,
     fontFamily: fonts.heading.semiBold,
