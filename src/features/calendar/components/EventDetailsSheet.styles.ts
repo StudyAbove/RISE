@@ -5,7 +5,7 @@ import { fonts } from '../../../theme/typography';
 import { calendarColors } from '../calendarColors';
 
 // Sizes from the Figma "Biology Details" frame.
-const CIRCLE_SIZE = 85;
+export const CIRCLE_SIZE = 85;
 // The circle sits over the top edge of the main card by this much.
 const CIRCLE_OVERLAP = 11;
 const CARD_RADIUS = 20;
