@@ -1,6 +1,5 @@
-import { type FC, type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import type { SvgProps } from 'react-native-svg';
 import { format, parseISO } from 'date-fns';
 
 import BellIcon from '../../../../assets/icons/calendar/details/bell.svg';
@@ -8,32 +7,19 @@ import CalendarIcon from '../../../../assets/icons/calendar/details/calendar.svg
 import FileTextIcon from '../../../../assets/icons/calendar/details/file-text.svg';
 import MapPinIcon from '../../../../assets/icons/calendar/details/map-pin.svg';
 import CloseIcon from '../../../../assets/icons/calendar/close.svg';
-import AssignmentIcon from '../../../../assets/icons/calendar/event-types/assignment.svg';
 import ClassIcon from '../../../../assets/icons/calendar/event-types/class.svg';
-import PersonalIcon from '../../../../assets/icons/calendar/event-types/personal.svg';
-import StudyIcon from '../../../../assets/icons/calendar/event-types/study.svg';
-import WellnessIcon from '../../../../assets/icons/calendar/event-types/wellness.svg';
-import type { CalendarEvent, CalendarEventType } from '../../../models/CalendarEvent';
+import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { colors } from '../../../theme/colors';
-import { eventTypeCircleColors } from '../calendarColors';
 import { getLinkedCalendarProviders } from '../services/calendarEventSyncService';
 import { getAllDayRange } from '../utils/allDayEvents';
 import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS, formatReminder } from '../utils/eventLabels';
-import { styles } from './EventDetailsSheet.styles';
+import { CIRCLE_SIZE, styles } from './EventDetailsSheet.styles';
+import { EventTypeCircle } from './EventTypeCircle';
 import { SourceLogo } from './SourceLogo';
 import { formatEventTime } from './TodayEventsCard';
 
 const BIG_ICON_SIZE = 44;
-
-// The big icon at the top, by event type.
-const TYPE_ICONS: Record<CalendarEventType, FC<SvgProps>> = {
-  class: ClassIcon,
-  assignment: AssignmentIcon,
-  study: StudyIcon,
-  personal: PersonalIcon,
-  wellness: WellnessIcon,
-};
 
 interface EventDetailsSheetProps {
   visible: boolean;
@@ -172,7 +158,13 @@ export function EventDetailsSheet({
 
         {event && (
           <ScrollView contentContainerStyle={styles.content}>
-            <TypeCircle type={event.eventType} />
+            <EventTypeCircle
+              testID="event-type-circle"
+              type={event.eventType}
+              size={CIRCLE_SIZE}
+              iconSize={BIG_ICON_SIZE}
+              style={styles.circle}
+            />
 
             <View style={[styles.card, styles.mainCard]}>
               <Text accessibilityRole="header" style={styles.title}>
@@ -389,20 +381,6 @@ function formatEventDate(event: CalendarEvent): string {
     return `${format(range.firstDay, 'EEEE, MMMM d')} – ${format(range.lastDay, 'EEEE, MMMM d, yyyy')}`;
   }
   return format(parseISO(event.startAt), 'EEEE, MMMM d, yyyy');
-}
-
-/** The colored circle with the event type's icon, or a calendar for events without a type. */
-function TypeCircle({ type }: { type?: CalendarEventType }) {
-  const Icon = type ? TYPE_ICONS[type] : CalendarIcon;
-
-  return (
-    <View
-      testID="event-type-circle"
-      style={[styles.circle, { backgroundColor: eventTypeCircleColors[type ?? 'none'] }]}
-    >
-      <Icon width={BIG_ICON_SIZE} height={BIG_ICON_SIZE} />
-    </View>
-  );
 }
 
 function DetailRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {

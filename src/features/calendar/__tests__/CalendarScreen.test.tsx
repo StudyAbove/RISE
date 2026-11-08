@@ -32,6 +32,9 @@ jest.mock('expo-sqlite/kv-store', () => ({
   },
 }));
 
+// Calendar search results (#78).
+const mockSearchCalendarEvents = jest.fn();
+
 // The student's synced classes, for the filter sheet's Courses rows (#159).
 const mockFetchCanvasCourses = jest.fn(() => Promise.resolve([] as unknown[]));
 jest.mock('../../../repositories/canvasRepository', () => ({
@@ -122,6 +125,11 @@ jest.mock(
 jest.mock(
   '../../../repositories/calendarEventsRepository',
   () => ({
+    searchCalendarEvents:
+      (...args: unknown[]) =>
+        mockSearchCalendarEvents(
+          ...args,
+        ),
     getCalendarEventsInRange:
       (...args: unknown[]) =>
         mockGetCalendarEventsInRange(
@@ -2089,7 +2097,7 @@ describe(
     );
 
     it(
-      'shows search as not yet available, and the ••• filters as available (#79)',
+      'shows search (#78) and the ••• filters (#79) as available',
       async () => {
         await render(
           <CalendarScreen />,
@@ -2102,7 +2110,7 @@ describe(
               name: 'Search',
             },
           ),
-        ).toBeDisabled();
+        ).toBeEnabled();
 
         expect(
           screen.getByRole(
@@ -3251,5 +3259,70 @@ describe('CalendarScreen: course filters (#159)', () => {
 
     expect(chip('Gym')).toHaveLength(0);
     expect(chip('Project 1').length).toBeGreaterThan(0);
+  });
+});
+
+describe('CalendarScreen: search (#78)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const project: CalendarEvent = {
+    id: 'project', userId: 'user-1', title: 'CECS 449 Project 1',
+    startAt: new Date(2026, 10, 23, 22, 59).toISOString(), endAt: new Date(2026, 10, 23, 23, 59).toISOString(),
+    source: 'rise', eventType: 'study',
+  };
+
+  async function searchFor(text: string) {
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+    await fireEvent.changeText(screen.getByLabelText('Search calendar'), text);
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+  }
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([]);
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+    mockSearchCalendarEvents.mockReset();
+    mockSearchCalendarEvents.mockResolvedValue([project]);
+  });
+
+  it('opens search from the header and finds events (AC1)', async () => {
+    await render(<CalendarScreen />);
+    await searchFor('449');
+
+    expect(mockSearchCalendarEvents).toHaveBeenCalledWith('449');
+    expect(await screen.findByRole('button', { name: /^CECS 449 Project 1, Mon, Nov 23/ })).toBeOnTheScreen();
+  });
+
+  it('opens a result on its day in Day view, with its details (AC6)', async () => {
+    await render(<CalendarScreen />);
+    await searchFor('449');
+
+    // iOS reports the search sheet finished closing; the test Modal is gone as
+    // soon as it's hidden, so keep its onDismiss and call it afterwards.
+    const onDismiss = screen.getByTestId('calendar-search-sheet').props.onDismiss as () => void;
+    await fireEvent.press(await screen.findByRole('button', { name: /^CECS 449 Project 1, / }));
+    await act(async () => {
+      onDismiss();
+    });
+
+    expect(screen.queryByLabelText('Search calendar')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Day', selected: true })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Monday, November 23' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'CECS 449 Project 1' })).toBeOnTheScreen();
+  });
+
+  it('closes with ✕ and leaves the calendar as it was', async () => {
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+
+    const onDismiss = screen.getByTestId('calendar-search-sheet').props.onDismiss as () => void;
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    await act(async () => {
+      onDismiss();
+    });
+
+    expect(screen.queryByLabelText('Search calendar')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Month', selected: true })).toBeOnTheScreen();
+    expect(screen.queryByRole('header', { name: 'CECS 449 Project 1' })).not.toBeOnTheScreen();
   });
 });

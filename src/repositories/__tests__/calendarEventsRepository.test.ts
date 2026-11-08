@@ -3,6 +3,7 @@ import {
   createCalendarEvent,
   deleteCalendarEvent,
   getCalendarEventsInRange,
+  searchCalendarEvents,
   updateCalendarEvent,
 } from '../calendarEventsRepository';
 
@@ -28,6 +29,9 @@ const mockQuery = {
   insert: jest.fn(),
   single: jest.fn(),
   delete: jest.fn(),
+  or: jest.fn(),
+  in: jest.fn(),
+  limit: jest.fn(),
 };
 const mockGetUser = jest.fn();
 
@@ -84,6 +88,8 @@ beforeEach(() => {
   mockQuery.eq.mockReturnValue(mockQuery);
   mockQuery.insert.mockReturnValue(mockQuery);
   mockQuery.delete.mockReturnValue(mockQuery);
+  mockQuery.or.mockReturnValue(mockQuery);
+  mockQuery.in.mockReturnValue(mockQuery);
   clearAddedMockCalendarEvents();
 });
 
@@ -685,5 +691,114 @@ describe('deleteCalendarEvent', () => {
 
     expect(mockQuery.from).not.toHaveBeenCalled();
     expect(await getCalendarEventsInRange(...range)).not.toContainEqual(saved);
+  });
+});
+
+describe('searchCalendarEvents (#78)', () => {
+  // The courses table gets its own query: select → or, which resolves.
+  const mockCoursesQuery = { select: jest.fn(), or: jest.fn() };
+
+  const row = (id: string, start: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    user_id: 'user-1',
+    title: id,
+    start_at: start,
+    end_at: start,
+    source: 'rise',
+    location: null,
+    description: null,
+    ...extra,
+  });
+
+  function mockSearch({ textRows = [] as unknown[], courseIds = [] as string[], courseRows = [] as unknown[] }) {
+    mockQuery.from.mockImplementation((table: string) => (table === 'courses' ? mockCoursesQuery : mockQuery));
+    mockCoursesQuery.select.mockReturnValue(mockCoursesQuery);
+    mockCoursesQuery.or.mockResolvedValue({ data: courseIds.map((id) => ({ id })), error: null });
+    mockQuery.order.mockReturnValue(mockQuery);
+    // Clear answers queued by an earlier test that only used one of its two.
+    mockQuery.limit.mockReset();
+    mockQuery.limit
+      .mockResolvedValueOnce({ data: textRows, error: null })
+      .mockResolvedValueOnce({ data: courseRows, error: null });
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date('2026-11-13T12:00:00.000Z') });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('returns nothing for an empty search, without asking Supabase', async () => {
+    await expect(searchCalendarEvents('   ')).resolves.toEqual([]);
+    expect(mockQuery.from).not.toHaveBeenCalled();
+  });
+
+  it('matches title, location, and description, and course name and code (AC1, AC2)', async () => {
+    mockSearch({});
+
+    await searchCalendarEvents('  lab ');
+
+    expect(mockQuery.or).toHaveBeenCalledWith(
+      'title.ilike."%lab%",location.ilike."%lab%",description.ilike."%lab%"',
+    );
+    expect(mockCoursesQuery.or).toHaveBeenCalledWith('name.ilike."%lab%",code.ilike."%lab%"');
+    expect(mockQuery.limit).toHaveBeenCalledWith(500);
+    // No course matched, so there's no second events query.
+    expect(mockQuery.in).not.toHaveBeenCalled();
+  });
+
+  it('adds the events of matching courses, once each, upcoming first', async () => {
+    const course = { name: 'Software Engineering', code: 'CECS 491B', sync_enabled: true };
+    mockSearch({
+      textRows: [
+        row('Lecture', '2026-11-14T12:00:00.000Z', { course_id: 'course-1', courses: course }),
+        row('Old lecture', '2026-11-01T12:00:00.000Z'),
+      ],
+      courseIds: ['course-1'],
+      courseRows: [
+        row('Lecture', '2026-11-14T12:00:00.000Z', { course_id: 'course-1', courses: course }),
+        row('Project 1', '2026-11-20T12:00:00.000Z', { course_id: 'course-1', courses: course }),
+      ],
+    });
+
+    const results = await searchCalendarEvents('cecs 491b');
+
+    expect(mockQuery.in).toHaveBeenCalledWith('course_id', ['course-1']);
+    expect(results.map((event) => event.id)).toEqual(['Lecture', 'Project 1', 'Old lecture']);
+    expect(results[0].course).toEqual({ id: 'course-1', name: 'Software Engineering', code: 'CECS 491B' });
+  });
+
+  it('leaves out events from courses the student stopped syncing', async () => {
+    mockSearch({
+      textRows: [
+        row('Hidden', '2026-11-14T12:00:00.000Z', {
+          course_id: 'course-2',
+          courses: { name: 'Drawing', code: 'ART 101', sync_enabled: false },
+        }),
+        row('Shown', '2026-11-15T12:00:00.000Z'),
+      ],
+    });
+
+    expect((await searchCalendarEvents('a')).map((event) => event.id)).toEqual(['Shown']);
+  });
+
+  it('throws a Supabase error so the search can show it', async () => {
+    const searchError = { code: '42501', message: 'permission denied for table courses' };
+    mockSearch({});
+    mockCoursesQuery.or.mockResolvedValue({ data: null, error: searchError });
+
+    await expect(searchCalendarEvents('lab')).rejects.toBe(searchError);
+  });
+
+  it('searches the sample events while the login skip is on', async () => {
+    mockDevFlags.skipAuth = true;
+
+    const results = await searchCalendarEvents('biology');
+
+    expect(mockQuery.from).not.toHaveBeenCalled();
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((event) => event.title.toLowerCase().includes('biology'))).toBe(true);
   });
 });
