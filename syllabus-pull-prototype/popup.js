@@ -10,8 +10,8 @@ const pairExtensionButton = document.getElementById('pair-extension');
 const connectionStatus = document.getElementById('connection-status');
 
 let pullResult = null;
-// Public project URL from the app's EXPO_PUBLIC_SUPABASE_URL configuration.
-const SUPABASE_URL = 'https://imsydzsbicbnfzbuscbe.supabase.co';
+// Local Supabase URL for the standalone syllabus prototype.
+const SUPABASE_URL = 'http://127.0.0.1:54321';
 let connection = { token: null };
 
 function setStatus(message, isError = false) {
@@ -464,6 +464,30 @@ function base64ToBlob(base64, mimeType) {
   return new Blob(parts, { type: mimeType });
 }
 
+async function syncCourseToRise(course) {
+  if (!connection.token) throw new Error('Connect your RISE account before syncing this course.');
+  const canvasDomain = new URL(pullResult.canvasOrigin).hostname;
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/canvas-extension`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-rise-extension-token': connection.token,
+    },
+    body: JSON.stringify({
+      action: 'courses',
+      canvasDomain,
+      courses: [{
+        id: course.canvasCourseId,
+        name: course.name,
+        code: course.code,
+        term: course.term,
+      }],
+    }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || 'RISE could not sync this course.');
+}
+
 async function parseCanvasDocument(course, file, button) {
   const originalLabel = button.textContent;
   button.disabled = true;
@@ -473,6 +497,7 @@ async function parseCanvasDocument(course, file, button) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('Open the signed-in Canvas tab and try again.');
+    await syncCourseToRise(course);
 
     const [download] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -527,6 +552,7 @@ async function parseCanvasDocument(course, file, button) {
     const documentBlob = base64ToBlob(download.result.base64, download.result.mimeType);
     const form = new FormData();
     form.set('canvasCourseId', course.canvasCourseId);
+    form.set('courseCode', course.code || '');
     form.set('courseName', course.name);
     form.set('file', documentBlob, download.result.filename);
 
@@ -559,6 +585,7 @@ async function parseSyllabusText(course, button, text = course.syllabusText, sou
   setStatus(`Sending syllabus text for ${course.name} to Supabase…`);
 
   try {
+    await syncCourseToRise(course);
     const response = await fetch(`${SUPABASE_URL}/functions/v1/canvas-extension`, {
       method: 'POST',
       headers: {
@@ -568,6 +595,7 @@ async function parseSyllabusText(course, button, text = course.syllabusText, sou
       body: JSON.stringify({
         action: 'prototypeExtractSyllabusText',
         canvasCourseId: course.canvasCourseId,
+        courseCode: course.code,
         courseName: course.name,
         sourceName,
         syllabusText: text,

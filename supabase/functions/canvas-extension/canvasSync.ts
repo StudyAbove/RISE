@@ -7,12 +7,14 @@ const MAX_COURSES = 100;
 const MAX_ASSIGNMENTS = 5000;
 const MAX_TITLE_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_SYLLABUS_LENGTH = 50000;
 
 export type SyncedCourse = {
   canvasCourseId: string;
   name: string;
   code: string | null;
   term: string | null;
+  syllabusText: string | null;
 };
 
 export type SyncedAssignment = {
@@ -30,6 +32,24 @@ export type SyncPayload = {
   canvasDomain: string;
   courses: SyncedCourse[];
   assignments: SyncedAssignment[];
+};
+
+export type SavedSyllabusReview = {
+  courseId: string;
+  confirmed: true;
+  course_overview: string | null;
+  professor_name: string | null;
+  professor_email: string | null;
+  grading_mode: 'points' | 'weighted_categories';
+  late_work: string | null;
+  office_hours: {
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    required_booking: boolean;
+    booking_link: string | null;
+  }[];
+  topics: { title: string; percentage: number; total_count: number | null }[];
 };
 
 /** Thrown when the extension sends something RISE can't save. */
@@ -51,6 +71,105 @@ function readId(value: unknown, field: string): string {
   }
 
   throw new InvalidPayloadError(`${field} must be a Canvas ID.`);
+}
+
+function readUuid(value: unknown, field: string) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new InvalidPayloadError(`${field} must be a course ID.`);
+  }
+
+  return value;
+}
+
+function readTime(value: unknown, field: string) {
+  if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value)) {
+    throw new InvalidPayloadError(`${field} must be a valid time.`);
+  }
+
+  return value;
+}
+
+export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
+  if (!isRecord(body) || !isRecord(body.review)) {
+    throw new InvalidPayloadError('Expected a confirmed syllabus review.');
+  }
+
+  const review = body.review;
+  if (review.confirmed !== true) {
+    throw new InvalidPayloadError('Confirm the syllabus information before saving it.');
+  }
+
+  const gradingMode = review.grading_mode;
+  if (gradingMode !== 'points' && gradingMode !== 'weighted_categories') {
+    throw new InvalidPayloadError('Choose a valid grading mode.');
+  }
+
+  const officeHoursRaw = review.office_hours ?? [];
+  const topicsRaw = review.topics ?? [];
+  if (!Array.isArray(officeHoursRaw) || officeHoursRaw.length > 30 || !Array.isArray(topicsRaw) || topicsRaw.length > 50) {
+    throw new InvalidPayloadError('The syllabus review has too many entries.');
+  }
+
+  const officeHours = officeHoursRaw.map((item, index) => {
+    if (!isRecord(item)) {
+      throw new InvalidPayloadError('Each office-hours entry must be an object.');
+    }
+
+    const day = item.day_of_week;
+    if (typeof day !== 'number' || !Number.isInteger(day) || day < 0 || day > 6) {
+      throw new InvalidPayloadError(`Office-hours entry ${index + 1} needs a valid day.`);
+    }
+    if (typeof item.required_booking !== 'boolean') {
+      throw new InvalidPayloadError('required_booking must be true or false.');
+    }
+
+    const bookingLink = readHttpsUrl(item.booking_link);
+    if (item.booking_link != null && item.booking_link !== '' && !bookingLink) {
+      throw new InvalidPayloadError('Office-hours booking links must use HTTPS.');
+    }
+
+    return {
+      day_of_week: day,
+      start_time: readTime(item.start_time, 'Office-hours start time'),
+      end_time: readTime(item.end_time, 'Office-hours end time'),
+      required_booking: item.required_booking,
+      booking_link: bookingLink,
+    };
+  });
+
+  const topics = topicsRaw.map((item, index) => {
+    if (!isRecord(item)) {
+      throw new InvalidPayloadError('Each grading topic must be an object.');
+    }
+    const title = readText(item.title, 50);
+    const percentage = item.percentage;
+    const totalCount = item.total_count;
+    if (!title || typeof percentage !== 'number' || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      throw new InvalidPayloadError(`Grading topic ${index + 1} needs a title and percentage from 0 to 100.`);
+    }
+    if (totalCount != null && (!Number.isInteger(totalCount) || (totalCount as number) < 1)) {
+      throw new InvalidPayloadError(`Grading topic ${index + 1} has an invalid total count.`);
+    }
+
+    return { title, percentage, total_count: totalCount == null ? null : totalCount as number };
+  });
+
+  const professorEmail = readText(review.professor_email, 254);
+  if (professorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(professorEmail)) {
+    throw new InvalidPayloadError('Enter a valid professor email address.');
+  }
+
+  return {
+    courseId: readUuid(review.course_id, 'course_id'),
+    confirmed: true,
+    course_overview: readText(review.course_overview, 5000),
+    professor_name: readText(review.professor_name, 100),
+    professor_email: professorEmail,
+    grading_mode: gradingMode,
+    late_work: readText(review.late_work, 200),
+    office_hours: officeHours,
+    topics,
+  };
 }
 
 function readText(value: unknown, maxLength: number): string | null {
@@ -114,6 +233,8 @@ export function parseSyncPayload(body: unknown): SyncPayload {
       name: readText(course.name, MAX_TITLE_LENGTH) ?? 'Untitled course',
       code: readText(course.code, MAX_TITLE_LENGTH),
       term: readText(course.term, MAX_TITLE_LENGTH),
+      // Syllabus text is sent to the AI for extraction, but is not persisted.
+      syllabusText: readText(course.syllabusText, MAX_SYLLABUS_LENGTH),
     };
   });
 

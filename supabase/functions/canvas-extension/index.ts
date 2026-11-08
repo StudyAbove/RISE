@@ -639,19 +639,32 @@ async function savePrototypeRun(
   return data;
 }
 
-async function extractPrototypeText(supabase: SupabaseClient, body: Record<string, unknown>) {
+async function saveExtractedSyllabus(supabase: SupabaseClient, userId: string, courseCode: string, syllabusInfo: Awaited<ReturnType<typeof extractSyllabusInfo>>) {
+  const { data: syllabusId, error } = await supabase.rpc('save_extracted_syllabus', {
+    p_user_id: userId,
+    p_course_code: courseCode,
+    p_info: syllabusInfo,
+  });
+  if (error) throw error;
+  return syllabusId as string;
+}
+
+async function extractPrototypeText(supabase: SupabaseClient, userId: string, body: Record<string, unknown>) {
   const syllabusText = body.syllabusText;
   const courseName = typeof body.courseName === 'string' ? body.courseName.trim().slice(0, 500) : '';
   const canvasCourseId = typeof body.canvasCourseId === 'string'
     ? body.canvasCourseId.slice(0, 100)
     : null;
   const sourceName = typeof body.sourceName === 'string' ? body.sourceName.slice(0, 120) : null;
+  const courseCode = typeof body.courseCode === 'string' ? body.courseCode.trim().slice(0, 100) : '';
   if (typeof syllabusText !== 'string' || !syllabusText.trim() || syllabusText.length > 50_000) {
     return jsonResponse({ error: 'Provide syllabus text between 1 and 50,000 characters.' }, 400);
   }
   if (!courseName) return jsonResponse({ error: 'A course name is required.' }, 400);
+  if (!courseCode) return jsonResponse({ error: 'A course code is required to link this syllabus to your course.' }, 400);
 
   const syllabusInfo = await extractSyllabusInfo(syllabusText, courseName);
+  const syllabusId = await saveExtractedSyllabus(supabase, userId, courseCode, syllabusInfo);
   const run = await savePrototypeRun(supabase, {
     canvasCourseId,
     courseName,
@@ -660,16 +673,19 @@ async function extractPrototypeText(supabase: SupabaseClient, body: Record<strin
     inputCharacterCount: syllabusText.length,
     syllabusInfo,
   });
-  return jsonResponse({ run, syllabusInfo });
+  return jsonResponse({ run, syllabusId, syllabusInfo });
 }
 
-async function extractPrototypeDocument(supabase: SupabaseClient, form: FormData) {
+async function extractPrototypeDocument(supabase: SupabaseClient, userId: string, form: FormData) {
   const courseNameValue = form.get('courseName');
   const courseName = typeof courseNameValue === 'string' ? courseNameValue.trim().slice(0, 500) : '';
   const courseIdValue = form.get('canvasCourseId');
   const canvasCourseId = typeof courseIdValue === 'string' ? courseIdValue.slice(0, 100) : null;
+  const courseCodeValue = form.get('courseCode');
+  const courseCode = typeof courseCodeValue === 'string' ? courseCodeValue.trim().slice(0, 100) : '';
   const uploadedFile = form.get('file');
   if (!courseName) return jsonResponse({ error: 'A course name is required.' }, 400);
+  if (!courseCode) return jsonResponse({ error: 'A course code is required to link this syllabus to your course.' }, 400);
   if (!(uploadedFile instanceof File)) {
     return jsonResponse({ error: 'Upload a PDF or DOCX syllabus file.' }, 400);
   }
@@ -695,6 +711,7 @@ async function extractPrototypeDocument(supabase: SupabaseClient, form: FormData
 
   const document = new File([bytes], filename, { type: contentType });
   const syllabusInfo = await extractSyllabusFile(document, courseName);
+  const syllabusId = await saveExtractedSyllabus(supabase, userId, courseCode, syllabusInfo);
   const run = await savePrototypeRun(supabase, {
     canvasCourseId,
     courseName,
@@ -703,7 +720,7 @@ async function extractPrototypeDocument(supabase: SupabaseClient, form: FormData
     inputCharacterCount: 0,
     syllabusInfo,
   });
-  return jsonResponse({ run, syllabusInfo });
+  return jsonResponse({ run, syllabusId, syllabusInfo });
 }
 
 Deno.serve(async (req) => {
@@ -719,7 +736,8 @@ Deno.serve(async (req) => {
     const supabase = createAdminClient();
     const documentAction = req.headers.get('x-rise-extension-action');
     if (documentAction === 'prototypeExtractSyllabusDocument') {
-      if (!(await findTokenUser(supabase, req.headers.get('x-rise-extension-token')))) {
+      const tokenUser = await findTokenUser(supabase, req.headers.get('x-rise-extension-token'));
+      if (!tokenUser) {
         return jsonResponse({ error: 'Reconnect the extension to your Rise account.', code: 'reconnect_required' }, 401);
       }
       if (!req.headers.get('content-type')?.includes('multipart/form-data')) {
@@ -729,7 +747,7 @@ Deno.serve(async (req) => {
       if (contentLength > 9 * 1024 * 1024) {
         return jsonResponse({ error: 'The document upload exceeds the 8 MB limit.' }, 413);
       }
-      return await extractPrototypeDocument(supabase, await req.formData());
+      return await extractPrototypeDocument(supabase, tokenUser.userId, await req.formData());
     }
     if (documentAction === 'extractSyllabusDocument') {
       if (!req.headers.get('content-type')?.includes('multipart/form-data')) {
@@ -756,7 +774,7 @@ Deno.serve(async (req) => {
       if (!tokenUser) {
         return jsonResponse({ error: 'Reconnect the extension to your Rise account.', code: 'reconnect_required' }, 401);
       }
-      return await extractPrototypeText(supabase, body);
+      return await extractPrototypeText(supabase, tokenUser.userId, body);
     }
 
     if (body?.action === 'pair') {
