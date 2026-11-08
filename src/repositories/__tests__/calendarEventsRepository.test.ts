@@ -105,10 +105,10 @@ describe('getCalendarEventsInRange', () => {
       'calendar_events',
     );
 
-    // All columns, so the calendar keeps working before the #31 migration is applied.
+    // All columns, plus each event's course (#159).
     expect(
       mockQuery.select,
-    ).toHaveBeenCalledWith('*');
+    ).toHaveBeenCalledWith('*, courses(name, code, sync_enabled)');
 
     expect(
       mockQuery.lt,
@@ -169,6 +169,96 @@ describe('getCalendarEventsInRange', () => {
         description: 'Room 204',
       },
     ]);
+  });
+
+  describe('assignment events (#159)', () => {
+    const assignmentRow = {
+      id: 'event-2',
+      user_id: 'user-1',
+      title: 'Project 1',
+      start_at: '2026-11-14T06:59:00+00:00',
+      end_at: '2026-11-14T07:59:00+00:00',
+      source: 'canvas',
+      location: null,
+      description: null,
+      event_type: 'assignment',
+      assignment_id: 'assignment-1',
+      course_id: 'course-1',
+      courses: { name: 'Software Engineering', code: 'CECS 491B', sync_enabled: true },
+    };
+
+    const plainRow = {
+      id: 'event-3',
+      user_id: 'user-1',
+      title: 'Gym',
+      start_at: '2026-11-13T17:00:00+00:00',
+      end_at: '2026-11-13T18:00:00+00:00',
+      source: 'rise',
+      location: null,
+      description: null,
+      assignment_id: null,
+      course_id: null,
+      courses: null,
+    };
+
+    it('includes the assignment and its course', async () => {
+      mockSupabaseResult({ data: [assignmentRow], error: null });
+
+      const [event] = await getCalendarEventsInRange(rangeStart, rangeEnd);
+
+      expect(event).toMatchObject({
+        id: 'event-2',
+        eventType: 'assignment',
+        assignmentId: 'assignment-1',
+        course: { id: 'course-1', name: 'Software Engineering', code: 'CECS 491B' },
+      });
+    });
+
+    it('leaves out events from a course the student stopped syncing', async () => {
+      mockSupabaseResult({
+        data: [
+          { ...assignmentRow, courses: { ...assignmentRow.courses, sync_enabled: false } },
+          plainRow,
+        ],
+        error: null,
+      });
+
+      const events = await getCalendarEventsInRange(rangeStart, rangeEnd);
+
+      expect(events.map((event) => event.id)).toEqual(['event-3']);
+    });
+
+    it('still loads events, without courses, before the migration is applied', async () => {
+      mockSupabaseResult({ data: null, error: null });
+      mockQuery.order
+        .mockResolvedValueOnce({
+          data: null,
+          error: { code: 'PGRST200', message: "Could not find a relationship between 'calendar_events' and 'courses'" },
+        })
+        .mockResolvedValueOnce({ data: [{ ...plainRow, courses: undefined, course_id: undefined }], error: null });
+
+      const events = await getCalendarEventsInRange(rangeStart, rangeEnd);
+
+      expect(mockQuery.select).toHaveBeenLastCalledWith('*');
+      expect(events.map((event) => event.id)).toEqual(['event-3']);
+    });
+
+    it('throws other errors without retrying', async () => {
+      const permissionError = { code: '42501', message: 'permission denied for table calendar_events' };
+      mockSupabaseResult({ data: null, error: permissionError });
+
+      await expect(getCalendarEventsInRange(rangeStart, rangeEnd)).rejects.toBe(permissionError);
+      expect(mockQuery.select).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps events with no course, without an assignment or course', async () => {
+      mockSupabaseResult({ data: [plainRow], error: null });
+
+      const [event] = await getCalendarEventsInRange(rangeStart, rangeEnd);
+
+      expect(event.assignmentId).toBeUndefined();
+      expect(event.course).toBeUndefined();
+    });
   });
 
   it('throws the Supabase error so the screen can show an error state', async () => {

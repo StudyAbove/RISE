@@ -26,6 +26,14 @@ interface CalendarEventRow {
   // Added by the #31 migration; missing until it's applied.
   event_type?: CalendarEventType | null;
   reminder_minutes?: number | null;
+  // Added by the #159 migration. course_id comes back as the joined course.
+  assignment_id?: string | null;
+  course_id?: string | null;
+  courses?: {
+    name: string;
+    code: string | null;
+    sync_enabled: boolean;
+  } | null;
 }
 
 interface CalendarEventSyncRow
@@ -83,6 +91,16 @@ const toCalendarEvent = (
     row.event_type ?? undefined,
   reminderMinutes:
     row.reminder_minutes ?? undefined,
+  assignmentId:
+    row.assignment_id ?? undefined,
+  course:
+    row.course_id && row.courses
+      ? {
+          id: row.course_id,
+          name: row.courses.name,
+          code: row.courses.code ?? undefined,
+        }
+      : undefined,
 });
 
 const toCalendarEventSyncRecord = (
@@ -170,7 +188,8 @@ export async function createImportedCalendarEvent(
 
 /**
  * The signed-in student's events that overlap [rangeStart, rangeEnd),
- * earliest first.
+ * earliest first, each with its course. Leaves out events from courses the
+ * student stopped syncing, like the Assignments page does.
  *
  * Row-level security limits the query to the student's own events.
  */
@@ -185,16 +204,13 @@ export async function getCalendarEventsInRange(
     );
   }
 
-  const {
-    data,
-    error,
-  } =
-    await supabase
+  const queryRange = (
+    columns: string,
+  ) =>
+    supabase
       .from('calendar_events')
       .select(
-        // All columns, so the new event_type and reminder_minutes come back
-        // once the #31 migration is applied, and this still works before it is.
-        '*',
+        columns,
       )
       .lt(
         'start_at',
@@ -208,15 +224,45 @@ export async function getCalendarEventsInRange(
         'start_at',
       );
 
+  // All columns, plus each event's course through course_id.
+  let {
+    data,
+    error,
+  } =
+    await queryRange(
+      '*, courses(name, code, sync_enabled)',
+    );
+
+  // Before the #159 migration there's no course_id to follow, and Supabase
+  // rejects the whole query (PGRST200). Load the events without courses.
+  if (
+    error?.code ===
+    'PGRST200'
+  ) {
+    ({
+      data,
+      error,
+    } =
+      await queryRange(
+        '*',
+      ));
+  }
+
   if (error) {
     throw error;
   }
 
   return (
-    data as CalendarEventRow[]
-  ).map(
-    toCalendarEvent,
-  );
+    data as unknown as CalendarEventRow[]
+  )
+    .filter(
+      (row) =>
+        row.courses?.sync_enabled !==
+        false,
+    )
+    .map(
+      toCalendarEvent,
+    );
 }
 
 /**
