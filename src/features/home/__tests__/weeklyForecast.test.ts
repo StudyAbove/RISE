@@ -1,0 +1,314 @@
+import type { Assignment } from '../../../repositories/assignmentsRepository';
+import {
+  buildWeeklyForecast,
+  formatForecastDue,
+  getClassWeekAssignments,
+  getForecastLevel,
+  type ForecastItem,
+} from '../utils/weeklyForecast';
+
+// Monday, November 9, 2026 at 9 AM, local time.
+const now = new Date(2026, 10, 9, 9, 0);
+
+let nextId = 1;
+
+function assignment(overrides: Partial<Assignment>): Assignment {
+  return {
+    id: `a${nextId++}`,
+    title: 'Problem Set',
+    description: null,
+    dueAt: new Date(2026, 10, 13, 23, 59),
+    completed: false,
+    source: 'canvas',
+    courseName: 'Electrical Engineering',
+    courseCode: 'EE 381',
+    courseColor: '#8FA8F0',
+    courseTint: '#E3E9FC',
+    pointsPossible: null,
+    htmlUrl: null,
+    estimatedMinutes: 60,
+    kind: 'homework',
+    ...overrides,
+  };
+}
+
+function item(minutes: number, kind: ForecastItem['kind'] = 'homework'): ForecastItem {
+  const id = `i${nextId++}`;
+
+  return {
+    id,
+    assignmentId: id,
+    courseId: null,
+    title: 'Work',
+    courseLabel: null,
+    courseColor: '#8FA8F0',
+    dueAt: new Date(2026, 10, 12, 12, 0),
+    minutes,
+    kind,
+  };
+}
+
+describe('getForecastLevel', () => {
+  it('is light under 5 hours, medium from 5, and heavy from 10', () => {
+    expect(getForecastLevel([item(4 * 60 + 55)])).toBe('light');
+    expect(getForecastLevel([item(5 * 60)])).toBe('medium');
+    expect(getForecastLevel([item(9 * 60), item(55)])).toBe('medium');
+    expect(getForecastLevel([item(10 * 60)])).toBe('heavy');
+  });
+
+  it('makes a week with an exam at least medium', () => {
+    expect(getForecastLevel([item(60, 'exam')])).toBe('medium');
+    expect(getForecastLevel([item(60, 'exam'), item(60)])).toBe('medium');
+  });
+
+  it('makes an exam plus 5 hours of other work heavy', () => {
+    expect(getForecastLevel([item(4 * 60, 'exam'), item(5 * 60)])).toBe('heavy');
+  });
+
+  it('is clear with nothing to do', () => {
+    expect(getForecastLevel([])).toBe('clear');
+  });
+});
+
+describe('buildWeeklyForecast', () => {
+  it('says the week looks clear when nothing is due in the next 7 days', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({ dueAt: new Date(2026, 10, 17, 9, 1) }),
+        assignment({ dueAt: new Date(2026, 10, 10), completed: true }),
+        assignment({ dueAt: null }),
+      ],
+      now,
+    );
+
+    expect(forecast).toMatchObject({
+      level: 'clear',
+      title: 'Your week looks clear',
+      summary: 'Nothing is due in the next 7 days. Enjoy the breathing room!',
+      recommended: [],
+    });
+  });
+
+  it('uses due times, not just dates, for the 7 days', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        // Due earlier today, so it's already passed.
+        assignment({ title: 'Earlier today', dueAt: new Date(2026, 10, 9, 8, 0) }),
+        assignment({ title: 'Later today', dueAt: new Date(2026, 10, 9, 23, 59) }),
+        // Exactly 7 days from now counts; a minute later doesn't.
+        assignment({ title: 'Last minute', dueAt: new Date(2026, 10, 16, 9, 0) }),
+        assignment({ title: 'Too late', dueAt: new Date(2026, 10, 16, 9, 1) }),
+      ],
+      now,
+    );
+
+    expect(forecast.recommended.map((entry) => entry.title)).toEqual([
+      'Later today',
+      'Last minute',
+    ]);
+  });
+
+  it('counts assignments and exams and calls out the busiest day', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({ dueAt: new Date(2026, 10, 10, 23, 59), estimatedMinutes: 30 }),
+        assignment({ dueAt: new Date(2026, 10, 12, 10, 0), estimatedMinutes: 90 }),
+        assignment({ dueAt: new Date(2026, 10, 12, 23, 59), estimatedMinutes: 60 }),
+        assignment({
+          title: 'Midterm',
+          dueAt: new Date(2026, 10, 13, 9, 0),
+          estimatedMinutes: 120,
+          kind: 'exam',
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.level).toBe('medium');
+    expect(forecast.title).toBe('Medium week ahead');
+    expect(forecast.summary).toBe(
+      'You have 3 assignments due and 1 exam coming up. Thursday is your busiest day.',
+    );
+  });
+
+  it('shows only the top 3, starting with what needs the earliest start', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({ title: 'Short quiz', dueAt: new Date(2026, 10, 11, 9, 0), estimatedMinutes: 30 }),
+        // Due later but needs 3 days of work, so it should be started first.
+        assignment({ title: 'Big project', dueAt: new Date(2026, 10, 13, 9, 0), estimatedMinutes: 300 }),
+        assignment({ title: 'Reading', dueAt: new Date(2026, 10, 14, 9, 0), estimatedMinutes: 30 }),
+        assignment({ title: 'Lab', dueAt: new Date(2026, 10, 12, 9, 0), estimatedMinutes: 120 }),
+      ],
+      now,
+    );
+
+    expect(forecast.recommended.map((entry) => entry.title)).toEqual([
+      'Big project',
+      'Short quiz',
+      'Lab',
+    ]);
+  });
+
+  it('guesses a time for assignments that have no estimate yet', () => {
+    const forecast = buildWeeklyForecast(
+      [assignment({ title: 'Final Exam', estimatedMinutes: null, kind: null })],
+      now,
+    );
+
+    expect(forecast.recommended[0]).toMatchObject({ minutes: 240, kind: 'exam' });
+    expect(forecast.summary).toBe('You have 1 exam coming up. Let’s get ahead!');
+  });
+
+  it('shows the class code, or the class name when there is no code', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({ courseCode: null, courseName: 'Cell Biology' }),
+        assignment({ courseCode: null, courseName: null }),
+      ],
+      now,
+    );
+
+    expect(forecast.recommended.map((entry) => entry.courseLabel)).toEqual([
+      'Cell Biology',
+      null,
+    ]);
+  });
+});
+
+describe('buildWeeklyForecast with microtasks (#61)', () => {
+  const step = (id: string, position: number, estimatedMinutes: number, completed = false) => ({
+    id,
+    title: `Step ${position}`,
+    position,
+    estimatedMinutes,
+    completed,
+  });
+
+  it('shows an unfinished step over an hour in place of its assignment', () => {
+    const lab = assignment({
+      title: 'Lab Report',
+      estimatedMinutes: 180,
+      microtasks: [step('s1', 1, 30, true), step('s2', 2, 90), step('s3', 3, 120)],
+    });
+
+    const [row] = buildWeeklyForecast([lab], now).recommended;
+
+    // The next big step, which still opens its assignment.
+    expect(row).toMatchObject({
+      id: 's2',
+      assignmentId: lab.id,
+      title: 'Step 2',
+      minutes: 90,
+      courseLabel: 'EE 381',
+    });
+  });
+
+  it('keeps the assignment when no step is over an hour', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({
+          title: 'Problem Set',
+          microtasks: [step('s1', 1, 60), step('s2', 2, 45)],
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.recommended[0]).toMatchObject({ title: 'Problem Set', minutes: 105 });
+  });
+
+  it('takes finished steps off the week', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({
+          estimatedMinutes: 240,
+          microtasks: [step('s1', 1, 60, true), step('s2', 2, 30, true), step('s3', 3, 45)],
+        }),
+      ],
+      now,
+    );
+
+    expect(forecast.totalMinutes).toBe(45);
+    expect(forecast.level).toBe('light');
+  });
+
+  it('leaves out an assignment whose steps are all done', () => {
+    const forecast = buildWeeklyForecast(
+      [assignment({ microtasks: [step('s1', 1, 90, true)] })],
+      now,
+    );
+
+    expect(forecast.recommended).toEqual([]);
+    expect(forecast.level).toBe('clear');
+  });
+});
+
+describe('getClassWeekAssignments (#61)', () => {
+  it('lists every unfinished assignment the class has due in the next 7 days, soonest first', () => {
+    const assignments = [
+      assignment({ title: 'Essay', courseId: 'ee381', dueAt: new Date(2026, 10, 14, 9, 0) }),
+      assignment({ title: 'Quiz', courseId: 'ee381', dueAt: new Date(2026, 10, 10, 9, 0) }),
+      assignment({ title: 'Lab', courseId: 'ee381', dueAt: new Date(2026, 10, 12, 9, 0) }),
+      assignment({ title: 'Reading', courseId: 'ee381', dueAt: new Date(2026, 10, 11, 9, 0) }),
+      // Left out: another class, done, already past, and after the 7 days.
+      assignment({ title: 'Other class', courseId: 'bio200' }),
+      assignment({ title: 'Done', courseId: 'ee381', completed: true }),
+      assignment({ title: 'Past', courseId: 'ee381', dueAt: new Date(2026, 10, 8, 9, 0) }),
+      assignment({ title: 'Later', courseId: 'ee381', dueAt: new Date(2026, 10, 17, 9, 0) }),
+    ];
+
+    expect(
+      getClassWeekAssignments(assignments, 'ee381', now).map((entry) => entry.title),
+    ).toEqual(['Quiz', 'Reading', 'Lab', 'Essay']);
+  });
+});
+
+describe('buildWeeklyForecast with the calendar (#67)', () => {
+  const midnight = (date: number) => new Date(2026, 10, date).getTime();
+
+  it('moves work up when the days before it are booked', () => {
+    const assignments = [
+      assignment({ title: 'Lab due Wed', dueAt: new Date(2026, 10, 11, 9, 0), estimatedMinutes: 120 }),
+      assignment({ title: 'Paper due Fri', dueAt: new Date(2026, 10, 13, 9, 0), estimatedMinutes: 240 }),
+    ];
+
+    expect(
+      buildWeeklyForecast(assignments, now).recommended.map((entry) => entry.title),
+    ).toEqual(['Lab due Wed', 'Paper due Fri']);
+
+    // Wednesday and Thursday are full of events, so the paper has to start
+    // before the lab does.
+    const busyWeek = new Map([
+      [midnight(11), 10 * 60],
+      [midnight(12), 10 * 60],
+    ]);
+
+    expect(
+      buildWeeklyForecast(assignments, now, busyWeek).recommended.map((entry) => entry.title),
+    ).toEqual(['Paper due Fri', 'Lab due Wed']);
+  });
+
+  it('counts calendar events toward the busiest day', () => {
+    const forecast = buildWeeklyForecast(
+      [
+        assignment({ dueAt: new Date(2026, 10, 10, 23, 59), estimatedMinutes: 90 }),
+        assignment({ dueAt: new Date(2026, 10, 12, 23, 59), estimatedMinutes: 30 }),
+      ],
+      now,
+      // A full Thursday outweighs the bigger assignment due Tuesday.
+      new Map([[midnight(12), 8 * 60]]),
+    );
+
+    expect(forecast.summary).toBe(
+      'You have 2 assignments due. Thursday is your busiest day.',
+    );
+  });
+});
+
+describe('formatForecastDue', () => {
+  it('shows the weekday and time, or Today', () => {
+    expect(formatForecastDue(new Date(2026, 10, 13, 23, 59), now)).toBe('Fri 11:59 PM');
+    expect(formatForecastDue(new Date(2026, 10, 9, 17, 0), now)).toBe('Today 5:00 PM');
+  });
+});

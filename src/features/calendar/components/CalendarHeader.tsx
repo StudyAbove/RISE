@@ -24,6 +24,10 @@ interface CalendarHeaderProps {
   onNext: () => void;
   /** Opens the Add Event form. */
   onAddEvent: () => void;
+  /** Opens "Show on calendar", the filters (#79). */
+  onOpenFilters: () => void;
+  /** Whether filters are hiding any events, so VoiceOver can say so. */
+  isFiltering?: boolean;
 }
 
 /** Top of the Calendar page: sun-and-hills banner, action icons, and the period label with ‹ › arrows. */
@@ -34,6 +38,8 @@ export function CalendarHeader({
   onPrevious,
   onNext,
   onAddEvent,
+  onOpenFilters,
+  isFiltering = false,
 }: CalendarHeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -51,10 +57,16 @@ export function CalendarHeader({
         accessibilityIgnoresInvertColors
       />
 
-      {/* The ••• menu and search are built in later stories, so they're disabled
-          for now (VoiceOver reads them as "dimmed"). */}
+      {/* Search is built in a later story, so it's disabled for now (VoiceOver
+          reads it as "dimmed"). */}
       <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel="More options" hitSlop={HIT_SLOP} disabled>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Show on calendar"
+          accessibilityValue={isFiltering ? { text: 'Some events hidden' } : undefined}
+          hitSlop={HIT_SLOP}
+          onPress={onOpenFilters}
+        >
           <View style={styles.iconBox}>
             <MoreIcon width={23} height={5} />
           </View>

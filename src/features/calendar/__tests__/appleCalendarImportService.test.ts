@@ -13,6 +13,7 @@ import {
   markCalendarEventLinkSynced,
   saveCalendarEventLink,
   updateCalendarEventLinkAllDayMetadata,
+  updateCalendarEventLinkExternalEventId,
   updateCalendarEventLinkWritability,
 } from '../../../repositories/calendarEventLinksRepository';
 
@@ -53,6 +54,21 @@ jest.mock(
     getAppleCalendarAccess:
       jest.fn(),
 
+    getAppleCalendarExternalEventId:
+      jest.fn(
+        (
+          nativeEventId: string,
+          originalStartAt?: string,
+        ) =>
+          originalStartAt
+            ? `rise-apple-occurrence:${encodeURIComponent(
+                nativeEventId,
+              )}:${encodeURIComponent(
+                originalStartAt,
+              )}`
+            : nativeEventId,
+      ),
+
     updateAppleCalendarEvent:
       jest.fn(),
   }),
@@ -88,6 +104,9 @@ jest.mock(
       jest.fn(),
 
     updateCalendarEventLinkAllDayMetadata:
+      jest.fn(),
+
+    updateCalendarEventLinkExternalEventId:
       jest.fn(),
 
     updateCalendarEventLinkWritability:
@@ -142,6 +161,9 @@ const mockMarkCalendarEventLinkSynced =
 const mockUpdateCalendarEventLinkAllDayMetadata =
   updateCalendarEventLinkAllDayMetadata as jest.Mock;
 
+const mockUpdateCalendarEventLinkExternalEventId =
+  updateCalendarEventLinkExternalEventId as jest.Mock;
+
 const mockUpdateCalendarEventLinkWritability =
   updateCalendarEventLinkWritability as jest.Mock;
 
@@ -174,6 +196,10 @@ beforeEach(() => {
   );
 
   mockMarkCalendarEventLinkSynced.mockResolvedValue(
+    undefined,
+  );
+
+  mockUpdateCalendarEventLinkExternalEventId.mockResolvedValue(
     undefined,
   );
 
@@ -273,6 +299,12 @@ describe(
             allDay:
               false,
 
+            allDayStartDate:
+              undefined,
+
+            allDayEndDate:
+              undefined,
+
             isWritable:
               true,
           },
@@ -318,6 +350,9 @@ describe(
             externalEventId:
               'apple-event-1',
 
+            nativeEventId:
+              'apple-event-1',
+
             externalCalendarId:
               'apple-calendar-1',
 
@@ -342,12 +377,21 @@ describe(
             allDay:
               false,
 
+            allDayStartDate:
+              undefined,
+
+            allDayEndDate:
+              undefined,
+
             isWritable:
               true,
           },
 
           {
             externalEventId:
+              'apple-event-2',
+
+            nativeEventId:
               'apple-event-2',
 
             externalCalendarId:
@@ -656,6 +700,230 @@ describe(
         },
       ]);
     });
+
+    it(
+      'adopts a legacy recurring Apple link without duplicating its RISE occurrence',
+      async () => {
+        mockGetEventsAsync.mockResolvedValue([
+          {
+            id:
+              'apple-series-legacy',
+            calendarId:
+              'apple-calendar-1',
+            title:
+              'CECS 378',
+            startDate:
+              '2026-11-02T18:00:00.000Z',
+            endDate:
+              '2026-11-02T19:15:00.000Z',
+            originalStartDate:
+              '2026-11-02T18:00:00.000Z',
+            recurrenceRule: {
+              frequency:
+                'weekly',
+              interval:
+                1,
+            },
+            location:
+              null,
+            notes:
+              '',
+            allDay:
+              false,
+          },
+        ]);
+
+        mockGetCalendarEventLinksByProvider.mockResolvedValue([
+          {
+            id:
+              'legacy-link-1',
+            calendarEventId:
+              'rise-existing-occurrence',
+            userId:
+              'user-1',
+            provider:
+              'apple',
+            externalEventId:
+              'apple-series-legacy',
+            externalCalendarId:
+              'apple-calendar-1',
+            isWritable:
+              true,
+            isAllDay:
+              false,
+            lastSyncedAt:
+              '2026-10-30T18:00:00.000Z',
+          },
+        ]);
+
+        mockGetCalendarEventsByIdsForSync.mockResolvedValue([
+          {
+            id:
+              'rise-existing-occurrence',
+            userId:
+              'user-1',
+            title:
+              'CECS 378',
+            startAt:
+              '2026-11-02T18:00:00.000Z',
+            endAt:
+              '2026-11-02T19:15:00.000Z',
+            source:
+              'apple',
+            location:
+              undefined,
+            description:
+              undefined,
+            updatedAt:
+              '2026-10-30T18:00:00.000Z',
+          },
+        ]);
+
+        const result =
+          await syncAppleCalendarEvents(
+            new Date(
+              2026,
+              9,
+              31,
+            ),
+          );
+
+        expect(
+          mockUpdateCalendarEventLinkExternalEventId,
+        ).toHaveBeenCalledWith(
+          'rise-existing-occurrence',
+          'apple',
+          'rise-apple-occurrence:apple-series-legacy:2026-11-02T18%3A00%3A00.000Z',
+        );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).not.toHaveBeenCalled();
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).not.toHaveBeenCalled();
+
+        expect(result.imported).toBe(0);
+        expect(result.failed).toBe(0);
+        expect(result.total).toBe(1);
+      },
+    );
+
+    it(
+      'imports separate occurrences of the same recurring Apple event',
+      async () => {
+        mockGetEventsAsync.mockResolvedValue([
+          {
+            id: 'apple-series-1',
+            calendarId: 'apple-calendar-1',
+            title: 'CECS 378',
+            startDate:
+              '2026-11-02T18:00:00.000Z',
+            endDate:
+              '2026-11-02T19:15:00.000Z',
+            originalStartDate:
+              '2026-11-02T18:00:00.000Z',
+            recurrenceRule: {
+              frequency: 'weekly',
+              interval: 1,
+            },
+            location: null,
+            notes: '',
+            allDay: false,
+          },
+          {
+            id: 'apple-series-1',
+            calendarId: 'apple-calendar-1',
+            title: 'CECS 378',
+            startDate:
+              '2026-11-09T18:00:00.000Z',
+            endDate:
+              '2026-11-09T19:15:00.000Z',
+            originalStartDate:
+              '2026-11-09T18:00:00.000Z',
+            recurrenceRule: {
+              frequency: 'weekly',
+              interval: 1,
+            },
+            location: null,
+            notes: '',
+            allDay: false,
+          },
+        ]);
+
+        mockCreateImportedCalendarEvent
+          .mockResolvedValueOnce({
+            id: 'rise-apple-occurrence-1',
+            userId: 'user-1',
+            title: 'CECS 378',
+            startAt:
+              '2026-11-02T18:00:00.000Z',
+            endAt:
+              '2026-11-02T19:15:00.000Z',
+            source: 'apple',
+          })
+          .mockResolvedValueOnce({
+            id: 'rise-apple-occurrence-2',
+            userId: 'user-1',
+            title: 'CECS 378',
+            startAt:
+              '2026-11-09T18:00:00.000Z',
+            endAt:
+              '2026-11-09T19:15:00.000Z',
+            source: 'apple',
+          });
+
+        /*
+         * Each recurring occurrence now has its own provider-link ID,
+         * so neither occurrence is already linked on the first sync.
+         */
+        mockGetCalendarEventLinkByExternalEvent
+          .mockResolvedValue(null);
+
+        const result =
+          await syncAppleCalendarEvents(
+            new Date(2026, 9, 31),
+          );
+
+        expect(
+          mockCreateImportedCalendarEvent,
+        ).toHaveBeenCalledTimes(2);
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenCalledTimes(2);
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            calendarEventId:
+              'rise-apple-occurrence-1',
+            provider: 'apple',
+            externalEventId:
+              'rise-apple-occurrence:apple-series-1:2026-11-02T18%3A00%3A00.000Z',
+          }),
+        );
+
+        expect(
+          mockSaveCalendarEventLink,
+        ).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({
+            calendarEventId:
+              'rise-apple-occurrence-2',
+            provider: 'apple',
+            externalEventId:
+              'rise-apple-occurrence:apple-series-1:2026-11-09T18%3A00%3A00.000Z',
+          }),
+        );
+
+        expect(result.imported).toBe(2);
+        expect(result.failed).toBe(0);
+      },
+    );
 
     it(
       'bulk imports new Apple events and skips matching linked events',

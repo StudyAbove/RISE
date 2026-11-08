@@ -1,0 +1,282 @@
+import { addDays, format, isSameDay, startOfDay } from 'date-fns';
+
+import {
+  getAssignmentEstimate,
+  type AssignmentKind,
+} from '../../assignments/utils/assignmentEstimate';
+import { getStartBy, type StudyMinutesOn } from '../../assignments/utils/startBy';
+import { getStudyMinutesOn } from './dailyStudyTime';
+import type { Assignment } from '../../../repositories/assignmentsRepository';
+
+/**
+ * The Weekly Forecast card on Home (#57): how busy the next 7 days look and
+ * which assignments to start first.
+ *
+ * Microtasks (#61): finished ones take their time off the assignment, and an
+ * unfinished one over an hour long is recommended in place of its assignment,
+ * so the card names the big step to start.
+ */
+
+export type ForecastLevel = 'clear' | 'light' | 'medium' | 'heavy';
+
+export type ForecastItem = {
+  id: string;
+  /** The assignment this row opens when tapped (#61). */
+  assignmentId: string;
+  /** The class its label opens, for that class's week (#61). */
+  courseId: string | null;
+  title: string;
+  /** "EE 381" or the class name, when the assignment has a class. */
+  courseLabel: string | null;
+  courseColor: string;
+  dueAt: Date;
+  minutes: number;
+  kind: AssignmentKind;
+};
+
+export type WeeklyForecast = {
+  level: ForecastLevel;
+  title: string;
+  summary: string;
+  /** Up to 3 assignments to start first, most urgent first. */
+  recommended: ForecastItem[];
+  totalMinutes: number;
+};
+
+const FORECAST_DAYS = 7;
+const MAX_RECOMMENDED = 3;
+
+// A microtask longer than this is shown in the forecast on its own.
+const BIG_STEP_MINUTES = 60;
+
+// Week levels, in hours of work due in the next 7 days.
+const MEDIUM_WEEK_MINUTES = 5 * 60;
+const HEAVY_WEEK_MINUTES = 10 * 60;
+
+const LEVEL_TITLES: Record<ForecastLevel, string> = {
+  clear: 'Your week looks clear',
+  light: 'Light week ahead',
+  medium: 'Medium week ahead',
+  heavy: 'Heavy week ahead',
+};
+
+/**
+ * How much work is left: the unfinished microtasks' time once the assignment
+ * has microtasks, or else its whole estimate.
+ */
+function getRemainingMinutes(assignment: Assignment) {
+  const tasks = assignment.microtasks ?? [];
+
+  if (tasks.length === 0) return getAssignmentEstimate(assignment).minutes;
+
+  return tasks
+    .filter((task) => !task.completed)
+    .reduce((sum, task) => sum + task.estimatedMinutes, 0);
+}
+
+/**
+ * The assignment's next unfinished microtask over an hour long, shown in the
+ * assignment's place under "Recommended to get ahead".
+ */
+function toRecommendedRow(item: ForecastItem, assignment: Assignment | undefined): ForecastItem {
+  const bigStep = assignment?.microtasks?.find(
+    (task) => !task.completed && task.estimatedMinutes > BIG_STEP_MINUTES,
+  );
+
+  if (!bigStep) return item;
+
+  return { ...item, id: bigStep.id, title: bigStep.title, minutes: bigStep.estimatedMinutes };
+}
+
+/** Unfinished work due after now and within the next 7 days. */
+function isDueThisWeek(assignment: Assignment, now: Date) {
+  if (assignment.completed || !assignment.dueAt) return false;
+
+  const dueTime = assignment.dueAt.getTime();
+  const weekEnd = now.getTime() + FORECAST_DAYS * 24 * 60 * 60 * 1000;
+
+  return dueTime > now.getTime() && dueTime <= weekEnd;
+}
+
+/**
+ * All of one class's unfinished assignments due in the forecast's 7 days,
+ * for the screen its label opens (#61). Soonest due first.
+ */
+export function getClassWeekAssignments(
+  assignments: Assignment[],
+  courseId: string,
+  now: Date,
+): Assignment[] {
+  return assignments
+    .filter((assignment) => assignment.courseId === courseId && isDueThisWeek(assignment, now))
+    .sort((a, b) => a.dueAt!.getTime() - b.dueAt!.getTime() || a.title.localeCompare(b.title));
+}
+
+/** Unfinished assignments due in the next 7 days, counting their due times. */
+function getWeekItems(assignments: Assignment[], now: Date): ForecastItem[] {
+  return assignments.flatMap((assignment) => {
+    const { dueAt } = assignment;
+
+    if (!dueAt || !isDueThisWeek(assignment, now)) return [];
+
+    const { kind } = getAssignmentEstimate(assignment);
+    const minutes = getRemainingMinutes(assignment);
+
+    // Every step is done; only marking the assignment complete is left.
+    if (minutes === 0) return [];
+
+    return [
+      {
+        id: assignment.id,
+        assignmentId: assignment.id,
+        courseId: assignment.courseId ?? null,
+        title: assignment.title,
+        courseLabel: assignment.courseCode ?? assignment.courseName,
+        courseColor: assignment.courseColor,
+        dueAt,
+        minutes,
+        kind,
+      },
+    ];
+  });
+}
+
+/**
+ * Light under 5 hours, medium from 5, heavy from 10. An exam makes the week
+ * at least medium, and an exam plus 5 hours of other work makes it heavy.
+ */
+export function getForecastLevel(items: ForecastItem[]): ForecastLevel {
+  if (items.length === 0) return 'clear';
+
+  const totalMinutes = items.reduce((sum, item) => sum + item.minutes, 0);
+  const exams = items.filter((item) => item.kind === 'exam');
+  const otherMinutes = items
+    .filter((item) => item.kind !== 'exam')
+    .reduce((sum, item) => sum + item.minutes, 0);
+
+  if (totalMinutes >= HEAVY_WEEK_MINUTES) return 'heavy';
+  if (exams.length > 0 && otherMinutes >= MEDIUM_WEEK_MINUTES) return 'heavy';
+  if (totalMinutes >= MEDIUM_WEEK_MINUTES || exams.length > 0) return 'medium';
+  return 'light';
+}
+
+/**
+ * What to start first: whatever must be started soonest, then bigger work.
+ * Busy days on the calendar give less study time, so work due after them
+ * needs to start earlier.
+ */
+export function rankForecastItems(
+  items: ForecastItem[],
+  studyMinutesOn?: StudyMinutesOn,
+): ForecastItem[] {
+  const startBy = (item: ForecastItem) =>
+    getStartBy(item.dueAt, item.minutes, studyMinutesOn).getTime();
+
+  return [...items].sort(
+    (a, b) => startBy(a) - startBy(b) || b.minutes - a.minutes,
+  );
+}
+
+function plural(count: number, word: string) {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}
+
+/** "Today", "Tomorrow", or the weekday, e.g. "Thursday". */
+function dayName(date: Date, now: Date) {
+  if (isSameDay(date, now)) return 'Today';
+  if (isSameDay(date, addDays(now, 1))) return 'Tomorrow';
+  return format(date, 'EEEE');
+}
+
+/**
+ * The busiest day in the next 7 days, counting both work due and time in
+ * calendar events, when the load is spread over several days.
+ */
+function getBusiestDay(
+  items: ForecastItem[],
+  eventMinutesByDay: Map<number, number>,
+  now: Date,
+): Date | null {
+  const minutesByDay = new Map<number, number>();
+  const add = (day: number, minutes: number) =>
+    minutesByDay.set(day, (minutesByDay.get(day) ?? 0) + minutes);
+
+  for (const item of items) {
+    add(startOfDay(item.dueAt).getTime(), item.minutes);
+  }
+
+  const firstDay = startOfDay(now).getTime();
+  const lastDay = startOfDay(addDays(now, FORECAST_DAYS)).getTime();
+
+  for (const [day, minutes] of eventMinutesByDay) {
+    if (day >= firstDay && day <= lastDay && minutes > 0) add(day, minutes);
+  }
+
+  if (minutesByDay.size < 2) return null;
+
+  const [busiestDay] = [...minutesByDay].reduce((busiest, day) =>
+    day[1] > busiest[1] ? day : busiest,
+  );
+
+  return new Date(busiestDay);
+}
+
+function getSummary(
+  items: ForecastItem[],
+  eventMinutesByDay: Map<number, number>,
+  now: Date,
+) {
+  if (items.length === 0) {
+    return 'Nothing is due in the next 7 days. Enjoy the breathing room!';
+  }
+
+  const examCount = items.filter((item) => item.kind === 'exam').length;
+  const assignmentCount = items.length - examCount;
+
+  const counts = [
+    assignmentCount > 0 && `${plural(assignmentCount, 'assignment')} due`,
+    examCount > 0 && `${plural(examCount, 'exam')} coming up`,
+  ]
+    .filter(Boolean)
+    .join(' and ');
+
+  const busiestDay = getBusiestDay(items, eventMinutesByDay, now);
+  const callout = busiestDay
+    ? `${dayName(busiestDay, now)} is your busiest day.`
+    : 'Let’s get ahead!';
+
+  return `You have ${counts}. ${callout}`;
+}
+
+/**
+ * `eventMinutesByDay` is how much of each day the student's calendar takes
+ * up (see getEventMinutesByDay), so the plan follows their schedule.
+ */
+export function buildWeeklyForecast(
+  assignments: Assignment[],
+  now: Date,
+  eventMinutesByDay: Map<number, number> = new Map(),
+): WeeklyForecast {
+  const items = getWeekItems(assignments, now);
+  const assignmentsById = new Map(assignments.map((assignment) => [assignment.id, assignment]));
+  const level = getForecastLevel(items);
+  const studyMinutesOn = getStudyMinutesOn(eventMinutesByDay);
+
+  return {
+    level,
+    title: LEVEL_TITLES[level],
+    summary: getSummary(items, eventMinutesByDay, now),
+    // Ranked by the whole assignment's remaining work, then shown as its big
+    // step when it has one.
+    recommended: rankForecastItems(items, studyMinutesOn)
+      .slice(0, MAX_RECOMMENDED)
+      .map((item) => toRecommendedRow(item, assignmentsById.get(item.assignmentId))),
+    totalMinutes: items.reduce((sum, item) => sum + item.minutes, 0),
+  };
+}
+
+/** "Fri 11:59 PM", or "Today 11:59 PM". */
+export function formatForecastDue(dueAt: Date, now: Date): string {
+  const day = isSameDay(dueAt, now) ? 'Today' : format(dueAt, 'EEE');
+  return `${day} ${format(dueAt, 'h:mm a')}`;
+}

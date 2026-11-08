@@ -1,0 +1,384 @@
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { format } from 'date-fns';
+import Svg, { Path, Rect } from 'react-native-svg';
+
+import {
+  fetchAssignmentById,
+  type Assignment,
+} from '../../../repositories/assignmentsRepository';
+import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { BackButton } from '../../../components/BackButton';
+import { colors } from '../../../theme/colors';
+import { textStyles } from '../../../theme/typography';
+import type { RootStackParamList } from '../../navigation/types';
+import { PriorityPill } from '../components/PriorityPill';
+import { getPriorityLevel } from '../utils/assignmentPriority';
+import { AssignmentDescription } from '../components/AssignmentDescription';
+import { AssignmentMicrotasks } from '../components/AssignmentMicrotasks';
+import type { Microtask } from '../../../repositories/microtasksRepository';
+
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  'AssignmentDetails'
+>;
+
+type LoadStatus = 'loading' | 'ready' | 'missing' | 'error';
+
+// The same details screen is opened from Study Plan and List.
+export function AssignmentDetailsScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const now = useCurrentDate();
+  const { assignmentId } = route.params;
+
+  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [reloadCount, setReloadCount] = useState(0);
+    // Selection prepares a session; it does not mark tasks complete.
+  const [selectedTasks, setSelectedTasks] = useState<Microtask[]>([]);
+  // Remember each assignment's expanded description while this screen is mounted,
+  // including when returning from a focus session.
+  const [expandedDescriptions, setExpandedDescriptions] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Load the selected assignment again whenever this screen gains focus.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      async function loadAssignment() {
+        setStatus('loading');
+        setAssignment(null);
+        setSelectedTasks([]);
+
+        try {
+          const result = await fetchAssignmentById(assignmentId);
+
+          if (!active) return;
+
+          setAssignment(result);
+          setStatus(result ? 'ready' : 'missing');
+        } catch {
+          if (!active) return;
+
+          setStatus('error');
+        }
+      }
+
+      void loadAssignment();
+
+      // Ignore results if the student leaves before the request finishes.
+      return () => {
+        active = false;
+      };
+    }, [assignmentId, reloadCount]),
+  );
+
+  const courseLabel =
+    assignment?.courseCode ||
+    assignment?.courseName ||
+    'No course assigned';
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: insets.top + 16,
+          paddingBottom: insets.bottom + 32,
+        },
+      ]}
+    >
+      {/* Return to the page that opened these assignment details. */}
+      <View style={styles.backButtonContainer}>
+        <BackButton />
+      </View>
+
+      {status === 'loading' && (
+        <View style={styles.statusContainer}>
+          <ActivityIndicator color={colors.deepOlive} />
+          <Text
+            style={styles.statusText}
+            accessibilityLiveRegion="polite"
+          >
+            Loading assignment…
+          </Text>
+        </View>
+      )}
+
+      {status === 'missing' && (
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusText}>
+            This assignment is no longer available.
+          </Text>
+        </View>
+      )}
+
+      {status === 'error' && (
+        <View style={styles.statusContainer}>
+          <Text accessibilityRole="alert" style={styles.statusText}>
+            Couldn’t load this assignment.
+          </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setReloadCount((count) => count + 1)}
+            style={({ pressed }) => [
+              styles.retryButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.retryText}>Try again</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {status === 'ready' && assignment && (
+        <View style={styles.details}>
+          {/* Identify the course using its saved name and color. */}
+          <View style={styles.courseRow}>
+            <View
+              style={[
+                styles.courseDot,
+                { backgroundColor: assignment.courseColor },
+              ]}
+              accessible={false}
+            />
+
+            <Text style={styles.courseText}>{courseLabel}</Text>
+
+            {/* Same priority as the List and Study cards (#86). */}
+            {!assignment.completed && (
+              <View style={styles.priority}>
+                <PriorityPill level={getPriorityLevel(assignment, now)} />
+              </View>
+            )}
+          </View>
+
+          <Text accessibilityRole="header" style={styles.title}>
+            {assignment.title}
+          </Text>
+
+          {/* Display the real saved due date in the student's local time. */}
+          <View style={styles.dueRow}>
+            <Svg
+              width={16}
+              height={16}
+              viewBox="0 0 24 24"
+              fill="none"
+              accessible={false}
+            >
+              <Rect
+                x={3}
+                y={5}
+                width={18}
+                height={16}
+                rx={2}
+                stroke={colors.deepOlive}
+                strokeWidth={2}
+              />
+              <Path
+                d="M16 3v4M8 3v4M3 11h18"
+                stroke={colors.deepOlive}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            </Svg>
+
+            <Text style={styles.dueText}>
+              {assignment.dueAt
+                ? `Due ${format(
+                    assignment.dueAt,
+                    'EEE, MMM d, yyyy • h:mm a',
+                  )}`
+                : 'No due date'}
+            </Text>
+          </View>
+
+          {/* Show the full Canvas description without inventing a summary. */}
+          <AssignmentDescription
+            key={`${assignment.id}:${assignment.description ?? ''}`}
+            description={assignment.description}
+            expanded={expandedDescriptions[assignment.id] ?? false}
+            onExpandedChange={(expanded) =>
+              setExpandedDescriptions((previous) => ({
+                ...previous,
+                [assignment.id]: expanded,
+              }))
+            }
+          />
+
+          {/* Saved microtasks for this specific assignment (#42). */}
+          <AssignmentMicrotasks
+            key={assignment.id}
+            assignment={assignment}
+            onSelectionChange={setSelectedTasks}
+          />
+          {/* Open the focus screen for this selected assignment. */}
+          <Text style={styles.selectionHint}>
+            {assignment.completed
+              ? 'This assignment is already complete.'
+              : selectedTasks.length === 0
+                ? 'Select at least one task to start studying.'
+                : `${selectedTasks.length} selected · One task at a time`}
+          </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Start study session for ${assignment.title}`}
+            accessibilityState={{
+              disabled: assignment.completed || selectedTasks.length === 0,
+            }}
+            disabled={assignment.completed || selectedTasks.length === 0}
+            onPress={() => {
+              const sessionTasks = selectedTasks.filter(
+                (task) =>
+                  task.assignmentId === assignment.id &&
+                  !task.completed &&
+                  Number.isInteger(task.estimatedMinutes) &&
+                  task.estimatedMinutes > 0 &&
+                  task.estimatedMinutes <= 6000,
+              );
+
+              if (assignment.completed || sessionTasks.length === 0) return;
+
+              navigation.navigate('FocusSession', {
+                assignmentId: assignment.id,
+                assignmentTitle: assignment.title,
+                microtasks: sessionTasks.map((task) => ({
+                  id: task.id,
+                  title: task.title,
+                  estimatedMinutes: task.estimatedMinutes,
+                })),
+              });
+            }}
+            style={({ pressed }) => [
+              styles.startButton,
+              (assignment.completed || selectedTasks.length === 0) &&
+                styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.startButtonText}>
+              Start Study Session
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.warmCream,
+  },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: 26,
+  },
+  backButtonContainer: {
+    marginLeft: -2,
+    marginBottom: 16,
+  },
+  details: {
+    gap: 8,
+  },
+  courseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // Pushes the pill to the right edge, as in the Figma.
+  priority: {
+    marginLeft: 'auto',
+  },
+  courseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: colors.deepOlive,
+  },
+  courseText: {
+    ...textStyles.caption,
+    flex: 1,
+    color: colors.mutedGrayGreen,
+  },
+  title: {
+    ...textStyles.screenHeading,
+    color: colors.deepOlive,
+  },
+  dueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  dueText: {
+    ...textStyles.tinyLabel,
+    flex: 1,
+    color: colors.deepOlive,
+  },
+  statusContainer: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusText: {
+    ...textStyles.body,
+    color: colors.deepOlive,
+    textAlign: 'center',
+  },
+  retryButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: colors.mistGreen,
+  },
+  retryText: {
+    ...textStyles.link,
+    color: colors.deepOlive,
+  },
+  startButton: {
+    minHeight: 52,
+    backgroundColor: colors.butterYellow,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  startButtonText: {
+    ...textStyles.link,
+    color: colors.deepOlive,
+    textAlign: 'center',
+  },
+  selectionHint: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
+    marginTop: 12,
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+});

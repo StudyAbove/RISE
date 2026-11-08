@@ -1,16 +1,15 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
-  type LayoutChangeEvent,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { endOfDay, format, isSameYear } from 'date-fns';
-import Svg, { Path, Rect } from 'react-native-svg';
 
+import { TabPageHeader } from '../../../components/TabPageHeader';
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { supabase } from '../../../lib/supabase';
@@ -18,173 +17,13 @@ import {
   fetchAssignments,
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
-import { colors, statusColors } from '../../../theme/colors';
+import { colors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
-import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
-import { getTimeOfDay } from '../../home/utils/greeting';
-import { SettingsButton } from '../../settings/components/SettingsButton';
+import { AssignmentCard } from '../components/AssignmentCard';
+import { SectionHeader } from '../components/SectionHeader';
+import { getAssignmentListSections } from '../utils/assignmentListSections';
 
 type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
-
-// Let the hills extend slightly below the subtitle.
-const SKY_OVERLAP_BELOW_HEADER = 8;
-
-// Draw the small calendar icon next to each due date.
-function CalendarIcon({ color }: { color: string }) {
-  return (
-    <Svg
-      width={14}
-      height={14}
-      viewBox="0 0 24 24"
-      fill="none"
-      accessible={false}
-    >
-      <Rect
-        x={3}
-        y={5}
-        width={18}
-        height={16}
-        rx={2}
-        stroke={color}
-        strokeWidth={2}
-      />
-      <Path
-        d="M16 3v4M8 3v4M3 11h18"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-}
-
-// Build one card using a real assignment from Supabase.
-function AssignmentCard({
-  assignment,
-  today,
-}: {
-  assignment: Assignment;
-  today: Date;
-}) {
-  // This is assignment completion, not microtask progress.
-  const completionPercent = assignment.completed ? 100 : 0;
-
-  const needsAttention =
-    !assignment.completed &&
-    assignment.dueAt !== null &&
-    assignment.dueAt.getTime() <= endOfDay(today).getTime();
-
-  const dueColor = needsAttention
-    ? statusColors.urgentRed
-    : colors.deepOlive;
-
-  // Include the year when an assignment belongs to a different year.
-  const dueLabel = assignment.dueAt
-    ? `Due ${format(
-        assignment.dueAt,
-        isSameYear(assignment.dueAt, today)
-          ? 'EEE, MMM d'
-          : 'EEE, MMM d, yyyy',
-      )}`
-    : 'No due date';
-
-  const courseLabel =
-    assignment.courseCode ||
-    assignment.courseName ||
-    'No course assigned';
-
-  // The extension already converts Canvas descriptions to plain text.
-  const description =
-    assignment.description?.replace(/\s+/g, ' ').trim() ||
-    'No description provided';
-
-  return (
-    <View style={styles.card}>
-      {/* Use the student's saved course color. */}
-      <View
-        accessible
-        accessibilityLabel={`Course: ${courseLabel}`}
-        style={[
-          styles.courseDot,
-          { backgroundColor: assignment.courseColor },
-        ]}
-      />
-
-      <View style={styles.cardContent}>
-        <Text style={styles.assignmentTitle}>
-          {assignment.title}
-        </Text>
-
-        {/* Shorten only what is visible, without rewriting the instructions. */}
-        <Text
-          style={styles.description}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          accessibilityLabel={description}
-        >
-          {description}
-        </Text>
-
-        <View style={styles.dueRow}>
-          <CalendarIcon color={dueColor} />
-          <Text
-            style={[styles.dueDate, { color: dueColor }]}
-            accessibilityLabel={
-              assignment.dueAt
-                ? `Due ${format(
-                    assignment.dueAt,
-                    'EEEE, MMMM d, yyyy, h:mm a',
-                  )}`
-                : 'No due date'
-            }
-          >
-            {dueLabel}
-          </Text>
-        </View>
-
-        {/* Until microtasks are available, completion is 0% or 100%. */}
-        <View
-          style={styles.progressRow}
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel={`${assignment.title} completion`}
-          accessibilityValue={{
-            min: 0,
-            max: 100,
-            now: completionPercent,
-            text: assignment.completed ? 'Completed' : 'Not completed',
-          }}
-        >
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${completionPercent}%` },
-              ]}
-            />
-          </View>
-
-          <Text style={styles.progressText}>
-            {completionPercent}%
-          </Text>
-        </View>
-      </View>
-
-      {/* Display only. Opening assignment details comes in another story. */}
-      <View
-        style={styles.playCircle}
-        pointerEvents="none"
-        accessible={false}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        <Svg width={14} height={14} viewBox="0 0 14 14">
-          <Path d="M4 2v10l8-5z" fill={colors.deepOlive} />
-        </Svg>
-      </View>
-    </View>
-  );
-}
 
 export function AssignmentsScreen() {
   const titleRef = useRef<Text>(null);
@@ -193,16 +32,30 @@ export function AssignmentsScreen() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
-  const [headerBottom, setHeaderBottom] = useState<number | null>(null);
+  const [showPast, setShowPast] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Reload when the student opens this tab or requests a refresh.
+  // A pull-to-refresh keeps the list on screen while it reloads.
+  const isPullRefresh = useRef(false);
+
+  // Completed work enters Past immediately.
+  // Unfinished work enters Past after 2 days overdue.
+  // Both remain in Past for 14 days before being hidden from List.
+  const { currentAssignments, pastAssignments } = useMemo(
+    () => getAssignmentListSections(assignments, date),
+    [assignments, date],
+  );
+
+  // Reload when the student opens this tab, pulls down, or taps Try again.
   useFocusEffect(
     useCallback(() => {
       let active = true;
 
       async function loadAssignments() {
-        setStatus('loading');
-        setAssignments([]);
+        if (!isPullRefresh.current) {
+          setStatus('loading');
+          setAssignments([]);
+        }
 
         try {
           const { data, error } = await supabase.auth.getSession();
@@ -227,6 +80,9 @@ export function AssignmentsScreen() {
 
           setAssignments([]);
           setStatus('error');
+        } finally {
+          isPullRefresh.current = false;
+          setRefreshing(false);
         }
       }
 
@@ -239,48 +95,36 @@ export function AssignmentsScreen() {
     }, [reloadCount]),
   );
 
-  const handleHeaderLayout = ({
-    nativeEvent: { layout },
-  }: LayoutChangeEvent) => {
-    setHeaderBottom(layout.y + layout.height);
-  };
-
   const refreshAssignments = () => {
     setReloadCount((count) => count + 1);
+  };
+
+  const pullToRefresh = () => {
+    isPullRefresh.current = true;
+    setRefreshing(true);
+    refreshAssignments();
   };
 
   return (
     <TabScreenScrollView
       focusTargetRef={titleRef}
       contentContainerStyle={styles.container}
-    >
-      {/* Draw the artwork behind the header. */}
-      {headerBottom !== null && (
-        <HomeSkyBackdrop
-          timeOfDay={getTimeOfDay(date)}
-          bottom={headerBottom + SKY_OVERLAP_BELOW_HEADER}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={pullToRefresh}
+          tintColor={colors.deepOlive}
+          colors={[colors.deepOlive]}
         />
-      )}
-
-      <View onLayout={handleHeaderLayout}>
-        <View style={styles.headerRow}>
-          <SettingsButton />
-        </View>
-
-        <View style={styles.header}>
-          <Text
-            ref={titleRef}
-            accessibilityRole="header"
-            style={styles.title}
-          >
-            List
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Look at an overview of the future
-          </Text>
-        </View>
-      </View>
+      }
+    >
+      {/* The sky, settings button, title and subtitle, shared with Study
+          Plan and Analytics. */}
+      <TabPageHeader
+        title="List"
+        subtitle="Look at an overview of the future"
+        titleRef={titleRef}
+      />
 
       <View style={styles.list}>
         {status === 'loading' && (
@@ -336,9 +180,16 @@ export function AssignmentsScreen() {
           </View>
         )}
 
-        {/* No due-soon cutoff: display every assignment returned. */}
         {status === 'ready' &&
-          assignments.map((assignment) => (
+          assignments.length > 0 &&
+          currentAssignments.length === 0 && (
+            <View style={styles.statusCard}>
+              <Text style={styles.statusText}>You’re all caught up!</Text>
+            </View>
+          )}
+
+        {status === 'ready' &&
+          currentAssignments.map((assignment) => (
             <AssignmentCard
               key={assignment.id}
               assignment={assignment}
@@ -346,127 +197,47 @@ export function AssignmentsScreen() {
             />
           ))}
 
-        {status === 'ready' && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Refresh assignments"
-            onPress={refreshAssignments}
-            style={({ pressed }) => [
-              styles.refreshButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.retryText}>Refresh assignments</Text>
-          </Pressable>
+        {status === 'ready' && pastAssignments.length > 0 && (
+          <View style={styles.pastHeader}>
+            <SectionHeader
+              title="Past"
+              count={pastAssignments.length}
+              linkText={showPast ? 'Hide' : 'Show'}
+              linkLabel={
+                showPast
+                  ? 'Hide past assignments'
+                  : `Show ${pastAssignments.length} past assignments`
+              }
+              linkExpanded={showPast}
+              onLinkPress={() => setShowPast((shown) => !shown)}
+            />
+          </View>
         )}
+
+        {status === 'ready' &&
+          showPast &&
+          pastAssignments.map((assignment) => (
+            <AssignmentCard
+              key={assignment.id}
+              assignment={assignment}
+              today={date}
+            />
+          ))}
       </View>
     </TabScreenScrollView>
   );
 }
 
-// Keep the existing card design and shared theme.
+// Card styles now live in the shared AssignmentCard component.
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 18,
     paddingBottom: 36,
   },
-  headerRow: {
-    minHeight: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  header: {
-    paddingBottom: 8,
-  },
-  title: {
-    ...textStyles.screenHeading,
-    color: colors.deepOlive,
-  },
-  subtitle: {
-    ...textStyles.subtitle,
-    color: colors.mutedGrayGreen,
-    marginTop: 2,
-  },
+  // Same gap below the subtitle as before the shared header (8 + 12).
   list: {
     gap: 8,
-    marginTop: 12,
-  },
-  card: {
-    minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.softWhite,
-    borderWidth: 1,
-    borderColor: colors.mistGreen,
-    borderRadius: 15,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  courseDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: colors.deepOlive,
-    marginRight: 16,
-    alignSelf: 'flex-start',
-    marginTop: 10,
-  },
-  cardContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  assignmentTitle: {
-    ...textStyles.cardTitle,
-    color: colors.deepOlive,
-  },
-  description: {
-    ...textStyles.caption,
-    color: colors.mutedGrayGreen,
-    marginTop: 2,
-  },
-  dueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  dueDate: {
-    ...textStyles.tinyLabel,
-    flexShrink: 1,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 3,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: statusColors.progressTrack,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.softSage,
-    borderRadius: 4,
-  },
-  progressText: {
-    ...textStyles.tinyLabel,
-    fontSize: 8,
-    color: colors.mutedGrayGreen,
-    minWidth: 26,
-  },
-  playCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.mistGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 12,
+    marginTop: 20,
   },
   statusCard: {
     padding: 20,
@@ -501,11 +272,9 @@ const styles = StyleSheet.create({
     color: colors.deepOlive,
     textAlign: 'center',
   },
-  refreshButton: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
+  pastHeader: {
+    marginTop: 16,
+    marginBottom: 2,
   },
   pressed: {
     opacity: 0.7,
