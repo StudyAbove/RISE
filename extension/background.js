@@ -159,7 +159,17 @@ const messageHandlers = {
       await getToken(),
     );
 
-    return saved;
+    const courseMetadata = new Map(courses.map((course) => [String(course.id), course]));
+    return saved.map((course) => {
+      const metadata = courseMetadata.get(String(course.canvasCourseId));
+      const isCurrentTerm = Boolean(metadata?.isCurrentTerm);
+      return {
+        ...course,
+        courseRole: metadata?.courseRole ?? 'other',
+        isCurrentTerm,
+        syncEnabled: isCurrentTerm && course.syncEnabled,
+      };
+    });
   },
 
   async saveCourseChoices({ choices }) {
