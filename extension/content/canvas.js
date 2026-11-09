@@ -72,6 +72,14 @@
     });
   }
 
+  function openSyllabusEntry(course) {
+    if (!course?.courseId || !course?.canvasCourseId) return;
+    RiseModal.showSyllabusMethod({
+      courses: [course],
+      onSelected: () => syncNow({ announce: true, force: true }),
+    });
+  }
+
   async function start() {
     // Links from the welcome page and popup add ?rise=open, ?rise=sync or ?rise=classes.
     const requested = new URLSearchParams(location.search).get('rise');
@@ -85,7 +93,13 @@
       return;
     }
 
-    if (requested === 'classes') {
+    if (requested === 'syllabus-entry') {
+      const { pendingSyllabusEntry } = await chrome.storage.local.get('pendingSyllabusEntry');
+      if (pendingSyllabusEntry) {
+        await chrome.storage.local.remove('pendingSyllabusEntry');
+        openSyllabusEntry(pendingSyllabusEntry);
+      }
+    } else if (requested === 'classes') {
       openClassPicker();
     } else {
       syncNow({ announce: requested === 'sync', force: requested === 'sync' });
@@ -159,6 +173,8 @@
       syncNow({ announce: true, force: true });
     } else if (message?.type === 'openClasses') {
       openClassPicker();
+    } else if (message?.type === 'openSyllabusEntry') {
+      openSyllabusEntry(message.course);
     } else if (message?.type === 'openConnect') {
       chrome.storage.local.get('noteSeen').then(({ noteSeen }) => openConnectFlow({ includeNote: !noteSeen }));
     } else {

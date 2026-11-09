@@ -22,6 +22,18 @@ function showError(message) {
   content.append(el('div', { class: 'error', role: 'alert' }, message));
 }
 
+function makeSkipButton(className, label) {
+  const button = el('button', { class: className, type: 'button' }, label);
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Skipping class…';
+    content.querySelector('.error')?.remove();
+    try { await send('skipSyllabusSourceFlow'); }
+    catch (error) { showError(error.message); button.disabled = false; button.textContent = label; }
+  });
+  return button;
+}
+
 function field(form, labelText, name, value, type = 'text') {
   const label = el('label', {}, labelText);
   const input = type === 'textarea' ? el('textarea', { name }) : el('input', { name, type });
@@ -68,8 +80,12 @@ function labeledControl(labelText, name, value = '', type = 'text') {
     [['', 'Select day'], ['0', 'Sunday'], ['1', 'Monday'], ['2', 'Tuesday'], ['3', 'Wednesday'], ['4', 'Thursday'], ['5', 'Friday'], ['6', 'Saturday']]
       .forEach(([key, text]) => control.append(el('option', { value: key }, text)));
     control.value = normalizeDayOfWeek(value);
-  } else if (type === 'checkbox') control.checked = Boolean(value);
-  else control.value = value ?? '';
+  } else if (type === 'checkbox') {
+    control.checked = Boolean(value);
+    label.classList.add('check-field');
+    label.prepend(control);
+    return label;
+  } else control.value = value ?? '';
   label.append(control);
   return label;
 }
@@ -80,7 +96,8 @@ function addOfficeRow(container, value = {}, evidence = '') {
   row.append(labeledControl('Office location', 'office_location', value.office_location));
   row.append(labeledControl('Start time', 'start_time', value.start_time, 'time'));
   row.append(labeledControl('End time', 'end_time', value.end_time, 'time'));
-  row.append(labeledControl('Booking required', 'required_booking', value.required_booking, 'checkbox'));
+  row.append(labeledControl('By appointment / booking required', 'required_booking', value.required_booking, 'checkbox'));
+  row.append(el('p', { class: 'field-hint' }, 'Check this even when no booking link is available.'));
   row.append(labeledControl('Booking link', 'booking_link', value.booking_link, 'url'));
   appendEvidence(row, evidence);
   const remove = el('button', { class: 'secondary remove', type: 'button' }, 'Remove office hour');
@@ -104,17 +121,36 @@ function addTopicRow(container, value = {}, evidence = '') {
 function render(flow) {
   content.replaceChildren();
   if (!flow?.courses?.length) {
-    content.append(el('h1', {}, 'Find a class syllabus'), el('p', {}, 'On a Canvas page, choose AI Pull to start. Then navigate to a class syllabus and confirm the page here.'));
+    content.append(el('h1', {}, 'Find a class syllabus'), el('p', {}, 'On a Canvas page, choose Manually Type or AI Pull to start. Then follow the prompts here.'));
     return;
   }
   const course = flow.courses[flow.index];
   if (flow.status === 'done') {
-    content.append(el('h1', {}, 'Syllabi saved'), el('p', {}, 'You have reviewed all selected classes. You can close this panel.'));
+    content.append(el('h1', {}, 'Review complete'), el('p', {}, 'You have finished reviewing the selected classes. You can close this panel.'));
+    if (flow.skippedCourses?.length) {
+      const warning = el('section', { class: 'warning', role: 'alert' });
+      warning.append(
+        el('div', { class: 'warning-label' }, 'Warning'),
+        el('h2', {}, 'Syllabus not found'),
+        el('p', {}, 'Couldn’t find an instance of the class syllabus for:'),
+      );
+      const names = el('ul');
+      flow.skippedCourses.forEach((skipped) => names.append(el('li', {}, skipped.name || 'Unnamed class')));
+      warning.append(names);
+      content.append(warning);
+    }
     return;
   }
 
   content.append(el('div', { class: 'step' }, `CLASS ${flow.index + 1} OF ${flow.courses.length}`));
-  content.append(el('h1', { class: 'course-title' }, course.name));
+  const courseTitle = el('h1', { class: 'course-title' }, course.name);
+  if (flow.mode === 'manual') {
+    const titleRow = el('div', { class: 'course-title-row' });
+    titleRow.append(courseTitle, makeSkipButton('manual-skip', 'Syllabus not Posted'));
+    content.append(titleRow);
+  } else {
+    content.append(courseTitle);
+  }
   if (flow.status === 'review' && flow.review) {
     renderReview(flow, course, flow.review);
     return;
@@ -163,13 +199,14 @@ function render(flow) {
       ? 'No likely syllabus page was found, so the Canvas course homepage is open. Find the syllabus there, or open its Google Docs document.'
       : 'Navigate to this class’s syllabus. It can be a Canvas page or Google Docs document.'));
   }
-  const capture = el('button', { class: 'flow-action' }, 'This is where the syllabus is');
+  const captureLabel = flow.mode === 'manual' ? 'Use this page for manual entry' : 'This is where the syllabus is';
+  const capture = el('button', { class: 'flow-action' }, captureLabel);
   capture.addEventListener('click', async () => {
     capture.disabled = true;
-    capture.textContent = 'Reading syllabus…';
+    capture.textContent = flow.mode === 'manual' ? 'Opening entry fields…' : 'Reading syllabus…';
     content.querySelector('.error')?.remove();
     try { await send('captureSyllabusPage'); }
-    catch (error) { showError(error.message); capture.disabled = false; capture.textContent = 'This is where the syllabus is'; }
+    catch (error) { showError(error.message); capture.disabled = false; capture.textContent = captureLabel; }
   });
   content.append(capture);
   if (suggestion) {
@@ -180,15 +217,9 @@ function render(flow) {
     });
     content.append(different);
   }
-  const cancel = el('button', { class: 'flow-action flow-action--not-posted' }, 'Not posted yet');
-  cancel.addEventListener('click', async () => {
-    cancel.disabled = true;
-    cancel.textContent = 'Skipping class…';
-    content.querySelector('.error')?.remove();
-    try { await send('skipSyllabusSourceFlow'); }
-    catch (error) { showError(error.message); cancel.disabled = false; cancel.textContent = 'Not posted yet'; }
-  });
-  content.append(cancel);
+  if (flow.mode !== 'manual') {
+    content.append(makeSkipButton('flow-action flow-action--not-posted', 'Not posted yet'));
+  }
 }
 
 async function chooseSource(attachmentIndex, control) {
@@ -210,7 +241,12 @@ async function chooseSource(attachmentIndex, control) {
 function renderReview(flow, course, review) {
   const info = review.syllabusInfo ?? {};
   const evidence = info.evidence ?? {};
-  content.append(el('h2', {}, 'Review Pulled Information'), el('p', {}, `Source: ${review.sourceName || 'Selected page'} (${review.sourceType || 'page'}). Correct anything that needs editing.`));
+  content.append(
+    el('h2', {}, flow.mode === 'manual' ? 'Enter Syllabus Information' : 'Review Pulled Information'),
+    el('p', {}, flow.mode === 'manual'
+      ? 'Type the details from this class’s syllabus.'
+      : `Source: ${review.sourceName || 'Selected page'} (${review.sourceType || 'page'}). Correct anything that needs editing.`),
+  );
   const form = el('form');
   const professorName = field(form, 'Professor name', 'professor_name', info.professor_name);
   appendEvidence(professorName.closest('label'), evidence.professor_name);
@@ -280,7 +316,10 @@ function renderReview(flow, course, review) {
         office_hours: officeHours,
         topics: gradingTopics,
       };
-      if (officeHours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) throw new Error('Each office hour needs a day, start time, and end time.');
+      if (officeHours.some((item) => {
+        const appointmentOnly = item.required_booking && item.day_of_week == null && !item.start_time && !item.end_time;
+        return !appointmentOnly && (item.day_of_week == null || !item.start_time || !item.end_time);
+      })) throw new Error('Each office hour needs a day, start time, and end time, unless it is by appointment.');
       if (gradingMethod === 'weighted_categories' && gradingTopics.some((item) => !item.title || item.percentage == null)) {
         throw new Error('Each grading topic needs a title and percentage.');
       }

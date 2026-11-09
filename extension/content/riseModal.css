@@ -110,6 +110,76 @@
   letter-spacing: 0;
 }
 
+.manual-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.manual-title-row .title {
+  min-width: 0;
+  margin: 0;
+}
+
+.manual-not-posted {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #35433a;
+  border-radius: 8px;
+  background: #35433a;
+  color: #fff;
+  font: 600 13px/18px var(--font-body);
+  cursor: pointer;
+}
+
+.manual-not-posted:hover {
+  background: #26332b;
+}
+
+.manual-not-posted:focus-visible {
+  outline: 3px solid rgba(120, 146, 123, 0.55);
+  outline-offset: 2px;
+}
+
+.syllabus-warning {
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #dba19b;
+  border-left: 6px solid #9f473f;
+  border-radius: 10px;
+  background: #fff0ed;
+  color: #592d29;
+  text-align: left;
+}
+
+.syllabus-warning__label {
+  color: #8b3932;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.syllabus-warning h3 {
+  margin: 6px 0;
+  font: 700 18px/24px var(--font-heading);
+}
+
+.syllabus-warning p,
+.syllabus-warning li {
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.syllabus-warning ul {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  font-weight: 600;
+}
+
 .dialog--manual-card .review-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;

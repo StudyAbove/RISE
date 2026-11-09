@@ -319,6 +319,39 @@ async function listCourses(supabase: SupabaseClient, userId: string, body: unkno
   });
 }
 
+/** Selected classes without a normalized syllabus record. */
+async function listMissingSyllabusCourses(supabase: SupabaseClient, userId: string) {
+  const { data: courses, error: courseError } = await supabase
+    .from('courses')
+    .select('id, canvas_course_id, name, code, term')
+    .eq('user_id', userId)
+    .eq('sync_enabled', true)
+    .order('name');
+
+  if (courseError) throw courseError;
+  if (!courses?.length) return jsonResponse({ courses: [] });
+
+  const { data: syllabi, error: syllabusError } = await supabase
+    .from('syllabi')
+    .select('course_id')
+    .in('course_id', courses.map((course) => course.id));
+
+  if (syllabusError) throw syllabusError;
+
+  const coursesWithSyllabi = new Set((syllabi ?? []).map((syllabus) => syllabus.course_id));
+  return jsonResponse({
+    courses: courses
+      .filter((course) => !coursesWithSyllabi.has(course.id))
+      .map((course) => ({
+        courseId: course.id,
+        canvasCourseId: course.canvas_course_id,
+        name: course.name,
+        code: course.code,
+        term: course.term,
+      })),
+  });
+}
+
 async function saveCourseChoices(supabase: SupabaseClient, userId: string, body: unknown) {
   const choices = parseCourseChoices(body);
 
@@ -727,8 +760,11 @@ async function saveManualSyllabus(supabase: SupabaseClient, userId: string, body
       booking_link: typeof item.booking_link === 'string' ? item.booking_link.trim().slice(0, 2000) || null : null,
     };
   }) : [];
-  if (officeHours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
-    return jsonResponse({ error: 'Each office-hours entry needs a day, start time, and end time.' }, 400);
+  if (officeHours.some((item) => {
+    const appointmentOnly = item.required_booking && item.day_of_week == null && !item.start_time && !item.end_time;
+    return !appointmentOnly && (item.day_of_week == null || !item.start_time || !item.end_time);
+  })) {
+    return jsonResponse({ error: 'Each office-hours entry needs a day, start time, and end time, unless it is by appointment.' }, 400);
   }
   const topics = gradingMethod === 'weighted_categories' && Array.isArray(info.topics)
     ? info.topics.map((entry) => {
@@ -917,6 +953,10 @@ Deno.serve(async (req) => {
 
     if (body?.action === 'courses') {
       return await listCourses(supabase, tokenUser.userId, body);
+    }
+
+    if (body?.action === 'missingSyllabusCourses') {
+      return await listMissingSyllabusCourses(supabase, tokenUser.userId);
     }
 
     if (body?.action === 'saveCourseChoices') {

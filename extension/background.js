@@ -299,6 +299,10 @@ const messageHandlers = {
     });
   },
 
+  async listMissingSyllabusCourses() {
+    return callRise({ action: 'missingSyllabusCourses' }, await getToken());
+  },
+
   async saveCourseChoices({ choices }) {
     return callRise({ action: 'saveCourseChoices', choices }, await getToken());
   },
@@ -312,7 +316,7 @@ const messageHandlers = {
     return callRise({ action: 'saveManualSyllabus', courseId, syllabusInfo }, await getToken());
   },
 
-  async startSyllabusSourceFlow({ courses }, sender) {
+  async startSyllabusSourceFlow({ courses, mode = 'ai' }, sender) {
     if (!sender.tab?.id) throw new Error('Open Canvas in a browser tab to start AI Pull.');
     // Open the side panel directly from the user's click before doing async work.
     const opening = chrome.sidePanel.open({ tabId: sender.tab.id });
@@ -328,6 +332,8 @@ const messageHandlers = {
       })),
       index: 0,
       status: 'discovering',
+      mode: mode === 'manual' ? 'manual' : 'ai',
+      skippedCourses: [],
     };
     if (!flow.courses.length) throw new Error('Choose at least one class first.');
     await chrome.storage.local.set({ syllabusSourceFlow: flow });
@@ -361,6 +367,28 @@ const messageHandlers = {
     const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
     const course = flow?.courses?.[flow.index];
     if (!course) throw new Error('There is no active syllabus search. Start AI Pull from Canvas.');
+
+    if (flow.mode === 'manual') {
+      const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const sourceUrl = activeTab?.url || '';
+      const viewedCanvasCourseId = sourceUrl.match(/\/courses\/(\d+)/)?.[1];
+      if (viewedCanvasCourseId && viewedCanvasCourseId !== course.canvasCourseId) {
+        throw new Error(`This page belongs to a different Canvas class. Find the syllabus for ${course.name} first.`);
+      }
+      const sourceType = sourceUrl.includes('docs.google.com') ? 'Google Docs' : 'Canvas page';
+      await chrome.storage.local.set({
+        syllabusSourceFlow: {
+          ...flow,
+          status: 'review',
+          review: {
+            sourceName: activeTab?.title || 'Selected syllabus page',
+            sourceType,
+            syllabusInfo: { office_hours: [], topics: [] },
+          },
+        },
+      });
+      return { manualEntry: true };
+    }
 
     const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!activeTab?.id) throw new Error('Select the tab that has the syllabus open, then try again.');
@@ -428,17 +456,23 @@ const messageHandlers = {
   async skipSyllabusSourceFlow() {
     const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
     if (!flow?.courses?.[flow.index]) throw new Error('There is no active class to skip.');
+    const skippedCourses = [
+      ...(flow.skippedCourses ?? []),
+      { courseId: flow.courses[flow.index].courseId, name: flow.courses[flow.index].name },
+    ];
     const nextIndex = flow.index + 1;
     await chrome.storage.local.remove('syllabusSourceError');
     if (nextIndex >= flow.courses.length) {
       await chrome.storage.local.set({
-        syllabusSourceFlow: { ...flow, status: 'done', review: null, captured: null, suggestion: null },
+        syllabusSourceFlow: { ...flow, status: 'done', skippedCourses, review: null, captured: null, suggestion: null },
       });
+      syncFromCanvas(flow.origin).catch(() => {});
       return { done: true };
     }
     await locateCurrentSyllabus({
       ...flow,
       index: nextIndex,
+      skippedCourses,
       status: 'discovering',
       review: null,
       captured: null,

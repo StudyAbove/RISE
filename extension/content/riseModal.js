@@ -153,7 +153,9 @@ const RiseModal = (() => {
         <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
         <p class="review-progress" data-slot="progress"></p>
         <button class="review-next" type="button" data-action="next" aria-label="Save and go to the next class" ${manual && index < total - 1 ? '' : 'hidden'}>→</button>
-        <h2 class="title title--start" id="rise-title" data-slot="title">Review class information</h2>
+        ${manual
+          ? `<div class="manual-title-row"><h2 class="title title--start" id="rise-title" data-slot="title">Class</h2><button class="manual-not-posted" type="button" data-action="not-posted">Syllabus not Posted</button></div>`
+          : '<h2 class="title title--start" id="rise-title" data-slot="title">Review class information</h2>'}
         <p class="subtitle subtitle--start" data-slot="course-name"></p>
         <p class="review-note" data-slot="syllabus-note"></p>
 
@@ -199,6 +201,18 @@ const RiseModal = (() => {
         <p class="error" role="alert" hidden></p>
         <button class="button button--gold" type="submit" ${manual && index < total - 1 ? 'hidden' : ''}>${manual ? 'Done' : 'Confirm and continue'}</button>
       </form>`,
+
+    syllabusMissingSummary: () => `
+      <div class="dialog dialog--centered" role="dialog" aria-modal="true" aria-labelledby="rise-title">
+        <h2 class="title title--large" id="rise-title">Review complete</h2>
+        <section class="syllabus-warning" role="alert">
+          <div class="syllabus-warning__label">Warning</div>
+          <h3>Syllabus not found</h3>
+          <p>Couldn’t find an instance of the class syllabus for:</p>
+          <ul data-slot="missing-classes"></ul>
+        </section>
+        <button class="button button--gold" type="button" data-action="done">Continue</button>
+      </div>`,
 
   };
 
@@ -483,61 +497,55 @@ const RiseModal = (() => {
     overlay.querySelector('[data-action="close"]').addEventListener('click', close);
   }
 
-  function showSyllabusMethod({ courses, onSelected }) {
+  function showSyllabusMethod({ courses }) {
     const overlay = render('syllabusMethod');
 
-    overlay.querySelector('[data-action="manual"]').addEventListener('click', async () => {
-      await chrome.storage.local.set({ syllabusEntryPreference: 'manual' });
-      const reviews = courses.map((course) => ({
-        courseId: course.courseId,
-        courseCode: course.code,
-        courseTerm: course.term,
-        courseName: course.name,
-        syllabusInfo: {},
-      }));
-
-      showSyllabusReviews({
-        reviews,
-        manual: true,
-        onDone: onSelected,
-        onSave: (syllabusInfo, course) => sendToRise({
-          type: 'saveManualSyllabus',
-          courseId: course.courseId,
-          syllabusInfo,
-        }),
-      });
-    });
-    overlay.querySelector('[data-action="ai"]').addEventListener('click', async (event) => {
-      const aiButton = event.currentTarget;
+    async function beginFlow(mode, button) {
       const manualButton = overlay.querySelector('[data-action="manual"]');
-      const errorText = overlay.querySelector('[data-slot="method-error"]');
+      const aiButton = overlay.querySelector('[data-action="ai"]');
       aiButton.disabled = true;
       manualButton.disabled = true;
-      aiButton.textContent = 'Opening…';
+      button.textContent = 'Opening…';
+      const errorText = overlay.querySelector('[data-slot="method-error"]');
       errorText.hidden = true;
       try {
-        const starting = sendToRise({
+        await sendToRise({
           type: 'startSyllabusSourceFlow',
+          mode,
           courses: courses.map(({ courseId, canvasCourseId, code, term, name }) => ({
             courseId, canvasCourseId, code, term, name,
           })),
         });
-        await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
-        await starting;
+        await chrome.storage.local.set({ syllabusEntryPreference: mode });
         close();
       } catch (error) {
         errorText.textContent = error.message || 'Could not open the syllabus finder.';
         errorText.hidden = false;
         aiButton.disabled = false;
         manualButton.disabled = false;
-        aiButton.textContent = 'AI Pull';
+        button.textContent = mode === 'manual' ? 'Manually Type' : 'AI Pull';
       }
-    });
+    }
+
+    overlay.querySelector('[data-action="manual"]').addEventListener('click', (event) => beginFlow('manual', event.currentTarget));
+    overlay.querySelector('[data-action="ai"]').addEventListener('click', (event) => beginFlow('ai', event.currentTarget));
   }
 
   function showSyllabusReviews({ reviews, onSave, manual = false, onDone = close }) {
     const queue = [...reviews];
+    const notPostedCourses = [];
     let index = 0;
+
+    function showNotPostedSummary() {
+      const overlay = render('syllabusMissingSummary');
+      const list = overlay.querySelector('[data-slot="missing-classes"]');
+      notPostedCourses.forEach((course) => {
+        const item = document.createElement('li');
+        item.textContent = course.courseName;
+        list.append(item);
+      });
+      overlay.querySelector('[data-action="done"]').addEventListener('click', onDone);
+    }
 
     function appendInput(parent, labelText, name, value = '', type = 'text') {
       const label = document.createElement('label');
@@ -584,7 +592,7 @@ const RiseModal = (() => {
       booking.type = 'checkbox';
       booking.name = 'required_booking';
       booking.checked = Boolean(value.required_booking);
-      bookingLabel.append(booking, document.createTextNode('Booking required'));
+      bookingLabel.append(booking, document.createTextNode('By appointment / booking required'));
       row.append(bookingLabel);
       appendInput(row, 'Booking link (optional)', 'booking_link', value.booking_link ?? value.schedule_booking, 'url');
 
@@ -618,7 +626,8 @@ const RiseModal = (() => {
 
     function renderReview() {
       if (index >= queue.length) {
-        onDone();
+        if (notPostedCourses.length) showNotPostedSummary();
+        else onDone();
         return;
       }
 
@@ -684,6 +693,11 @@ const RiseModal = (() => {
       overlay.querySelector('[data-action="add-topic"]')?.addEventListener('click', () => appendTopic(topicsContainer));
       const errorText = form.querySelector('.error');
       overlay.querySelector('[data-action="next"]').addEventListener('click', () => form.requestSubmit());
+      overlay.querySelector('[data-action="not-posted"]')?.addEventListener('click', () => {
+        notPostedCourses.push({ courseName });
+        index += 1;
+        renderReview();
+      });
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -726,8 +740,11 @@ const RiseModal = (() => {
         };
 
         try {
-          if (confirmed.office_hours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
-            throw new Error('For each office-hours entry, add a day, start time, and end time.');
+          if (confirmed.office_hours.some((item) => {
+            const appointmentOnly = item.required_booking && item.day_of_week == null && !item.start_time && !item.end_time;
+            return !appointmentOnly && (item.day_of_week == null || !item.start_time || !item.end_time);
+          })) {
+            throw new Error('For each office-hours entry, add a day, start time, and end time, unless it is by appointment.');
           }
           if (confirmed.topics.some((item) => !item.title || item.percentage == null)) {
             throw new Error('For each grading topic, add a title and percentage.');
@@ -776,5 +793,5 @@ const RiseModal = (() => {
     setTimeout(() => toast.remove(), 4000);
   }
 
-  return { showNote, showWelcome, showClassPicker, showSyllabusReviews, showSyncResult, showToast, dismiss: close };
+  return { showNote, showWelcome, showClassPicker, showSyllabusMethod, showSyllabusReviews, showSyncResult, showToast, dismiss: close };
 })();
