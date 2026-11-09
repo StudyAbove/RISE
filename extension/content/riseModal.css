@@ -255,6 +255,32 @@
   line-height: 22.5px;
 }
 
+.syllabus-method-options {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.syllabus-method-options .button {
+  flex: 1;
+  min-width: 0;
+  height: 51px;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.syllabus-method-options [data-action="manual"] {
+  background: #DDE9D9;
+  color: var(--ink);
+}
+
+.syllabus-method-options [data-action="ai"] {
+  background: #78927B;
+  color: #ffffff;
+}
+
 .link-button {
   margin-top: 0;
   padding: 0;

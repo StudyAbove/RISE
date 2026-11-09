@@ -138,6 +138,16 @@ const RiseModal = (() => {
         <button class="link-button" type="button" data-action="close">Done</button>
       </div>`,
 
+    syllabusMethod: () => `
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rise-title">
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <h2 class="title title--start" id="rise-title">To save syllabi information:</h2>
+        <div class="syllabus-method-options">
+          <button class="button" type="button" data-action="manual">Manually Type</button>
+          <button class="button" type="button" data-action="ai">AI Pull</button>
+        </div>
+      </div>`,
+
     syllabusReview: ({ index, total }) => `
       <form class="dialog dialog--review" role="dialog" aria-modal="true" aria-labelledby="rise-title" novalidate>
         <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
@@ -313,8 +323,12 @@ const RiseModal = (() => {
         showClassPicker({
           isSetup: true,
           onSaved: () => {
-            showConnected(email);
-            onConnected();
+            showSyllabusMethod({
+              onSelected: () => {
+                showConnected(email);
+                onConnected();
+              },
+            });
           },
         });
       } catch (error) {
@@ -451,6 +465,19 @@ const RiseModal = (() => {
     const overlay = render('connected');
     overlay.querySelector('[data-slot="email"]').textContent = email;
     overlay.querySelector('[data-action="close"]').addEventListener('click', close);
+  }
+
+  function showSyllabusMethod({ onSelected }) {
+    const overlay = render('syllabusMethod');
+
+    overlay.querySelector('[data-action="manual"]').addEventListener('click', async () => {
+      await chrome.storage.local.set({ syllabusEntryPreference: 'manual' });
+      onSelected();
+    });
+    overlay.querySelector('[data-action="ai"]').addEventListener('click', async () => {
+      await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
+      onSelected();
+    });
   }
 
   function showSyllabusReviews({ reviews, onSave }) {
