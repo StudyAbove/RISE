@@ -17,6 +17,7 @@ import {
 import { AssignmentDetailsScreen } from '../../assignments/screens/AssignmentDetailsScreen';
 import { ClassWeekScreen } from '../../home/screens/ClassWeekScreen';
 import { TakeABreakScreen } from '../../breaks/screens/TakeABreakScreen';
+import { BreakSessionScreen } from '../../breaks/screens/BreakSessionScreen';
 import CheckInboxScreen from '../../auth/screens/CheckInboxScreen';
 import CreateAccountScreen from '../../auth/screens/CreateAccountScreen';
 import LoginScreen from '../../auth/screens/LoginScreen';
@@ -696,6 +697,13 @@ export function RootNavigator({
                 gestureEnabled: false,
               }}
 
+            />
+            <Stack.Screen
+              name="BreakSession"
+              component={BreakSessionScreen}
+              options={{
+                gestureEnabled: false,
+              }}
             />
           </>
         )}

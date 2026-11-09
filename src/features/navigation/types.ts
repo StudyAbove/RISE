@@ -33,6 +33,9 @@ export type RootStackParamList = {
     }[];
   };
   TakeABreak: undefined;
+  BreakSession: {
+    breakId: string;
+  };
 };
 
 // Lets useNavigation() know the app's routes without passing a type each time.
