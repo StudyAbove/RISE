@@ -546,9 +546,9 @@ async function saveSyllabusReview(
     p_user_id: userId,
     p_course_id: review.courseId,
     p_review: {
-      course_overview: review.course_overview,
       professor_name: review.professor_name,
       professor_email: review.professor_email,
+      class_location: review.class_location,
       grading_method: review.grading_method,
       late_work: review.late_work,
       office_hours: review.office_hours,
@@ -569,10 +569,10 @@ async function extractSyllabusDocument(
   userId: string,
   form: FormData,
 ) {
-  const canvasCourseId = form.get('canvasCourseId');
+  const courseId = form.get('courseId');
   const uploadedFile = form.get('file');
-  if (typeof canvasCourseId !== 'string' || !/^\d+$/.test(canvasCourseId)) {
-    return jsonResponse({ error: 'A valid Canvas course ID is required.' }, 400);
+  if (typeof courseId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(courseId)) {
+    return jsonResponse({ error: 'A valid RISE course ID is required.' }, 400);
   }
   if (!(uploadedFile instanceof File)) {
     return jsonResponse({ error: 'Upload a PDF or DOCX syllabus file.' }, 400);
@@ -603,13 +603,36 @@ async function extractSyllabusDocument(
     .from('courses')
     .select('id, name')
     .eq('user_id', userId)
-    .eq('canvas_course_id', canvasCourseId)
+    .eq('id', courseId)
     .maybeSingle();
   if (courseError) throw courseError;
-  if (!course) return jsonResponse({ error: 'That Canvas course is not connected to this RISE account.' }, 404);
+  if (!course) return jsonResponse({ error: 'That course is not connected to this RISE account.' }, 404);
 
   const document = new File([bytes], filename, { type: contentType });
   const syllabusInfo = await extractSyllabusFile(document, course.name);
+  return jsonResponse({ syllabusInfo });
+}
+
+/** Extracts syllabus HTML/text without saving until the student reviews it. */
+async function extractSyllabusText(supabase: SupabaseClient, userId: string, body: Record<string, unknown>) {
+  const courseId = typeof body.courseId === 'string' ? body.courseId : '';
+  const syllabusText = body.syllabusText;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(courseId)) {
+    return jsonResponse({ error: 'A valid RISE course ID is required.' }, 400);
+  }
+  if (typeof syllabusText !== 'string' || !syllabusText.trim() || syllabusText.length > 50_000) {
+    return jsonResponse({ error: 'Provide syllabus text between 1 and 50,000 characters.' }, 400);
+  }
+  const { data: course, error } = await supabase
+    .from('courses')
+    .select('id, name')
+    .eq('id', courseId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!course) return jsonResponse({ error: 'That course is not connected to this RISE account.' }, 404);
+
+  const syllabusInfo = await extractSyllabusInfo(syllabusText, course.name);
   return jsonResponse({ syllabusInfo });
 }
 
@@ -857,6 +880,10 @@ Deno.serve(async (req) => {
 
     if (body?.action === 'sync') {
       return await syncCanvas(supabase, tokenUser.userId, body);
+    }
+
+    if (body?.action === 'extractSyllabusText') {
+      return await extractSyllabusText(supabase, tokenUser.userId, body);
     }
 
     if (body?.action === 'saveManualSyllabus') {

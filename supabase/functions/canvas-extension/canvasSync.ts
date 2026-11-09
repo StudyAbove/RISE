@@ -37,15 +37,16 @@ export type SyncPayload = {
 export type SavedSyllabusReview = {
   courseId: string;
   confirmed: true;
-  course_overview: string | null;
   professor_name: string | null;
   professor_email: string | null;
-  grading_method: 'points' | 'weighted_categories';
+  class_location: string | null;
+  grading_method: 'points' | 'weighted_categories' | 'other';
   late_work: string | null;
   office_hours: {
     day_of_week: number;
     start_time: string;
     end_time: string;
+    office_location: string | null;
     required_booking: boolean;
     booking_link: string | null;
   }[];
@@ -100,7 +101,7 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
   }
 
   const gradingMethod = review.grading_method;
-  if (gradingMethod !== 'points' && gradingMethod !== 'weighted_categories') {
+  if (gradingMethod !== 'points' && gradingMethod !== 'weighted_categories' && gradingMethod !== 'other') {
     throw new InvalidPayloadError('Choose a valid grading method.');
   }
 
@@ -132,6 +133,7 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
       day_of_week: day,
       start_time: readTime(item.start_time, 'Office-hours start time'),
       end_time: readTime(item.end_time, 'Office-hours end time'),
+      office_location: readText(item.office_location, 500),
       required_booking: item.required_booking,
       booking_link: bookingLink,
     };
@@ -162,9 +164,9 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
   return {
     courseId: readUuid(review.course_id, 'course_id'),
     confirmed: true,
-    course_overview: readText(review.course_overview, 5000),
     professor_name: readText(review.professor_name, 100),
     professor_email: professorEmail,
+    class_location: readText(review.class_location, 500),
     grading_method: gradingMethod,
     late_work: readText(review.late_work, 200),
     office_hours: officeHours,

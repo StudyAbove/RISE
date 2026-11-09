@@ -106,7 +106,6 @@ const RiseModal = (() => {
 
         <button class="button button--gold" type="submit">Connect →</button>
       </form>`,
-
     classes: ({ isSetup }) => `
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rise-title">
         ${isSetup ? '' : `<button class="close-button" type="button" data-action="close" aria-label="Close">
@@ -146,6 +145,7 @@ const RiseModal = (() => {
           <button class="button" type="button" data-action="manual">Manually Type</button>
           <button class="button" type="button" data-action="ai">AI Pull</button>
         </div>
+        <p class="error" role="alert" data-slot="method-error" hidden></p>
       </div>`,
 
     syllabusReview: ({ index, total, manual = false }) => `
@@ -166,7 +166,7 @@ const RiseModal = (() => {
           ${manual ? '' : '<h3>Syllabi</h3>'}
           <div class="review-grid">
             <label class="review-field">Professor name
-              <input name="professorName" maxlength="100" placeholder="Unavailable">
+              <input name="professorName" maxlength="200" placeholder="Unavailable">
             </label>
             <label class="review-field">Professor email
               <input name="professorEmail" type="email" maxlength="254" placeholder="Unavailable">
@@ -199,6 +199,7 @@ const RiseModal = (() => {
         <p class="error" role="alert" hidden></p>
         <button class="button button--gold" type="submit" ${manual && index < total - 1 ? 'hidden' : ''}>${manual ? 'Done' : 'Confirm and continue'}</button>
       </form>`,
+
   };
 
   let host = null;
@@ -490,6 +491,7 @@ const RiseModal = (() => {
       const reviews = courses.map((course) => ({
         courseId: course.courseId,
         courseCode: course.code,
+        courseTerm: course.term,
         courseName: course.name,
         syllabusInfo: {},
       }));
@@ -505,9 +507,40 @@ const RiseModal = (() => {
         }),
       });
     });
-    overlay.querySelector('[data-action="ai"]').addEventListener('click', async () => {
-      await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
-      onSelected();
+    overlay.querySelector('[data-action="ai"]').addEventListener('click', async (event) => {
+      const aiButton = event.currentTarget;
+      const manualButton = overlay.querySelector('[data-action="manual"]');
+      const errorText = overlay.querySelector('[data-slot="method-error"]');
+      aiButton.disabled = true;
+      manualButton.disabled = true;
+      aiButton.textContent = 'Searching Canvas…';
+      errorText.hidden = true;
+      try {
+        await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
+        const { reviews } = await sendToRise({
+          type: 'pullSyllabusReviews',
+          origin: location.origin,
+          courses: courses.map(({ courseId, canvasCourseId, code, term, name }) => ({
+            courseId, canvasCourseId, code, term, name,
+          })),
+        });
+        showSyllabusReviews({
+          reviews,
+          manual: true,
+          onDone: onSelected,
+          onSave: (syllabusInfo, course) => sendToRise({
+            type: 'saveManualSyllabus',
+            courseId: course.courseId,
+            syllabusInfo,
+          }),
+        });
+      } catch (error) {
+        errorText.textContent = error.message || 'Could not search Canvas for syllabi.';
+        errorText.hidden = false;
+        aiButton.disabled = false;
+        manualButton.disabled = false;
+        aiButton.textContent = 'AI Pull';
+      }
     });
   }
 
@@ -524,6 +557,8 @@ const RiseModal = (() => {
       input.type = type;
       input.value = value ?? '';
       if (name === 'title') input.maxLength = 100;
+      if (name === 'office_location') input.maxLength = 500;
+      if (name === 'booking_link') input.maxLength = 2000;
       if (type === 'time') input.step = '60';
       label.append(input);
       parent.append(label);
@@ -604,22 +639,33 @@ const RiseModal = (() => {
       const courseName = review.courseName ?? review.name ?? 'Class';
 
       overlay.querySelector('[data-slot="progress"]').textContent = `Class ${index + 1} of ${queue.length}`;
-      overlay.querySelector('[data-slot="course-name"]').textContent = manual ? '' : courseName;
+      overlay.querySelector('[data-slot="course-name"]').textContent = manual
+        ? [review.courseCode, review.courseTerm].filter(Boolean).join(' · ')
+        : courseName;
       overlay.querySelector('[data-slot="title"]').textContent = manual ? courseName : 'Review class information';
       overlay.querySelector('[data-slot="syllabus-note"]').textContent = review.hasSyllabus === false
         ? 'RISE could not find a syllabus for this class. Add the details you know below.'
         : 'Check the information found in the syllabus and correct anything that needs updating.';
-      if (manual) overlay.querySelector('[data-slot="syllabus-note"]').hidden = true;
+      const syllabusNote = overlay.querySelector('[data-slot="syllabus-note"]');
+      if (review.aiPull) {
+        syllabusNote.textContent = review.processingError
+          || `AI pulled information from ${review.sourceName} (${review.sourceType}). Review and correct the fields below.`;
+        syllabusNote.hidden = false;
+      } else if (manual) {
+        syllabusNote.hidden = true;
+      }
 
       form.elements.gradingMethod.value = data.grading_method ?? 'points';
       form.elements.professorName.value = data.professorName ?? data.professor_name ?? '';
       form.elements.professorEmail.value = data.professorEmail ?? data.professor_email ?? '';
       form.elements.lateWork.value = data.late_work ?? data.lateWork ?? '';
-      if (manual) form.elements.classLocation.value = data.class_location ?? '';
+      if (manual) {
+        form.elements.classLocation.value = data.class_location ?? '';
+      }
 
       const officeHours = overlay.querySelector('[data-slot="office-hours"]');
       const topicsContainer = overlay.querySelector('[data-slot="topics"]');
-      (data.office_hours?.length ? data.office_hours : (manual ? [] : [{}])).forEach((item) => appendOfficeHour(officeHours, item));
+      (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
       topicData.forEach((item) => appendTopic(topicsContainer, item));
 
       const topicsSection = overlay.querySelector('[data-slot="topics-section"]');

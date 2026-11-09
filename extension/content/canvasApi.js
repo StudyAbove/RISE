@@ -10,6 +10,8 @@ const RiseCanvasApi = (() => {
   // Canvas pages results; stop well before anything unreasonable.
   const MAX_PAGES = 50;
   const MAX_DESCRIPTION_LENGTH = 5000;
+  const MAX_SYLLABUS_LENGTH = 50000;
+  const MAX_SYLLABUS_FILE_BYTES = 8 * 1024 * 1024;
 
   /** Thrown when Canvas has no signed-in session to read with. */
   class CanvasSignedOutError extends Error {
@@ -60,7 +62,7 @@ const RiseCanvasApi = (() => {
   const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 
   /** Assignment descriptions are HTML; Rise only needs the text. */
-  function htmlToText(html) {
+  function htmlToText(html, maxLength = MAX_DESCRIPTION_LENGTH) {
     if (!html) {
       return '';
     }
@@ -73,7 +75,139 @@ const RiseCanvasApi = (() => {
       )
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, MAX_DESCRIPTION_LENGTH);
+      .slice(0, maxLength);
+  }
+
+  async function getCanvasObject(origin, path, label) {
+    const url = new URL(path, origin);
+    if (url.origin !== origin) throw new Error(`Canvas returned a ${label} outside this Canvas site.`);
+    const response = await fetch(url.href, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`Canvas could not read ${label} (HTTP ${response.status}).`);
+    return response.json();
+  }
+
+  function syllabusFileName(file) {
+    return String(file.display_name || file.filename || file.name || '');
+  }
+
+  function supportedSyllabusFile(file, nameHint = '') {
+    const name = syllabusFileName(file).toLowerCase();
+    const extension = name.split('.').pop();
+    return (/syllabus/i.test(name) || /syllabus/i.test(nameHint)) && ['pdf', 'docx', 'txt'].includes(extension);
+  }
+
+  async function downloadSyllabusFile(origin, file) {
+    const fileName = syllabusFileName(file) || `syllabus-${file.id}`;
+    const extension = fileName.toLowerCase().split('.').pop();
+    const urlValue = file.url || file.download_url;
+    if (!urlValue) throw new Error('Canvas did not provide a syllabus download link.');
+    const url = new URL(urlValue, origin);
+    if (url.protocol !== 'https:') throw new Error('Canvas returned an insecure syllabus link.');
+    const response = await fetch(url.href, {
+      credentials: url.origin === origin ? 'include' : 'omit',
+    });
+    if (!response.ok) throw new Error(`Canvas could not download the syllabus (HTTP ${response.status}).`);
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('The syllabus document is empty.');
+    if (blob.size > MAX_SYLLABUS_FILE_BYTES) throw new Error('Syllabus documents must be 8 MB or smaller.');
+
+    if (extension === 'txt') {
+      const text = (await blob.text()).slice(0, MAX_SYLLABUS_LENGTH);
+      if (!text.trim()) throw new Error('The syllabus text document is empty.');
+      return { kind: 'text', name: fileName, text };
+    }
+
+    const type = extension === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    return { kind: 'document', name: fileName, type, blob };
+  }
+
+  /** Search syllabus files before falling back to Canvas's HTML syllabus/page. */
+  async function findSyllabusSource(origin, courseId) {
+    const filesPath = `/api/v1/courses/${encodeURIComponent(courseId)}/files?per_page=100`;
+    const files = await getPaged(origin, filesPath).catch(() => []);
+    const candidates = files.filter(supportedSyllabusFile)
+      .sort((a, b) => Number(/syllabus/i.test(syllabusFileName(b))) - Number(/syllabus/i.test(syllabusFileName(a))));
+    for (const file of candidates) {
+      try {
+        const metadata = file.url ? file : await getCanvasObject(
+          origin,
+          `/api/v1/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(file.id)}`,
+          'syllabus file',
+        );
+        return await downloadSyllabusFile(origin, metadata);
+      } catch {
+        // Try another syllabus document before using the HTML fallback.
+      }
+    }
+
+    const modulesPath = `/api/v1/courses/${encodeURIComponent(courseId)}/modules?include[]=items&search_term=syllabus&per_page=100`;
+    const modules = await getPaged(origin, modulesPath).catch(() => []);
+    for (const module of modules) {
+      let items = Array.isArray(module.items) ? module.items : [];
+      if (!items.length && module.id != null) {
+        items = await getPaged(origin, `/api/v1/courses/${encodeURIComponent(courseId)}/modules/${encodeURIComponent(module.id)}/items?per_page=100`).catch(() => []);
+      }
+      for (const item of items) {
+        if (!/syllabus/i.test(item?.title || '') || item.type !== 'File' || item.content_id == null) continue;
+        try {
+          const metadata = await getCanvasObject(
+            origin,
+            `/api/v1/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(item.content_id)}`,
+            'syllabus file',
+          );
+          if (supportedSyllabusFile(metadata, item.title)) return await downloadSyllabusFile(origin, metadata);
+        } catch {
+          // Continue through module files in case another syllabus copy is available.
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /** HTML syllabus body and module pages are the fallback after files. */
+  async function findHtmlSyllabus(origin, courseId) {
+    try {
+      const course = await getCanvasObject(
+        origin,
+        `/api/v1/courses/${encodeURIComponent(courseId)}?include[]=syllabus_body`,
+        'course syllabus',
+      );
+      const text = htmlToText(course.syllabus_body || '', MAX_SYLLABUS_LENGTH);
+      if (text) return { name: 'Canvas course syllabus (HTML)', text };
+    } catch {
+      // Try an HTML page titled Syllabus below.
+    }
+
+    const modulesPath = `/api/v1/courses/${encodeURIComponent(courseId)}/modules?include[]=items&search_term=syllabus&per_page=100`;
+    const modules = await getPaged(origin, modulesPath).catch(() => []);
+    for (const module of modules) {
+      let items = Array.isArray(module.items) ? module.items : [];
+      if (!items.length && module.id != null) {
+        items = await getPaged(origin, `/api/v1/courses/${encodeURIComponent(courseId)}/modules/${encodeURIComponent(module.id)}/items?per_page=100`).catch(() => []);
+      }
+      for (const item of items) {
+        if (!/syllabus/i.test(item?.title || '') || item.type !== 'Page' || !item.page_url) continue;
+        try {
+          const page = await getCanvasObject(
+            origin,
+            `/api/v1/courses/${encodeURIComponent(courseId)}/pages/${encodeURIComponent(item.page_url)}`,
+            'syllabus page',
+          );
+          const text = htmlToText(page.body || '', MAX_SYLLABUS_LENGTH);
+          if (text) return { name: page.title || item.title || 'Canvas syllabus page (HTML)', text };
+        } catch {
+          // Continue in case another syllabus page is available.
+        }
+      }
+    }
+
+    return null;
   }
 
   function isSubmitted(submission) {
@@ -154,5 +288,5 @@ const RiseCanvasApi = (() => {
     };
   }
 
-  return { collect, collectCourses };
+  return { collect, collectCourses, findSyllabusSource, findHtmlSyllabus };
 })();

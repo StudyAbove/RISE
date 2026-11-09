@@ -51,6 +51,29 @@ async function callRise(body, token) {
   return data;
 }
 
+async function callRiseFormData(formData, action, token) {
+  const headers = { 'x-rise-extension-action': action };
+  if (token) headers['x-rise-extension-token'] = token;
+  let response;
+  try {
+    response = await fetch(self.RISE_CONFIG.supabaseUrl + FUNCTION_PATH, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+  } catch {
+    throw new Error("Rise couldn't be reached. Check your internet connection.");
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || 'Something went wrong. Please try again.');
+    error.code = data.code;
+    if (error.code === 'reconnect_required') await chrome.storage.local.remove(['token', 'lastSync']);
+    throw error;
+  }
+  return data;
+}
+
 async function getToken() {
   const { token } = await chrome.storage.local.get('token');
 
@@ -183,6 +206,81 @@ const messageHandlers = {
 
   async saveManualSyllabus({ courseId, syllabusInfo }) {
     return callRise({ action: 'saveManualSyllabus', courseId, syllabusInfo }, await getToken());
+  },
+
+  /** Search Canvas documents first, then HTML, and extract each selected syllabus. */
+  async pullSyllabusReviews({ origin, courses }) {
+    const token = await getToken();
+    const reviews = [];
+    for (const course of courses ?? []) {
+      const base = {
+        courseId: course.courseId,
+        courseCode: course.code,
+        courseTerm: course.term,
+        courseName: course.name,
+        aiPull: true,
+      };
+      try {
+        let source = await RiseCanvasApi.findSyllabusSource(origin, course.canvasCourseId);
+        if (source) {
+          const extracted = source.kind === 'text'
+            ? await callRise({
+              action: 'extractSyllabusText',
+              courseId: course.courseId,
+              courseName: course.name,
+              syllabusText: source.text,
+            }, token)
+            : await (() => {
+              const form = new FormData();
+              form.set('courseId', course.courseId);
+              form.set('courseName', course.name);
+              form.set('file', source.blob, source.name);
+              return callRiseFormData(form, 'extractSyllabusDocument', token);
+            })();
+          reviews.push({
+            ...base,
+            hasSyllabus: true,
+            sourceName: source.name,
+            sourceType: source.kind === 'text' ? 'text document' : source.type === 'application/pdf' ? 'PDF' : 'DOCX',
+            syllabusInfo: extracted.syllabusInfo ?? {},
+          });
+          continue;
+        }
+
+        source = await RiseCanvasApi.findHtmlSyllabus(origin, course.canvasCourseId);
+        if (!source) {
+          reviews.push({
+            ...base,
+            hasSyllabus: false,
+            processingError: 'No syllabus document or HTML syllabus was found. Fill in any details you know.',
+            syllabusInfo: {},
+          });
+          continue;
+        }
+
+        const extracted = await callRise({
+          action: 'extractSyllabusText',
+          courseId: course.courseId,
+          courseName: course.name,
+          syllabusText: source.text,
+        }, token);
+        reviews.push({
+          ...base,
+          hasSyllabus: true,
+          sourceName: source.name,
+          sourceType: 'HTML',
+          syllabusInfo: extracted.syllabusInfo ?? {},
+        });
+      } catch (error) {
+        reviews.push({
+          ...base,
+          hasSyllabus: false,
+          processingError: error.message || 'Could not pull this syllabus. Fill in any details you know.',
+          syllabusInfo: {},
+        });
+      }
+    }
+    return { reviews };
   },
 
   /** Opening Canvas or pressing Sync now. Skips if a sync just ran, unless forced. */
