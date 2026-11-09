@@ -25,6 +25,8 @@ export type RootStackParamList = {
   Breathing: undefined;
   ExtensionEmail: undefined;
   OfficeHours: undefined;
+  /** One class's assignments due this week, opened from the Weekly Forecast (#61). */
+  ClassWeek: { courseId: string; courseLabel: string };
   FocusSession: {
     assignmentId: string;
     assignmentTitle: string;
@@ -35,6 +37,9 @@ export type RootStackParamList = {
     }[];
   };
   TakeABreak: undefined;
+  BreakSession: {
+    breakId: string;
+  };
 };
 
 // Lets useNavigation() know the app's routes without passing a type each time.

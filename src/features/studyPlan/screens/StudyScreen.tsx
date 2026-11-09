@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Text,
   View,
-  type LayoutChangeEvent,
 } from 'react-native';
 import {
   useFocusEffect,
@@ -14,6 +13,7 @@ import {
 } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
+import { TabPageHeader } from '../../../components/TabPageHeader';
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { supabase } from '../../../lib/supabase';
@@ -25,16 +25,10 @@ import { colors } from '../../../theme/colors';
 import { textStyles } from '../../../theme/typography';
 import { AssignmentCard } from '../../assignments/components/AssignmentCard';
 import { SectionHeader } from '../../assignments/components/SectionHeader';
-import { HomeSkyBackdrop } from '../../home/components/HomeSkyBackdrop';
-import { getTimeOfDay } from '../../home/utils/greeting';
 import type { MainTabParamList } from '../../navigation/types';
-import { SettingsButton } from '../../settings/components/SettingsButton';
 import { getStudySections } from '../utils/studySections';
 
 type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
-
-// Let the hills extend slightly below the title.
-const SKY_OVERLAP_BELOW_HEADER = 8;
 
 export function StudyScreen() {
   const titleRef = useRef<Text>(null);
@@ -47,8 +41,6 @@ export function StudyScreen() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
 
-  // Measure the header so the sky lines up with the title.
-  const [headerBottom, setHeaderBottom] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // A pull-to-refresh keeps the sections on screen while it reloads.
@@ -108,12 +100,6 @@ export function StudyScreen() {
     }, [reloadCount]),
   );
 
-  const handleHeaderLayout = ({
-    nativeEvent: { layout },
-  }: LayoutChangeEvent) => {
-    setHeaderBottom(layout.y + layout.height);
-  };
-
   const refreshAssignments = () => {
     setReloadCount((count) => count + 1);
   };
@@ -139,27 +125,8 @@ export function StudyScreen() {
         />
       }
     >
-      {/* Draw the shared sky artwork behind the header. */}
-      {headerBottom !== null && (
-        <HomeSkyBackdrop
-          timeOfDay={getTimeOfDay(date)}
-          bottom={headerBottom + SKY_OVERLAP_BELOW_HEADER}
-        />
-      )}
-
-      <View onLayout={handleHeaderLayout}>
-        <View style={styles.headerRow}>
-          <SettingsButton />
-        </View>
-
-        <Text
-          ref={titleRef}
-          accessibilityRole="header"
-          style={styles.title}
-        >
-          Study Plan
-        </Text>
-      </View>
+      {/* The sky, settings button and title, shared with List and Analytics. */}
+      <TabPageHeader title="Study Plan" titleRef={titleRef} />
 
       <View style={styles.list}>
         {status === 'loading' && (
@@ -291,19 +258,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 36,
   },
-  headerRow: {
-    minHeight: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  title: {
-    ...textStyles.screenHeading,
-    color: colors.deepOlive,
-    paddingBottom: 8,
-  },
+  // Same gap below the title as before the shared header (8 + 16).
   list: {
     gap: 8,
-    marginTop: 16,
+    marginTop: 24,
   },
   // Spacing follows the Figma Study Planning Screen sections.
   section: {

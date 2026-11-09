@@ -2,7 +2,7 @@
 // pop-ups. After that, syncing happens in the background service worker on a
 // timer; opening Canvas just nudges it to sync if it hasn't recently.
 
-/* global RiseCanvasApi, RiseModal, sendToRise */
+/* global RiseCanvasApi, RiseModal, RiseSyllabusEvidence, sendToRise */
 (() => {
   function plural(count, word, pluralWord = `${word}s`) {
     return `${count} ${count === 1 ? word : pluralWord}`;
@@ -72,6 +72,14 @@
     });
   }
 
+  function openSyllabusEntry(course) {
+    if (!course?.courseId || !course?.canvasCourseId) return;
+    RiseModal.showSyllabusMethod({
+      courses: [course],
+      onSelected: () => syncNow({ announce: true, force: true }),
+    });
+  }
+
   async function start() {
     // Links from the welcome page and popup add ?rise=open, ?rise=sync or ?rise=classes.
     const requested = new URLSearchParams(location.search).get('rise');
@@ -85,7 +93,13 @@
       return;
     }
 
-    if (requested === 'classes') {
+    if (requested === 'syllabus-entry') {
+      const { pendingSyllabusEntry } = await chrome.storage.local.get('pendingSyllabusEntry');
+      if (pendingSyllabusEntry) {
+        await chrome.storage.local.remove('pendingSyllabusEntry');
+        openSyllabusEntry(pendingSyllabusEntry);
+      }
+    } else if (requested === 'classes') {
       openClassPicker();
     } else {
       syncNow({ announce: requested === 'sync', force: requested === 'sync' });
@@ -94,10 +108,73 @@
 
   // Requests from the toolbar popup.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === 'syncNow') {
+    if (message?.type === 'highlightSyllabusEvidence') {
+      sendResponse({ ok: true, result: { highlighted: RiseSyllabusEvidence.highlight(message.quote) } });
+      return;
+    } else if (message?.type === 'captureSyllabusPage') {
+      const match = location.pathname.match(/\/courses\/(\d+)/);
+      const text = document.body?.innerText?.trim() ?? '';
+      const pageLinks = [...document.querySelectorAll('a[href]')]
+        .map((link) => {
+          const url = link.href;
+          if (!/^https:\/\//i.test(url)) return null;
+          const contextNode = link.closest('p, li, td, dd, blockquote') || link.parentElement;
+          const nearbyText = [
+            link.closest('tr')?.innerText,
+            contextNode?.previousElementSibling?.innerText,
+            contextNode?.innerText,
+            contextNode?.nextElementSibling?.innerText,
+          ].filter(Boolean).join(' ');
+          return {
+            label: (link.innerText || link.textContent || '').trim().slice(0, 240),
+            url: url.slice(0, 2000),
+            nearbyText: (nearbyText || link.innerText || '').trim().slice(0, 1200),
+          };
+        })
+        .filter(Boolean)
+        .filter((link, index, all) => all.findIndex((item) => item.url === link.url) === index)
+        .slice(0, 100);
+      const attachments = [...document.querySelectorAll('a[href]')]
+        .map((link) => {
+          const href = link.href;
+          const apiEndpoint = link.getAttribute('data-api-endpoint');
+          const fileMatch = `${apiEndpoint || ''} ${href}`.match(/\/files\/(\d+)/);
+          const title = link.getAttribute('download') || link.textContent.trim() || link.title || href.split('/').pop();
+          const fileLike = fileMatch || /\.(pdf|docx|txt)(?:[?#]|$)/i.test(href) || /\.(pdf|docx|txt)$/i.test(title);
+          if (!fileLike || !/^https:\/\//i.test(href)) return null;
+          return { title: title.slice(0, 240), url: href, apiEndpoint, fileId: fileMatch?.[1] ?? null };
+        })
+        .filter(Boolean)
+        .filter((item, index, all) => all.findIndex((candidate) => candidate.url === item.url) === index)
+        .sort((a, b) => Number(/syllabus/i.test(b.title)) - Number(/syllabus/i.test(a.title)))
+        .slice(0, 20);
+      const currentFile = location.pathname.match(/\/courses\/(\d+)\/files\/(\d+)/);
+      if (currentFile && match?.[1] === currentFile[1] && !attachments.some((item) => item.fileId === currentFile[2])) {
+        attachments.unshift({
+          title: document.title || 'Canvas syllabus document',
+          url: location.href,
+          apiEndpoint: null,
+          fileId: currentFile[2],
+        });
+      }
+      sendResponse({
+        ok: true,
+        result: {
+          url: location.href,
+          title: document.title,
+          courseCanvasId: match?.[1] ?? null,
+          text: text.slice(0, 80000),
+          pageLinks,
+          attachments,
+        },
+      });
+      return;
+    } else if (message?.type === 'syncNow') {
       syncNow({ announce: true, force: true });
     } else if (message?.type === 'openClasses') {
       openClassPicker();
+    } else if (message?.type === 'openSyllabusEntry') {
+      openSyllabusEntry(message.course);
     } else if (message?.type === 'openConnect') {
       chrome.storage.local.get('noteSeen').then(({ noteSeen }) => openConnectFlow({ includeNote: !noteSeen }));
     } else {

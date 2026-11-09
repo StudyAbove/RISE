@@ -61,6 +61,7 @@ import { EventDetailsSheet } from '../components/EventDetailsSheet';
 import { EventSourceLegend } from '../components/EventSourceLegend';
 import { CalendarFilterNotice } from '../components/filters/CalendarFilterNotice';
 import { CalendarFilterSheet } from '../components/filters/CalendarFilterSheet';
+import { CalendarSearchSheet } from '../components/search/CalendarSearchSheet';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
 import { TodayEventsCard } from '../components/TodayEventsCard';
@@ -233,6 +234,18 @@ export function CalendarScreen() {
     setIsFilterSheetOpen,
   ] =
     useState(false);
+
+  const [
+    isSearchOpen,
+    setIsSearchOpen,
+  ] =
+    useState(false);
+
+  // The search result to show once the search sheet has closed (#78).
+  const searchResultToOpenRef =
+    useRef<CalendarEvent | null>(
+      null,
+    );
 
   // Says when a new event didn't reach a connected Google or Apple calendar (#123).
   const [
@@ -1356,6 +1369,14 @@ export function CalendarScreen() {
       }
     }
 
+    // An assignment's event (#159) follows the assignment, so it's never
+    // editable here.
+    if (
+      event.assignmentId
+    ) {
+      readOnly = true;
+    }
+
     openEditAfterDetailsRef.current =
       false;
 
@@ -1377,6 +1398,52 @@ export function CalendarScreen() {
 
     setDetailsVisible(
       true,
+    );
+  }
+
+  /*
+   * A search result (#78, AC6) opens its day in Day view with its details on
+   * top. iOS can't show Details while the search sheet is still closing, so
+   * that waits for handleSearchDismissed.
+   */
+  function handleSearchResult(
+    event: CalendarEvent,
+  ) {
+    searchResultToOpenRef.current =
+      event;
+
+    setIsSearchOpen(
+      false,
+    );
+
+    // onDismiss only fires on iOS.
+    if (
+      Platform.OS !==
+      'ios'
+    ) {
+      handleSearchDismissed();
+    }
+  }
+
+  function handleSearchDismissed() {
+    const event =
+      searchResultToOpenRef.current;
+
+    searchResultToOpenRef.current =
+      null;
+
+    if (!event) {
+      return;
+    }
+
+    handleShowDay(
+      parseISO(
+        event.startAt,
+      ),
+    );
+
+    void openEventDetails(
+      event,
     );
   }
 
@@ -1954,6 +2021,9 @@ export function CalendarScreen() {
         onOpenFilters={() =>
           setIsFilterSheetOpen(true)
         }
+        onOpenSearch={() =>
+          setIsSearchOpen(true)
+        }
         isFiltering={
           filtering
         }
@@ -2272,6 +2342,21 @@ export function CalendarScreen() {
         }
         onClose={() =>
           setIsFilterSheetOpen(false)
+        }
+      />
+
+      <CalendarSearchSheet
+        visible={
+          isSearchOpen
+        }
+        onClose={() =>
+          setIsSearchOpen(false)
+        }
+        onSelectEvent={
+          handleSearchResult
+        }
+        onDismiss={
+          handleSearchDismissed
         }
       />
     </View>

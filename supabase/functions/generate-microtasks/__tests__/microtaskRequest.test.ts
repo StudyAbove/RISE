@@ -224,16 +224,25 @@ describe('readMicrotaskPlan', () => {
     );
   });
 
-  it('accepts longer stages when needed for a large assignment', () => {
-    const plan = {
-      status: 'ready',
-      tasks: [
-        { title: 'Research and organize the project', minutes: 2400 },
-        { title: 'Develop the project deliverables', minutes: 3000 },
-        { title: 'Review and prepare the final submission', minutes: 600 },
-      ],
-    };
+  it('accepts a plan of twelve 90-minute tasks at the 18-hour limit', () => {
+    const tasks = Array.from({ length: 12 }, (_, index) => ({
+      title: `Project step ${index + 1}`,
+      minutes: 90,
+    }));
 
-    expect(readMicrotaskPlan(plan, 6000)).toEqual(plan);
+    expect(readMicrotaskPlan({ status: 'ready', tasks }, 1080)).toEqual({
+      status: 'ready',
+      tasks,
+    });
+  });
+
+  it('rejects a 91-minute task even when the plan total is correct', () => {
+    const tasks = [
+      { title: 'Draft the report', minutes: 91 },
+      { title: 'Review the draft', minutes: 29 },
+    ];
+
+    expect(() => readMicrotaskPlan({ status: 'ready', tasks }, 120))
+      .toThrow('Each task must take between 1 and 90 whole minutes.');
   });
 });

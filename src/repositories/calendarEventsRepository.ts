@@ -1,3 +1,11 @@
+import { addYears, subYears } from 'date-fns';
+
+import {
+  anyColumnContains,
+  eventMatchesSearch,
+  normalizeSearchTerm,
+  orderSearchResults,
+} from '../features/calendar/utils/calendarSearch';
 import { DEV_SKIP_AUTH } from '../lib/devFlags';
 import { supabase } from '../lib/supabase';
 import {
@@ -26,6 +34,14 @@ interface CalendarEventRow {
   // Added by the #31 migration; missing until it's applied.
   event_type?: CalendarEventType | null;
   reminder_minutes?: number | null;
+  // Added by the #159 migration. course_id comes back as the joined course.
+  assignment_id?: string | null;
+  course_id?: string | null;
+  courses?: {
+    name: string;
+    code: string | null;
+    sync_enabled: boolean;
+  } | null;
 }
 
 interface CalendarEventSyncRow
@@ -83,6 +99,16 @@ const toCalendarEvent = (
     row.event_type ?? undefined,
   reminderMinutes:
     row.reminder_minutes ?? undefined,
+  assignmentId:
+    row.assignment_id ?? undefined,
+  course:
+    row.course_id && row.courses
+      ? {
+          id: row.course_id,
+          name: row.courses.name,
+          code: row.courses.code ?? undefined,
+        }
+      : undefined,
 });
 
 const toCalendarEventSyncRecord = (
@@ -170,7 +196,8 @@ export async function createImportedCalendarEvent(
 
 /**
  * The signed-in student's events that overlap [rangeStart, rangeEnd),
- * earliest first.
+ * earliest first, each with its course. Leaves out events from courses the
+ * student stopped syncing, like the Assignments page does.
  *
  * Row-level security limits the query to the student's own events.
  */
@@ -185,28 +212,69 @@ export async function getCalendarEventsInRange(
     );
   }
 
-  const {
+  const rows =
+    await loadEventsWithCourses(
+      (columns) =>
+        supabase
+          .from('calendar_events')
+          .select(
+            columns,
+          )
+          .lt(
+            'start_at',
+            rangeEnd.toISOString(),
+          )
+          .gt(
+            'end_at',
+            rangeStart.toISOString(),
+          )
+          .order(
+            'start_at',
+          ),
+    );
+
+  return rows.map(
+    toCalendarEvent,
+  );
+}
+
+type EventsQuery = (
+  columns: string,
+) => PromiseLike<{
+  data: unknown;
+  error: { code?: string } | null;
+}>;
+
+/**
+ * Runs an events query with each event's course, leaving out events from
+ * courses the student stopped syncing.
+ */
+async function loadEventsWithCourses(
+  query: EventsQuery,
+): Promise<CalendarEventRow[]> {
+  // All columns, plus each event's course through course_id.
+  let {
     data,
     error,
   } =
-    await supabase
-      .from('calendar_events')
-      .select(
-        // All columns, so the new event_type and reminder_minutes come back
-        // once the #31 migration is applied, and this still works before it is.
+    await query(
+      '*, courses(name, code, sync_enabled)',
+    );
+
+  // Before the #159 migration there's no course_id to follow, and Supabase
+  // rejects the whole query (PGRST200). Load the events without courses.
+  if (
+    error?.code ===
+    'PGRST200'
+  ) {
+    ({
+      data,
+      error,
+    } =
+      await query(
         '*',
-      )
-      .lt(
-        'start_at',
-        rangeEnd.toISOString(),
-      )
-      .gt(
-        'end_at',
-        rangeStart.toISOString(),
-      )
-      .order(
-        'start_at',
-      );
+      ));
+  }
 
   if (error) {
     throw error;
@@ -214,8 +282,153 @@ export async function getCalendarEventsInRange(
 
   return (
     data as CalendarEventRow[]
+  ).filter(
+    (row) =>
+      row.courses?.sync_enabled !==
+      false,
+  );
+}
+
+// Plenty for one search term, while a very broad one ("a") can't load the
+// whole calendar.
+const SEARCH_QUERY_LIMIT = 500;
+
+/**
+ * The signed-in student's events whose title, location, description, or
+ * course name or code contains the term, ignoring case (#78). Upcoming
+ * events come first; see orderSearchResults.
+ *
+ * Row-level security limits every query to the student's own events and
+ * courses (AC9).
+ */
+export async function searchCalendarEvents(
+  term: string,
+): Promise<CalendarEvent[]> {
+  const search =
+    normalizeSearchTerm(
+      term,
+    );
+
+  if (!search) {
+    return [];
+  }
+
+  if (DEV_SKIP_AUTH) {
+    const now = new Date();
+
+    return orderSearchResults(
+      getMockCalendarEvents(
+        subYears(now, 1),
+        addYears(now, 1),
+      ).filter(
+        (event) =>
+          eventMatchesSearch(
+            event,
+            search,
+          ),
+      ),
+    );
+  }
+
+  // An event's own columns and its course's can't be OR'd in one filter, so
+  // matching courses are found first, then their events.
+  const [
+    textRows,
+    courseIds,
+  ] =
+    await Promise.all([
+      loadEventsWithCourses(
+        (columns) =>
+          supabase
+            .from('calendar_events')
+            .select(
+              columns,
+            )
+            .or(
+              anyColumnContains(
+                ['title', 'location', 'description'],
+                search,
+              ),
+            )
+            .order(
+              'start_at',
+            )
+            .limit(
+              SEARCH_QUERY_LIMIT,
+            ),
+      ),
+      findMatchingCourseIds(
+        search,
+      ),
+    ]);
+
+  const courseRows =
+    courseIds.length > 0
+      ? await loadEventsWithCourses(
+          (columns) =>
+            supabase
+              .from('calendar_events')
+              .select(
+                columns,
+              )
+              .in(
+                'course_id',
+                courseIds,
+              )
+              .order(
+                'start_at',
+              )
+              .limit(
+                SEARCH_QUERY_LIMIT,
+              ),
+        )
+      : [];
+
+  // An event can match both ways, e.g. "CECS 449 Lecture" in course CECS 449.
+  const eventsById =
+    new Map(
+      [...textRows, ...courseRows].map(
+        (row) => [
+          row.id,
+          toCalendarEvent(row),
+        ],
+      ),
+    );
+
+  return orderSearchResults([
+    ...eventsById.values(),
+  ]);
+}
+
+/** Ids of the student's courses whose name or code contains the term. */
+async function findMatchingCourseIds(
+  search: string,
+): Promise<string[]> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from('courses')
+      .select(
+        'id',
+      )
+      .or(
+        anyColumnContains(
+          ['name', 'code'],
+          search,
+        ),
+      );
+
+  if (error) {
+    throw error;
+  }
+
+  return (
+    data ?? []
   ).map(
-    toCalendarEvent,
+    (course) =>
+      course.id as string,
   );
 }
 

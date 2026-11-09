@@ -92,7 +92,7 @@ describe('AssignmentsScreen', () => {
     expect(await screen.findByLabelText('Show 2 past assignments')).toBeTruthy();
     expect(titlesOnScreen()).toEqual(['Quiz 3', 'Problem Set 6', 'Essay']);
     expect(screen.getByText('Overdue')).toBeTruthy();
-    expect(screen.getByText('High Priority')).toBeTruthy();
+    expect(screen.getByText('High')).toBeTruthy();
   });
 
   it('shows past assignments below current work when asked', async () => {
@@ -107,6 +107,25 @@ describe('AssignmentsScreen', () => {
 
     expect(titlesOnScreen()).toEqual(['Essay', 'Finished Lab', 'Week 1 Reading']);
     expect(screen.getByLabelText('Hide past assignments')).toBeTruthy();
+  });
+
+  it('shows saved microtask progress on each card', async () => {
+    mockFetchAssignments.mockResolvedValue([
+      assignment({
+        id: 'started',
+        title: 'Lab Report',
+        microtasks: [
+          { id: 't1', title: 'Collect data', position: 1, estimatedMinutes: 15, completed: true },
+          { id: 't2', title: 'Write it up', position: 2, estimatedMinutes: 45, completed: false },
+        ],
+      }),
+    ]);
+
+    await render(<AssignmentsScreen />);
+
+    // 15 of the 60 minutes are done.
+    expect(await screen.findByText('25%')).toBeTruthy();
+    expect(screen.getByLabelText(/Lab Report\..*25% complete\./)).toBeTruthy();
   });
 
   it('says when everything is done', async () => {

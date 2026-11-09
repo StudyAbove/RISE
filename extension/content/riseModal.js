@@ -106,7 +106,6 @@ const RiseModal = (() => {
 
         <button class="button button--gold" type="submit">Connect →</button>
       </form>`,
-
     classes: ({ isSetup }) => `
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rise-title">
         ${isSetup ? '' : `<button class="close-button" type="button" data-action="close" aria-label="Close">
@@ -137,6 +136,84 @@ const RiseModal = (() => {
         <p class="info-box" data-slot="status" role="status">📚 Importing your courses and assignments…</p>
         <button class="link-button" type="button" data-action="close">Done</button>
       </div>`,
+
+    syllabusMethod: () => `
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="rise-title">
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <h2 class="title title--start" id="rise-title">To save syllabi information:</h2>
+        <div class="syllabus-method-options">
+          <button class="button" type="button" data-action="manual">Manually Type</button>
+          <button class="button" type="button" data-action="ai">AI Pull</button>
+        </div>
+        <p class="error" role="alert" data-slot="method-error" hidden></p>
+      </div>`,
+
+    syllabusReview: ({ index, total, manual = false }) => `
+      <form class="dialog dialog--review${manual ? ' dialog--manual-card' : ''}" role="dialog" aria-modal="true" aria-labelledby="rise-title" novalidate>
+        <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
+        <p class="review-progress" data-slot="progress"></p>
+        <button class="review-next" type="button" data-action="next" aria-label="Save and go to the next class" ${manual && index < total - 1 ? '' : 'hidden'}>→</button>
+        ${manual
+          ? `<div class="manual-title-row"><h2 class="title title--start" id="rise-title" data-slot="title">Class</h2><button class="manual-not-posted" type="button" data-action="not-posted">Syllabus not Posted</button></div>`
+          : '<h2 class="title title--start" id="rise-title" data-slot="title">Review class information</h2>'}
+        <p class="subtitle subtitle--start" data-slot="course-name"></p>
+        <p class="review-note" data-slot="syllabus-note"></p>
+
+        ${manual ? `<div class="manual-tabs" role="tablist" aria-label="Class information">
+          <button type="button" role="tab" aria-selected="true" data-tab="details">Class Details</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="office-hours">Office Hours</button>
+        </div>` : ''}
+
+        <section class="review-section" data-panel="details">
+          ${manual ? '' : '<h3>Syllabi</h3>'}
+          <div class="review-grid">
+            <label class="review-field">Professor name
+              <input name="professorName" maxlength="200" placeholder="Unavailable">
+            </label>
+            <label class="review-field">Professor email
+              <input name="professorEmail" type="email" maxlength="254" placeholder="Unavailable">
+            </label>
+          </div>
+          ${manual ? `<label class="review-field">Class location
+            <input name="classLocation" maxlength="500" placeholder="Class location">
+          </label>` : ''}
+          <label class="review-field">Late-work policy
+            <textarea name="lateWork" placeholder="Late-work policy"></textarea>
+          </label>
+          <label class="review-field">Grading method
+            <select name="gradingMethod">
+              <option value="weighted_categories">${manual ? 'Percentage' : 'Weighted categories'}</option>
+              <option value="points">Points</option>
+              ${manual ? '<option value="other">Other</option>' : ''}
+            </select>
+          </label>
+          <section class="review-section" data-slot="topics-section" ${manual ? 'hidden' : ''}>
+            <div class="review-section-heading"><h3>Grading topics</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
+            <div class="review-rows" data-slot="topics"></div>
+          </section>
+        </section>
+
+        <section class="review-section" data-panel="office-hours" ${manual ? 'hidden' : ''}>
+          <div class="review-section-heading"><h3>Office hours</h3><button class="small-button" type="button" data-action="add-office-hour">Add time</button></div>
+          <div class="review-rows" data-slot="office-hours"></div>
+        </section>
+
+        <p class="error" role="alert" hidden></p>
+        <button class="button button--gold" type="submit" ${manual && index < total - 1 ? 'hidden' : ''}>${manual ? 'Done' : 'Confirm and continue'}</button>
+      </form>`,
+
+    syllabusMissingSummary: () => `
+      <div class="dialog dialog--centered" role="dialog" aria-modal="true" aria-labelledby="rise-title">
+        <h2 class="title title--large" id="rise-title">Review complete</h2>
+        <section class="syllabus-warning" role="alert">
+          <div class="syllabus-warning__label">Warning</div>
+          <h3>Syllabus not found</h3>
+          <p>Couldn’t find an instance of the class syllabus for:</p>
+          <ul data-slot="missing-classes"></ul>
+        </section>
+        <button class="button button--gold" type="button" data-action="done">Continue</button>
+      </div>`,
+
   };
 
   let host = null;
@@ -274,9 +351,14 @@ const RiseModal = (() => {
         await sendToRise({ type: 'pair', email, code, origin: location.origin });
         showClassPicker({
           isSetup: true,
-          onSaved: () => {
-            showConnected(email);
-            onConnected();
+          onSaved: (courses) => {
+            showSyllabusMethod({
+              courses,
+              onSelected: () => {
+                showConnected(email);
+                onConnected();
+              },
+            });
           },
         });
       } catch (error) {
@@ -400,7 +482,7 @@ const RiseModal = (() => {
           type: 'saveCourseChoices',
           choices: courses.map(({ canvasCourseId, color, syncEnabled }) => ({ canvasCourseId, color, syncEnabled })),
         });
-        onSaved();
+        onSaved(courses.filter((course) => course.syncEnabled));
       } catch (error) {
         showError(error.message);
         saveButton.disabled = false;
@@ -413,6 +495,276 @@ const RiseModal = (() => {
     const overlay = render('connected');
     overlay.querySelector('[data-slot="email"]').textContent = email;
     overlay.querySelector('[data-action="close"]').addEventListener('click', close);
+  }
+
+  function showSyllabusMethod({ courses }) {
+    const overlay = render('syllabusMethod');
+
+    async function beginFlow(mode, button) {
+      const manualButton = overlay.querySelector('[data-action="manual"]');
+      const aiButton = overlay.querySelector('[data-action="ai"]');
+      aiButton.disabled = true;
+      manualButton.disabled = true;
+      button.textContent = 'Opening…';
+      const errorText = overlay.querySelector('[data-slot="method-error"]');
+      errorText.hidden = true;
+      try {
+        await sendToRise({
+          type: 'startSyllabusSourceFlow',
+          mode,
+          courses: courses.map(({ courseId, canvasCourseId, code, term, name }) => ({
+            courseId, canvasCourseId, code, term, name,
+          })),
+        });
+        await chrome.storage.local.set({ syllabusEntryPreference: mode });
+        close();
+      } catch (error) {
+        errorText.textContent = error.message || 'Could not open the syllabus finder.';
+        errorText.hidden = false;
+        aiButton.disabled = false;
+        manualButton.disabled = false;
+        button.textContent = mode === 'manual' ? 'Manually Type' : 'AI Pull';
+      }
+    }
+
+    overlay.querySelector('[data-action="manual"]').addEventListener('click', (event) => beginFlow('manual', event.currentTarget));
+    overlay.querySelector('[data-action="ai"]').addEventListener('click', (event) => beginFlow('ai', event.currentTarget));
+  }
+
+  function showSyllabusReviews({ reviews, onSave, manual = false, onDone = close }) {
+    const queue = [...reviews];
+    const notPostedCourses = [];
+    let index = 0;
+
+    function showNotPostedSummary() {
+      const overlay = render('syllabusMissingSummary');
+      const list = overlay.querySelector('[data-slot="missing-classes"]');
+      notPostedCourses.forEach((course) => {
+        const item = document.createElement('li');
+        item.textContent = course.courseName;
+        list.append(item);
+      });
+      overlay.querySelector('[data-action="done"]').addEventListener('click', onDone);
+    }
+
+    function appendInput(parent, labelText, name, value = '', type = 'text') {
+      const label = document.createElement('label');
+      label.className = 'review-field review-field--compact';
+      label.textContent = labelText;
+      const input = document.createElement('input');
+      input.name = name;
+      input.type = type;
+      input.value = value ?? '';
+      if (name === 'title') input.maxLength = 100;
+      if (name === 'office_location') input.maxLength = 500;
+      if (name === 'booking_link') input.maxLength = 2000;
+      if (type === 'time') input.step = '60';
+      label.append(input);
+      parent.append(label);
+      return input;
+    }
+
+    function appendOfficeHour(parent, value = {}) {
+      const row = document.createElement('div');
+      row.className = 'review-row review-row--office';
+      const dayLabel = document.createElement('label');
+      dayLabel.className = 'review-field review-field--compact';
+      dayLabel.textContent = 'Day';
+      const day = document.createElement('select');
+      day.name = 'dayOfWeek';
+      [['', 'Select day'], ...[['Sunday', 0], ['Monday', 1], ['Tuesday', 2], ['Wednesday', 3], ['Thursday', 4], ['Friday', 5], ['Saturday', 6]].map(([label, value]) => [value, label])]
+        .forEach(([key, text]) => {
+          const option = document.createElement('option');
+          option.value = key;
+          option.textContent = text;
+          day.append(option);
+        });
+      day.value = value.day_of_week ?? value.dayOfWeek ?? '';
+      dayLabel.append(day);
+      row.append(dayLabel);
+      if (manual) appendInput(row, 'Office location', 'office_location', value.office_location);
+      appendInput(row, 'Start', 'start', value.start_time ?? value.start, 'time');
+      appendInput(row, 'End', 'end', value.end_time ?? value.end, 'time');
+
+      const bookingLabel = document.createElement('label');
+      bookingLabel.className = 'review-checkbox';
+      const booking = document.createElement('input');
+      booking.type = 'checkbox';
+      booking.name = 'required_booking';
+      booking.checked = Boolean(value.required_booking);
+      bookingLabel.append(booking, document.createTextNode('By appointment / booking required'));
+      row.append(bookingLabel);
+      appendInput(row, 'Booking link (optional)', 'booking_link', value.booking_link ?? value.schedule_booking, 'url');
+
+      const remove = document.createElement('button');
+      remove.className = 'small-button small-button--remove';
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', () => row.remove());
+      row.append(remove);
+      parent.append(row);
+    }
+
+    function appendTopic(parent, value = {}) {
+      const row = document.createElement('div');
+      row.className = 'review-row review-row--topic';
+      appendInput(row, 'Topic', 'title', value.title);
+      const percentage = appendInput(row, 'Percent', 'percentage', value.percentage, 'number');
+      percentage.min = '0';
+      percentage.max = '100';
+      percentage.step = '0.01';
+      appendInput(row, 'Total count (optional)', 'total_count', value.total_count ?? '', 'number').min = '1';
+
+      const remove = document.createElement('button');
+      remove.className = 'small-button small-button--remove';
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', () => row.remove());
+      row.append(remove);
+      parent.append(row);
+    }
+
+    function renderReview() {
+      if (index >= queue.length) {
+        if (notPostedCourses.length) showNotPostedSummary();
+        else onDone();
+        return;
+      }
+
+      const review = queue[index];
+      const overlay = render('syllabusReview', { index, total: queue.length, manual });
+      const form = overlay.querySelector('form');
+      const data = review.syllabusInfo ?? review;
+      const topicData = data.topics ?? data.grading_scale?.topics ?? [];
+      const courseName = review.courseName ?? review.name ?? 'Class';
+
+      overlay.querySelector('[data-slot="progress"]').textContent = `Class ${index + 1} of ${queue.length}`;
+      overlay.querySelector('[data-slot="course-name"]').textContent = manual
+        ? [review.courseCode, review.courseTerm].filter(Boolean).join(' · ')
+        : courseName;
+      overlay.querySelector('[data-slot="title"]').textContent = manual ? courseName : 'Review class information';
+      overlay.querySelector('[data-slot="syllabus-note"]').textContent = review.hasSyllabus === false
+        ? 'RISE could not find a syllabus for this class. Add the details you know below.'
+        : 'Check the information found in the syllabus and correct anything that needs updating.';
+      const syllabusNote = overlay.querySelector('[data-slot="syllabus-note"]');
+      if (review.aiPull) {
+        syllabusNote.textContent = review.processingError
+          || `AI pulled information from ${review.sourceName} (${review.sourceType}). Review and correct the fields below.`;
+        syllabusNote.hidden = false;
+      } else if (manual) {
+        syllabusNote.hidden = true;
+      }
+
+      form.elements.gradingMethod.value = data.grading_method ?? 'points';
+      form.elements.professorName.value = data.professorName ?? data.professor_name ?? '';
+      form.elements.professorEmail.value = data.professorEmail ?? data.professor_email ?? '';
+      form.elements.lateWork.value = data.late_work ?? data.lateWork ?? '';
+      if (manual) {
+        form.elements.classLocation.value = data.class_location ?? '';
+      }
+
+      const officeHours = overlay.querySelector('[data-slot="office-hours"]');
+      const topicsContainer = overlay.querySelector('[data-slot="topics"]');
+      (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
+      topicData.forEach((item) => appendTopic(topicsContainer, item));
+
+      const topicsSection = overlay.querySelector('[data-slot="topics-section"]');
+      const refreshTopicsVisibility = () => {
+        topicsSection.hidden = form.elements.gradingMethod.value !== 'weighted_categories';
+      };
+      form.elements.gradingMethod.addEventListener('change', refreshTopicsVisibility);
+      refreshTopicsVisibility();
+
+      if (manual) {
+        overlay.querySelectorAll('[data-tab]').forEach((tab) => {
+          tab.addEventListener('click', () => {
+            const selectedPanel = tab.dataset.tab;
+            overlay.querySelectorAll('[data-tab]').forEach((item) => {
+              item.setAttribute('aria-selected', String(item === tab));
+            });
+            overlay.querySelectorAll('[data-panel]').forEach((panel) => {
+              panel.hidden = panel.dataset.panel !== selectedPanel;
+            });
+          });
+        });
+      }
+
+      overlay.querySelector('[data-action="add-office-hour"]')?.addEventListener('click', () => appendOfficeHour(officeHours));
+      overlay.querySelector('[data-action="add-topic"]')?.addEventListener('click', () => appendTopic(topicsContainer));
+      const errorText = form.querySelector('.error');
+      overlay.querySelector('[data-action="next"]').addEventListener('click', () => form.requestSubmit());
+      overlay.querySelector('[data-action="not-posted"]')?.addEventListener('click', () => {
+        notPostedCourses.push({ courseName });
+        index += 1;
+        renderReview();
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorText.hidden = true;
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        button.textContent = 'Saving…';
+
+        const valueByRow = (slot, build) => [...overlay.querySelectorAll(`[data-slot="${slot}"] .review-row`)]
+          .map(build)
+          .filter((item) => Object.values(item).some((value) => value !== '' && value !== false && value != null));
+        const optionalText = (value) => value.trim() || null;
+
+        const confirmed = {
+          course_id: review.courseId ?? review.id,
+          professor_name: optionalText(form.elements.professorName.value),
+          professor_email: optionalText(form.elements.professorEmail.value),
+          late_work: optionalText(form.elements.lateWork.value),
+          class_location: manual ? optionalText(form.elements.classLocation.value) : null,
+          grading_method: form.elements.gradingMethod.value,
+          office_hours: valueByRow('office-hours', (row) => ({
+              day_of_week: row.querySelector('[name="dayOfWeek"]').value === '' ? null : Number(row.querySelector('[name="dayOfWeek"]').value),
+              start_time: optionalText(row.querySelector('[name="start"]').value),
+              end_time: optionalText(row.querySelector('[name="end"]').value),
+              office_location: optionalText(row.querySelector('[name="office_location"]')?.value ?? ''),
+              required_booking: row.querySelector('[name="required_booking"]').checked,
+              booking_link: optionalText(row.querySelector('[name="booking_link"]').value),
+          })),
+          topics: form.elements.gradingMethod.value === 'weighted_categories'
+            ? valueByRow('topics', (row) => ({
+              title: row.querySelector('[name="title"]').value.trim(),
+              percentage: row.querySelector('[name="percentage"]').value === ''
+                ? null
+                : Number(row.querySelector('[name="percentage"]').value),
+              total_count: row.querySelector('[name="total_count"]').value === ''
+                ? null
+                : Number(row.querySelector('[name="total_count"]').value),
+            }))
+            : [],
+        };
+
+        try {
+          if (confirmed.office_hours.some((item) => {
+            const appointmentOnly = item.required_booking && item.day_of_week == null && !item.start_time && !item.end_time;
+            return !appointmentOnly && (item.day_of_week == null || !item.start_time || !item.end_time);
+          })) {
+            throw new Error('For each office-hours entry, add a day, start time, and end time, unless it is by appointment.');
+          }
+          if (confirmed.topics.some((item) => !item.title || item.percentage == null)) {
+            throw new Error('For each grading topic, add a title and percentage.');
+          }
+
+          await onSave(confirmed, review);
+          index += 1;
+          if (manual && index >= queue.length) onDone();
+          else renderReview();
+        } catch (error) {
+          errorText.textContent = error.message || 'Could not save this review. Please try again.';
+          errorText.hidden = false;
+          button.disabled = false;
+          button.textContent = manual && index === queue.length - 1 ? 'Done' : 'Confirm and continue';
+        }
+      });
+    }
+
+    if (queue.length) renderReview();
+    else onDone();
   }
 
   /** Updates the status box on the "You're connected" screen, if it's open. */
@@ -441,5 +793,5 @@ const RiseModal = (() => {
     setTimeout(() => toast.remove(), 4000);
   }
 
-  return { showNote, showWelcome, showClassPicker, showSyncResult, showToast };
+  return { showNote, showWelcome, showClassPicker, showSyllabusMethod, showSyllabusReviews, showSyncResult, showToast, dismiss: close };
 })();

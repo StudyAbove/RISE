@@ -17,6 +17,9 @@ import {
   fetchAssignmentById,
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
+import { getStudySecondsForAssignment } from '../../../repositories/studySessionsRepository';
+import ClockIcon from '../../../../assets/icons/clock.svg';
+import { formatStudyTime } from '../../studySessions/utils/studyTime';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { BackButton } from '../../../components/BackButton';
 import { colors } from '../../../theme/colors';
@@ -44,6 +47,8 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
+  // Recorded study time for this assignment (#49); 0 hides the row.
+  const [studySeconds, setStudySeconds] = useState(0);
     // Selection prepares a session; it does not mark tasks complete.
   const [selectedTasks, setSelectedTasks] = useState<Microtask[]>([]);
   // Remember each assignment's expanded description while this screen is mounted,
@@ -83,6 +88,26 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
         active = false;
       };
     }, [assignmentId, reloadCount]),
+  );
+
+  // Reload the recorded study time too, so a session that just ended counts.
+  // On its own, so a problem here never affects the assignment itself.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      getStudySecondsForAssignment(assignmentId)
+        .then((seconds) => {
+          if (active) setStudySeconds(seconds);
+        })
+        .catch((error: Error) => {
+          console.log('Could not load study time:', error.message);
+        });
+
+      return () => {
+        active = false;
+      };
+    }, [assignmentId]),
   );
 
   const courseLabel =
@@ -206,6 +231,15 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
                 : 'No due date'}
             </Text>
           </View>
+
+          {studySeconds >= 60 && (
+            <View style={styles.dueRow}>
+              <ClockIcon width={16} height={16} />
+              <Text style={styles.dueText}>
+                Studied {formatStudyTime(studySeconds)}
+              </Text>
+            </View>
+          )}
 
           {/* Show the full Canvas description without inventing a summary. */}
           <AssignmentDescription

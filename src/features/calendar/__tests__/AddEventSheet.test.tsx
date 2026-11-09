@@ -140,6 +140,24 @@ describe('AddEventSheet', () => {
       expect(saved).toMatchObject({ eventType: 'class', location: 'Room 204', reminderMinutes: 1440 });
     });
 
+    // #38 AC1: every type can be chosen and is saved with the event.
+    it.each([
+      ['Class', 'class'],
+      ['Assignment', 'assignment'],
+      ['Study', 'study'],
+      ['Personal', 'personal'],
+      ['Wellness', 'wellness'],
+    ])('saves the %s type', async (label, eventType) => {
+      mockCreateCalendarEvent.mockResolvedValue(savedEvent);
+      await renderSheet();
+      await fillRequiredFields();
+
+      await fireEvent.press(screen.getByRole('radio', { name: label }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Add Event' }));
+
+      expect(mockCreateCalendarEvent.mock.calls[0][0].eventType).toBe(eventType);
+    });
+
     // #37 AC3: Location is optional, and a blank one isn't saved.
     it('saves without a location when Location is only spaces', async () => {
       mockCreateCalendarEvent.mockResolvedValue(savedEvent);

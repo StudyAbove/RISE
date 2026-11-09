@@ -25,6 +25,7 @@ import { fonts, textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
 import { useFocusCountdown } from '../hooks/useFocusCountdown';
 import { setMicrotaskCompleted } from '../../../repositories/microtasksRepository';
+import { recordStudySession } from '../../../repositories/studySessionsRepository';
 import {
   TaskCompletionModal,
   type TaskCompletionChoice,
@@ -184,6 +185,30 @@ export function FocusSessionScreen({ route, navigation }: Props) {
       );
     };
   }, [shouldCountSessionTime]);
+
+  // Record the focused time when the session closes, however the student
+  // leaves: Done, Back, or a swipe (#49). A break opens on top and doesn't
+  // close it. Saving happens in the background and never holds up leaving.
+  const sessionOpenedAtRef = useRef(new Date());
+
+  useEffect(
+    () => () => {
+      const activeStartedAt = activeSessionStartedAtRef.current;
+      const focusedMs =
+        accumulatedSessionMsRef.current +
+        (activeStartedAt === null ? 0 : Date.now() - activeStartedAt);
+
+      recordStudySession({
+        assignmentId,
+        startedAt: sessionOpenedAtRef.current,
+        endedAt: new Date(),
+        focusedSeconds: focusedMs / 1000,
+      }).catch((error: Error) =>
+        console.log('Could not record the study session:', error.message),
+      );
+    },
+    [assignmentId],
+  );
 
   // Once a cycle reaches zero, ask the student what to do.
   // Time expiring never completes the task automatically.

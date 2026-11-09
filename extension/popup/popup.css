@@ -65,6 +65,85 @@ h1 {
   color: var(--ink);
 }
 
+.missing-syllabi {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.missing-syllabi__title {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.missing-syllabi__list {
+  display: grid;
+  gap: 7px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.missing-syllabus-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #ead7d4;
+  border-radius: 9px;
+  background: #fff8f6;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.missing-syllabus-button:hover {
+  border-color: #c98980;
+  background: #fff0ed;
+}
+
+.missing-syllabus-button:focus-visible {
+  outline: 3px solid rgba(159, 71, 63, 0.45);
+  outline-offset: 2px;
+}
+
+.missing-syllabus-button:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.missing-syllabus-warning {
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #9f473f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.missing-syllabus-name {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.missing-syllabi__empty,
+.missing-syllabi__error {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.missing-syllabi__error {
+  color: var(--error);
+}
+
 .info-box {
   margin: 18px 0 16px;
   padding: 12px 14px;

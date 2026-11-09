@@ -18,7 +18,9 @@ import { AssignmentDetailsScreen } from '../../assignments/screens/AssignmentDet
 import { BreathingScreen } from '../../help/screens/BreathingScreen';
 import { ExtensionEmailScreen } from '../../help/screens/ExtensionEmailScreen';
 import { OfficeHoursScreen } from '../../help/screens/OfficeHoursScreen';
+import { ClassWeekScreen } from '../../home/screens/ClassWeekScreen';
 import { TakeABreakScreen } from '../../breaks/screens/TakeABreakScreen';
+import { BreakSessionScreen } from '../../breaks/screens/BreakSessionScreen';
 import CheckInboxScreen from '../../auth/screens/CheckInboxScreen';
 import CreateAccountScreen from '../../auth/screens/CreateAccountScreen';
 import LoginScreen from '../../auth/screens/LoginScreen';
@@ -686,6 +688,10 @@ export function RootNavigator({
             <Stack.Screen name="ExtensionEmail" component={ExtensionEmailScreen} />
             <Stack.Screen name="OfficeHours" component={OfficeHoursScreen} />
             <Stack.Screen
+              name="ClassWeek"
+              component={ClassWeekScreen}
+            />
+            <Stack.Screen
               name="FocusSession"
               component={FocusSessionScreen}
             />
@@ -697,6 +703,13 @@ export function RootNavigator({
                 gestureEnabled: false,
               }}
 
+            />
+            <Stack.Screen
+              name="BreakSession"
+              component={BreakSessionScreen}
+              options={{
+                gestureEnabled: false,
+              }}
             />
           </>
         )}

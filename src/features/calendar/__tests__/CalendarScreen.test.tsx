@@ -32,6 +32,15 @@ jest.mock('expo-sqlite/kv-store', () => ({
   },
 }));
 
+// Calendar search results (#78).
+const mockSearchCalendarEvents = jest.fn();
+
+// The student's synced classes, for the filter sheet's Courses rows (#159).
+const mockFetchCanvasCourses = jest.fn(() => Promise.resolve([] as unknown[]));
+jest.mock('../../../repositories/canvasRepository', () => ({
+  fetchCanvasCourses: () => mockFetchCanvasCourses(),
+}));
+
 const mockGetCalendarEventsInRange =
   jest.fn();
 
@@ -116,6 +125,11 @@ jest.mock(
 jest.mock(
   '../../../repositories/calendarEventsRepository',
   () => ({
+    searchCalendarEvents:
+      (...args: unknown[]) =>
+        mockSearchCalendarEvents(
+          ...args,
+        ),
     getCalendarEventsInRange:
       (...args: unknown[]) =>
         mockGetCalendarEventsInRange(
@@ -2083,7 +2097,7 @@ describe(
     );
 
     it(
-      'shows search as not yet available, and the ••• filters as available (#79)',
+      'shows search (#78) and the ••• filters (#79) as available',
       async () => {
         await render(
           <CalendarScreen />,
@@ -2096,7 +2110,7 @@ describe(
               name: 'Search',
             },
           ),
-        ).toBeDisabled();
+        ).toBeEnabled();
 
         expect(
           screen.getByRole(
@@ -3093,7 +3107,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('hides a type that is turned off, says so, and remembers it (AC1, AC2, AC6)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
@@ -3106,12 +3120,13 @@ describe('CalendarScreen: filters (#79)', () => {
     expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
       hiddenTypes: ['class'],
       hiddenSources: [],
+      hiddenCourses: [],
     });
   });
 
   it('hides events with no type, and a source, together (AC5)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('switch', { name: 'No type' }));
@@ -3125,7 +3140,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('changes nothing when the sheet is closed with ✕', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
@@ -3137,7 +3152,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('shows only events within the chosen dates (AC4)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     await fireEvent.press(screen.getByRole('button', { name: 'From, Any date' }));
@@ -3150,7 +3165,7 @@ describe('CalendarScreen: filters (#79)', () => {
 
   it('says when nothing matches, in the calendar and today\'s card (AC8)', async () => {
     await render(<CalendarScreen />);
-    await screen.findByLabelText(/^Chem Lab, RISE, 9:00 AM to /);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
 
     await openFilters();
     for (const name of ['RISE', 'Google Calendar', 'Apple Calendar']) {
@@ -3175,6 +3190,139 @@ describe('CalendarScreen: filters (#79)', () => {
     expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
       hiddenTypes: [],
       hiddenSources: [],
+      hiddenCourses: [],
     });
+  });
+});
+
+describe('CalendarScreen: assignment events (#159)', () => {
+  it('opens an assignment read-only, with its course and no Edit or Delete', async () => {
+    const assignmentEvent: CalendarEvent = {
+      ...makeEvent('Project 1', new Date(2026, 10, 13, 22, 59), new Date(2026, 10, 13, 23, 59)),
+      source: 'canvas',
+      eventType: 'assignment',
+      assignmentId: 'assignment-1',
+      course: { id: 'course-1', name: 'Software Engineering', code: 'CECS 491B' },
+    };
+    mockGetCalendarEventsInRange.mockResolvedValue([assignmentEvent]);
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+
+    await render(<CalendarScreen />);
+    await fireEvent.press((await screen.findAllByLabelText(/^Project 1, (Assignment, )?Canvas, /))[0]);
+
+    expect(await screen.findByRole('header', { name: 'Read-only calendar event' })).toBeOnTheScreen();
+    expect(screen.getByText('Software Engineering')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+});
+
+describe('CalendarScreen: course filters (#159)', () => {
+  const at = (hour: number) => new Date(2026, 10, 13, hour).toISOString();
+  const project: CalendarEvent = {
+    id: 'project', userId: 'user-1', title: 'Project 1', startAt: at(9), endAt: at(10), source: 'canvas',
+    eventType: 'assignment', assignmentId: 'assignment-1',
+    course: { id: 'cecs-491b', name: 'Software Engineering', code: 'CECS 491B' },
+  };
+  const gym: CalendarEvent = {
+    id: 'gym', userId: 'user-1', title: 'Gym', startAt: at(13), endAt: at(14), source: 'rise', eventType: 'wellness',
+  };
+  const chip = (title: string) => screen.queryAllByLabelText(new RegExp(`^${title}, .*, \\d+:\\d+ [AP]M to `));
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([project, gym]);
+    mockFetchCanvasCourses.mockResolvedValue([
+      { id: 'cecs-491b', name: 'Software Engineering', code: 'CECS 491B', color: 'sunbeam', syncEnabled: true },
+    ]);
+  });
+
+  it('hides a course that is unchecked, keeping events with no course', async () => {
+    await render(<CalendarScreen />);
+    expect((await screen.findAllByLabelText(/^Project 1, /)).length).toBeGreaterThan(0);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'CECS 491B' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Project 1')).toHaveLength(0);
+    expect(chip('Gym').length).toBeGreaterThan(0);
+    expect(screen.getByText('Some events are hidden')).toBeOnTheScreen();
+  });
+
+  it('shows only course work when All other courses is unchecked', async () => {
+    await render(<CalendarScreen />);
+    await screen.findAllByLabelText(/^Gym, /);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'All other courses' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Gym')).toHaveLength(0);
+    expect(chip('Project 1').length).toBeGreaterThan(0);
+  });
+});
+
+describe('CalendarScreen: search (#78)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const project: CalendarEvent = {
+    id: 'project', userId: 'user-1', title: 'CECS 449 Project 1',
+    startAt: new Date(2026, 10, 23, 22, 59).toISOString(), endAt: new Date(2026, 10, 23, 23, 59).toISOString(),
+    source: 'rise', eventType: 'study',
+  };
+
+  async function searchFor(text: string) {
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+    await fireEvent.changeText(screen.getByLabelText('Search calendar'), text);
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+  }
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([]);
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+    mockSearchCalendarEvents.mockReset();
+    mockSearchCalendarEvents.mockResolvedValue([project]);
+  });
+
+  it('opens search from the header and finds events (AC1)', async () => {
+    await render(<CalendarScreen />);
+    await searchFor('449');
+
+    expect(mockSearchCalendarEvents).toHaveBeenCalledWith('449');
+    expect(await screen.findByRole('button', { name: /^CECS 449 Project 1, Mon, Nov 23/ })).toBeOnTheScreen();
+  });
+
+  it('opens a result on its day in Day view, with its details (AC6)', async () => {
+    await render(<CalendarScreen />);
+    await searchFor('449');
+
+    // iOS reports the search sheet finished closing; the test Modal is gone as
+    // soon as it's hidden, so keep its onDismiss and call it afterwards.
+    const onDismiss = screen.getByTestId('calendar-search-sheet').props.onDismiss as () => void;
+    await fireEvent.press(await screen.findByRole('button', { name: /^CECS 449 Project 1, / }));
+    await act(async () => {
+      onDismiss();
+    });
+
+    expect(screen.queryByLabelText('Search calendar')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Day', selected: true })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Monday, November 23' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'CECS 449 Project 1' })).toBeOnTheScreen();
+  });
+
+  it('closes with ✕ and leaves the calendar as it was', async () => {
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+
+    const onDismiss = screen.getByTestId('calendar-search-sheet').props.onDismiss as () => void;
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    await act(async () => {
+      onDismiss();
+    });
+
+    expect(screen.queryByLabelText('Search calendar')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Month', selected: true })).toBeOnTheScreen();
+    expect(screen.queryByRole('header', { name: 'CECS 449 Project 1' })).not.toBeOnTheScreen();
   });
 });

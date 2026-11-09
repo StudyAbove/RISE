@@ -3,6 +3,7 @@ import {
   DEFAULT_CALENDAR_FILTERS,
   filterCalendarEvents,
   isFiltering,
+  NO_COURSE,
   type CalendarFilters,
 } from '../utils/calendarFilters';
 
@@ -64,6 +65,44 @@ describe('filterCalendarEvents', () => {
     expect(filterCalendarEvents(all, filters({ hiddenSources: ['rise', 'google', 'apple'] }))).toEqual([]);
   });
 
+  describe('courses (#159)', () => {
+    const project = event('Project 1', {
+      eventType: 'assignment',
+      source: 'canvas',
+      course: { id: 'cecs-491b', name: 'Software Engineering' },
+    });
+    const essay = event('Essay', {
+      eventType: 'assignment',
+      source: 'canvas',
+      course: { id: 'hist-110', name: 'US History' },
+    });
+    const withCourses = [...all, project, essay];
+
+    it('hides the courses that are turned off', () => {
+      expect(ids(filterCalendarEvents(withCourses, filters({ hiddenCourses: ['hist-110'] })))).toEqual([
+        'Chem Lab',
+        'Study group',
+        'Dentist',
+        'Gym',
+        'Project 1',
+      ]);
+    });
+
+    it('hides events with no course when "All other courses" is off', () => {
+      expect(ids(filterCalendarEvents(withCourses, filters({ hiddenCourses: [NO_COURSE] })))).toEqual([
+        'Project 1',
+        'Essay',
+      ]);
+    });
+
+    it('combines with the other filters', () => {
+      // Assignments are on, but one course is off.
+      expect(
+        ids(filterCalendarEvents(withCourses, filters({ hiddenTypes: ['none', 'class', 'study', 'wellness'], hiddenCourses: ['cecs-491b'] })))
+      ).toEqual(['Essay']);
+    });
+  });
+
   describe('dates (AC4)', () => {
     const nov16 = event('Nov 16', { startAt: local(16, 9), endAt: local(16, 10) });
     const nov18 = event('Nov 18', { startAt: local(18, 23), endAt: local(18, 23, 30) });
@@ -115,6 +154,7 @@ describe('isFiltering', () => {
     expect(isFiltering(DEFAULT_CALENDAR_FILTERS)).toBe(false);
     expect(isFiltering(filters({ hiddenTypes: ['none'] }))).toBe(true);
     expect(isFiltering(filters({ hiddenSources: ['canvas'] }))).toBe(true);
+    expect(isFiltering(filters({ hiddenCourses: [NO_COURSE] }))).toBe(true);
     expect(isFiltering(filters({ fromDate: new Date(2026, 10, 18) }))).toBe(true);
     expect(isFiltering(filters({ toDate: new Date(2026, 10, 18) }))).toBe(true);
   });

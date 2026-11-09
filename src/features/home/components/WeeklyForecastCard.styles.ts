@@ -76,6 +76,26 @@ export const styles = StyleSheet.create({
     marginRight: 8,
   },
 
+  // The class's dot and code, which open that class's week (#61).
+  classLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+
+  classLabel: {
+    fontFamily: fonts.body.semiBold,
+    fontSize: 11,
+    color: colors.deepOlive,
+  },
+
+  // The rest of the row, which opens the assignment.
+  assignmentLink: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
   rowTitle: {
     flex: 1,
     marginRight: 8,

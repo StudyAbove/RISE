@@ -11,6 +11,8 @@ export const EVENT_TITLE_LINE_HEIGHT = 12;
 // The source logo before the title (#82), from the Figma "Option B" board.
 // Month (mini) is 10 rather than Figma's 8, so the logos are easier to make out.
 export const EVENT_CHIP_LOGO_SIZE = { mini: 10, compact: 10, regular: 13 } as const;
+// The gap between the logo and the title on regular chips.
+const REGULAR_CONTENT_GAP = 5;
 
 export const styles = StyleSheet.create({
   chip: {
@@ -53,7 +55,7 @@ export const styles = StyleSheet.create({
     gap: 2,
   },
   regularContent: {
-    gap: 5,
+    gap: REGULAR_CONTENT_GAP,
   },
   title: {
     flexShrink: 1,
@@ -61,5 +63,23 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: EVENT_TITLE_LINE_HEIGHT,
     color: calendarColors.dateText,
+  },
+  // The event's type on 2 Day and Day chips (#38), in the hour labels' gray.
+  // On its own line it lines up with the title, past the logo.
+  typeLine: {
+    paddingLeft: EVENT_CHIP_LOGO_SIZE.regular + REGULAR_CONTENT_GAP,
+    fontFamily: fonts.body.regular,
+    fontSize: 9,
+    lineHeight: EVENT_TITLE_LINE_HEIGHT,
+    color: calendarColors.hourLabel,
+  },
+  // After the title on one-line chips. It never shrinks, so a long title is
+  // cut off before the type is.
+  inlineType: {
+    flexShrink: 0,
+    fontFamily: fonts.body.regular,
+    fontSize: 9,
+    lineHeight: EVENT_TITLE_LINE_HEIGHT,
+    color: calendarColors.hourLabel,
   },
 });

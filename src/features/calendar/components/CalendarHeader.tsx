@@ -26,6 +26,8 @@ interface CalendarHeaderProps {
   onAddEvent: () => void;
   /** Opens "Show on calendar", the filters (#79). */
   onOpenFilters: () => void;
+  /** Opens calendar search (#78). */
+  onOpenSearch: () => void;
   /** Whether filters are hiding any events, so VoiceOver can say so. */
   isFiltering?: boolean;
 }
@@ -39,6 +41,7 @@ export function CalendarHeader({
   onNext,
   onAddEvent,
   onOpenFilters,
+  onOpenSearch,
   isFiltering = false,
 }: CalendarHeaderProps) {
   const insets = useSafeAreaInsets();
@@ -57,8 +60,6 @@ export function CalendarHeader({
         accessibilityIgnoresInvertColors
       />
 
-      {/* Search is built in a later story, so it's disabled for now (VoiceOver
-          reads it as "dimmed"). */}
       <View style={styles.actionRow}>
         <Pressable
           accessibilityRole="button"
@@ -75,7 +76,7 @@ export function CalendarHeader({
           <Pressable accessibilityRole="button" accessibilityLabel="Add event" hitSlop={HIT_SLOP} onPress={onAddEvent}>
             <AddIcon width={24} height={24} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Search" hitSlop={HIT_SLOP} disabled>
+          <Pressable accessibilityRole="button" accessibilityLabel="Search" hitSlop={HIT_SLOP} onPress={onOpenSearch}>
             <View style={styles.iconBox}>
               <SearchIcon width={20.5} height={20.5} />
             </View>

@@ -139,6 +139,29 @@ describe('fetchAssignments', () => {
     expect(assignments[1]).toMatchObject({ estimatedMinutes: null, kind: null });
   });
 
+  it('includes saved microtask completion for the progress bar, so it stays after reopening', async () => {
+    mockRows.mockReturnValue([
+      {
+        ...assignmentRow('a1'),
+        // Out of order, to check they're sorted by position.
+        assignment_microtasks: [
+          { id: 't2', title: 'Write it up', position: 2, estimated_minutes: 45, completed: false },
+          { id: 't1', title: 'Collect data', position: 1, estimated_minutes: 30, completed: true },
+        ],
+      },
+      assignmentRow('a2'),
+    ]);
+
+    const assignments = await fetchAssignments();
+
+    expect(assignments[0].microtasks).toEqual([
+      { id: 't1', title: 'Collect data', position: 1, estimatedMinutes: 30, completed: true },
+      { id: 't2', title: 'Write it up', position: 2, estimatedMinutes: 45, completed: false },
+    ]);
+    // No microtasks created yet.
+    expect(assignments[1].microtasks).toEqual([]);
+  });
+
   it('loads assignments beyond the first batch', async () => {
     mockRows.mockReturnValue(
       Array.from({ length: 501 }, (_, index) =>

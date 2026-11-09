@@ -9,9 +9,9 @@ import {
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS } from '../utils/eventLabels';
 
 /*
- * The calendar's type and source toggles (#79) are kept on the phone, in the
- * same store the Supabase session uses, so they stay set after the app
- * restarts. The date range isn't saved: a forgotten range would quietly hide
+ * The calendar's type, source, and course toggles (#79, #159) are kept on the
+ * phone, in the same store the Supabase session uses, so they stay set after
+ * the app restarts. The date range isn't saved: a forgotten range would quietly hide
  * events the next time the student opens the app.
  */
 
@@ -34,6 +34,17 @@ function knownValues<T extends string>(value: unknown, allowed: T[]): T[] {
   return allowed.filter((item) => value.includes(item));
 }
 
+// Course ids can't be checked against the student's courses before they
+// load, but an id for a course that's gone matches no events, so it hides
+// nothing.
+function textValues(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
 /**
  * The saved toggles, with no date range. Anything missing, unreadable, or
  * unknown falls back to showing everything.
@@ -53,6 +64,7 @@ export function loadCalendarFilters(): CalendarFilters {
       ...DEFAULT_CALENDAR_FILTERS,
       hiddenTypes: knownValues(record.hiddenTypes, TYPE_FILTERS),
       hiddenSources: knownValues(record.hiddenSources, SOURCES),
+      hiddenCourses: textValues(record.hiddenCourses),
     };
   } catch (error) {
     console.log('Could not load the saved calendar filters:', error);
@@ -60,7 +72,7 @@ export function loadCalendarFilters(): CalendarFilters {
   }
 }
 
-/** Saves the type and source toggles. A failed save only means they reset next time. */
+/** Saves the type, source, and course toggles. A failed save only means they reset next time. */
 export function saveCalendarFilters(filters: CalendarFilters): void {
   try {
     Storage.setItemSync(
@@ -68,6 +80,7 @@ export function saveCalendarFilters(filters: CalendarFilters): void {
       JSON.stringify({
         hiddenTypes: filters.hiddenTypes,
         hiddenSources: filters.hiddenSources,
+        hiddenCourses: filters.hiddenCourses,
       })
     );
   } catch (error) {
