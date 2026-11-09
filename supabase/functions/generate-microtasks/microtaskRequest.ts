@@ -2,6 +2,9 @@
 // Kept apart from index.ts so Jest can test it without Deno or API calls.
 
 export const MAX_MICROTASKS = 12;
+export const MAX_MICROTASK_MINUTES = 90;
+export const MAX_MICROTASK_PLAN_MINUTES =
+  MAX_MICROTASKS * MAX_MICROTASK_MINUTES;
 
 export type AssignmentToBreakDown = {
   title: string;
@@ -50,9 +53,10 @@ Rules:
 - Never create more than 12 tasks.
 - Avoid filler, duplicate tasks, and unnecessarily splitting simple actions.
 - Aim for 10 to 30 minutes per task where practical.
-- For large assignments, use longer, clearly named stages when needed.
-  The preferred task duration is flexible; the 12-task maximum is not.
-- Every duration must be a positive whole number of minutes.
+- For large assignments, split long stages into distinct, actionable steps.
+- Every task must take between 1 and ${MAX_MICROTASK_MINUTES} whole minutes.
+- Use more tasks when needed to fit the full estimate within the per-task cap,
+  without exceeding ${MAX_MICROTASKS} tasks.
 - Task minutes must add up EXACTLY to the provided estimatedMinutes.
 - The saved total is a planning budget. Do not change that total.
 - Do not add breaks to the assignment's task list.
@@ -158,10 +162,10 @@ export function readMicrotaskPlan(
       typeof task.minutes !== 'number' ||
       !Number.isInteger(task.minutes) ||
       task.minutes < 1 ||
-      task.minutes > 6000
+      task.minutes > MAX_MICROTASK_MINUTES
     ) {
       throw new InvalidMicrotaskPlanError(
-        'Each task needs a positive whole-minute duration within limits.',
+        `Each task must take between 1 and ${MAX_MICROTASK_MINUTES} whole minutes.`,
       );
     }
 
