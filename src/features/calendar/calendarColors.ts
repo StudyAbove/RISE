@@ -22,6 +22,8 @@ export const calendarColors = {
   dateText: '#000000',
   // deepOlive family: dates above the Week grid
   weekHeaderNumber: '#1E1E1E',
+  // deepOlive family: event type icons and the "No type" dot on the filter sheet (#79)
+  typeIcon: '#1E1E1E',
   // mutedGrayGreen family: weekday letters and names (S M T…, SUN MON…)
   weekdayText: '#676767',
   // mutedGrayGreen family: "7 AM" hour labels
@@ -32,6 +34,10 @@ export const calendarColors = {
   todayCardBand: '#EFEEE9',
   // warmCream family: background of the event details sheet (#34)
   detailsBackground: '#F4F3F0',
+  // The red of a switched-off toggle on the filter sheet (#79). The palette
+  // has no red; this follows the Figma "Toggle" component, an exception to
+  // the family rule like Google's blue below.
+  toggleOff: '#D36062',
 } as const;
 
 /**
@@ -49,13 +55,15 @@ export const eventTypeButtonColors: Record<CalendarEventType | 'selected', { bac
 
 /**
  * The colored tab on the left of each event chip, by where the event came from.
- * RISE and Canvas use the two tab colors from Figma; Google and Apple, which
- * Figma doesn't show, use palette colors.
+ * RISE and Canvas use the two tab colors from Figma; Apple uses a palette color.
  */
 export const eventSourceColors: Record<CalendarSource, string> = {
   rise: '#F4DF8A', // butterYellow family
   canvas: '#C7BFA0',
-  google: colors.softSage,
+  // The blue from the Figma calendar frames. The palette has no blue, so this is
+  // an exception to the family rule, approved by the calendar's designer (#82):
+  // a palette green would look like Apple's tab.
+  google: '#8CA6DD',
   apple: colors.eucalyptus,
 };
 

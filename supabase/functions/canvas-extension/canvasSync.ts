@@ -9,6 +9,7 @@ const MAX_TITLE_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 5000;
 const MAX_SYLLABUS_LENGTH = 50000;
 const MAX_LATE_WORK_LENGTH = 10000;
+const MAX_NAME_LENGTH = 100;
 
 export type SyncedCourse = {
   canvasCourseId: string;
@@ -31,6 +32,8 @@ export type SyncedAssignment = {
 
 export type SyncPayload = {
   canvasDomain: string;
+  /** What the student goes by in Canvas, for Rise's greeting. */
+  studentName: string | null;
   courses: SyncedCourse[];
   assignments: SyncedAssignment[];
 };
@@ -276,6 +279,7 @@ export function parseSyncPayload(body: unknown): SyncPayload {
 
   return {
     canvasDomain: readCanvasDomain(body.canvasDomain),
+    studentName: readText(body.studentName, MAX_NAME_LENGTH),
     courses,
     assignments,
   };

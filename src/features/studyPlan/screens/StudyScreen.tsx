@@ -1,139 +1,253 @@
-/*
-import { TabPlaceholderScreen } from '../../../components/TabPlaceholderScreen';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {
+  useFocusEffect,
+  useNavigation,
+} from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
-// Main page of the Study tab. Placeholder until the real screen is built.
-export function StudyScreen() {
-  return <TabPlaceholderScreen title="Study" showSettingsButton />;
-}
-*/
-import { useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-
+import { TabPageHeader } from '../../../components/TabPageHeader';
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
-import { SettingsButton } from '../../settings/components/SettingsButton';
+import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { supabase } from '../../../lib/supabase';
+import {
+  fetchAssignments,
+  type Assignment,
+} from '../../../repositories/assignmentsRepository';
+import { colors } from '../../../theme/colors';
+import { textStyles } from '../../../theme/typography';
+import { AssignmentCard } from '../../assignments/components/AssignmentCard';
+import { SectionHeader } from '../../assignments/components/SectionHeader';
+import type { MainTabParamList } from '../../navigation/types';
+import { getStudySections } from '../utils/studySections';
 
-type Microtask = {
-  id: string;
-  title: string;
-  estimatedTime: string;
-  completed: boolean;
-};
-
-type AssignmentDetail = {
-  course: string;
-  title: string;
-  priority: string;
-  dueDate: string;
-  estimatedTime: string;
-  description: string;
-  microtasks: Microtask[];
-};
-
-const mockAssignment: AssignmentDetail = {
-  course: 'BIO 200',
-  title: 'Osmosis Lab Report',
-  priority: 'High Priority',
-  dueDate: 'Fri, Nov 13',
-  estimatedTime: '1h 20m',
-  description:
-    'Write up the experimental results and conclusion in a lab report style.',
-  microtasks: [
-    {
-      id: '1',
-      title: 'Organize data and results',
-      estimatedTime: '15 min',
-      completed: false,
-    },
-    {
-      id: '2',
-      title: 'Create graphs and tables',
-      estimatedTime: '20 min',
-      completed: false,
-    },
-    {
-      id: '3',
-      title: 'Write the results section',
-      estimatedTime: '25 min',
-      completed: false,
-    },
-    {
-      id: '4',
-      title: 'Write the conclusion and proofread',
-      estimatedTime: '20 min',
-      completed: false,
-    },
-  ],
-};
+type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
 
 export function StudyScreen() {
   const titleRef = useRef<Text>(null);
-  const completedTasks = mockAssignment.microtasks.filter(
-    (task) => task.completed,
-  ).length;
-  const totalTasks = mockAssignment.microtasks.length;
-  const progressPercent =
-    totalTasks === 0 ? 0 : (completedTasks / totalTasks) * 100;
+  const date = useCurrentDate();
+
+  const navigation =
+    useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [reloadCount, setReloadCount] = useState(0);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  // A pull-to-refresh keeps the sections on screen while it reloads.
+  const isPullRefresh = useRef(false);
+
+  const sections = useMemo(
+    () => getStudySections(assignments, date),
+    [assignments, date],
+  );
+
+  // Reload when the student opens this tab, pulls down, or taps Try again.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      async function loadAssignments() {
+        if (!isPullRefresh.current) {
+          setStatus('loading');
+          setAssignments([]);
+        }
+
+        try {
+          const { data, error } = await supabase.auth.getSession();
+
+          if (!active) return;
+          if (error) throw error;
+
+          // Skipping the login screen does not create a real session.
+          if (!data.session) {
+            setStatus('signedOut');
+            return;
+          }
+
+          const loadedAssignments = await fetchAssignments();
+
+          if (!active) return;
+
+          setAssignments(loadedAssignments);
+          setStatus('ready');
+        } catch {
+          if (!active) return;
+
+          setAssignments([]);
+          setStatus('error');
+        } finally {
+          isPullRefresh.current = false;
+          setRefreshing(false);
+        }
+      }
+
+      void loadAssignments();
+
+      // Ignore a request's result if the student leaves this screen.
+      return () => {
+        active = false;
+      };
+    }, [reloadCount]),
+  );
+
+  const refreshAssignments = () => {
+    setReloadCount((count) => count + 1);
+  };
+
+  const pullToRefresh = () => {
+    isPullRefresh.current = true;
+    setRefreshing(true);
+    refreshAssignments();
+  };
+
+  const openList = () => navigation.navigate('List');
 
   return (
     <TabScreenScrollView
       focusTargetRef={titleRef}
       contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={pullToRefresh}
+          tintColor={colors.deepOlive}
+          colors={[colors.deepOlive]}
+        />
+      }
     >
-      <View style={styles.headerRow}>
-        <View style={styles.backButton}>
-          <Text style={styles.backButtonText}>‹</Text>
-        </View>
-        <SettingsButton />
-      </View>
+      {/* The sky, settings button and title, shared with List and Analytics. */}
+      <TabPageHeader title="Study Plan" titleRef={titleRef} />
 
-      <View style={styles.courseRow}>
-        <View style={styles.courseDot} />
-        <Text style={styles.courseText}>{mockAssignment.course}</Text>
-      </View>
+      <View style={styles.list}>
+        {status === 'loading' && (
+          <View style={styles.statusCard}>
+            <ActivityIndicator color={colors.deepOlive} />
 
-      <View style={styles.titleRow}>
-        <Text ref={titleRef} accessibilityRole="header" style={styles.title}>
-          {mockAssignment.title}
-        </Text>
-        <Text style={styles.priorityBadge}>{mockAssignment.priority}</Text>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.dueDateText}>▣ Due {mockAssignment.dueDate}</Text>
-        <Text style={styles.estimatedTimeText}>
-          ◷ Est. {mockAssignment.estimatedTime}
-        </Text>
-      </View>
-
-      <Text style={styles.description}>{mockAssignment.description}</Text>
-
-      <Text style={styles.sectionTitle}>Progress</Text>
-      <View style={styles.progressRow}>
-        <View style={styles.progressTrack}>
-          <View
-            style={[styles.progressFill, { width: `${progressPercent}%` }]}
-          />
-        </View>
-        <Text style={styles.progressText}>
-          {completedTasks} / {totalTasks} tasks
-        </Text>
-      </View>
-
-      <Text style={styles.sectionTitle}>Tasks</Text>
-      <View style={styles.taskList}>
-        {mockAssignment.microtasks.map((task) => (
-          <View key={task.id} style={styles.taskCard}>
-            <View style={styles.checkbox} />
-            <View style={styles.taskTextGroup}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
-              <Text style={styles.taskTime}>Est. {task.estimatedTime}</Text>
-            </View>
+            <Text
+              style={styles.statusText}
+              accessibilityLiveRegion="polite"
+            >
+              Loading your assignments…
+            </Text>
           </View>
-        ))}
-      </View>
+        )}
 
-      <View style={styles.startButton}>
-        <Text style={styles.startButtonText}>Start Study Session</Text>
+        {status === 'signedOut' && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>
+              Sign in to RISE to view your assignments.
+            </Text>
+          </View>
+        )}
+
+        {status === 'error' && (
+          <View style={styles.statusCard}>
+            <Text accessibilityRole="alert" style={styles.statusText}>
+              Couldn’t load your assignments.
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={refreshAssignments}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {status === 'ready' && assignments.length === 0 && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>
+              No assignments to display.
+            </Text>
+
+            <Text style={styles.statusNote}>
+              Connect and sync your Canvas courses to import assignments.
+            </Text>
+          </View>
+        )}
+
+        {/* Overdue only appears when something is overdue. View all is on
+            Upcoming only, so the page has one way to open List. */}
+        {status === 'ready' && sections.overdue.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Overdue"
+              count={sections.overdue.length}
+            />
+
+            {sections.overdue.map((assignment) => (
+              <AssignmentCard
+                key={assignment.id}
+                assignment={assignment}
+                today={date}
+              />
+            ))}
+          </View>
+        )}
+
+        {status === 'ready' && assignments.length > 0 && (
+          <>
+            <View style={styles.section}>
+              <SectionHeader
+                title="Due Today"
+                count={sections.dueToday.length}
+                colorByWorkload
+              />
+
+              {sections.dueToday.length === 0 && (
+                <Text style={styles.emptyNote}>Nothing due today.</Text>
+              )}
+
+              {sections.dueToday.map((assignment) => (
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
+                  today={date}
+                />
+              ))}
+            </View>
+
+            <View style={styles.section}>
+              <SectionHeader
+                title="Upcoming"
+                count={sections.upcoming.length}
+                colorByWorkload
+                linkText="View all"
+                linkLabel="View all assignments"
+                onLinkPress={openList}
+              />
+
+              {sections.upcoming.length === 0 && (
+                <Text style={styles.emptyNote}>
+                  Nothing else due this week.
+                </Text>
+              )}
+
+              {sections.upcoming.map((assignment) => (
+                <AssignmentCard
+                  key={assignment.id}
+                  assignment={assignment}
+                  today={date}
+                />
+              ))}
+            </View>
+          </>
+        )}
       </View>
     </TabScreenScrollView>
   );
@@ -141,162 +255,57 @@ export function StudyScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 26,
-    paddingBottom: 40,
-    backgroundColor: '#FAF8F1',
+    paddingHorizontal: 18,
+    paddingBottom: 36,
   },
-  headerRow: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#DDE9D9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    color: '#35433A',
-    fontSize: 32,
-    lineHeight: 34,
-  },
-  courseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 18,
-  },
-  courseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#78927B',
-    borderWidth: 1,
-    borderColor: '#35433A',
-    marginRight: 8,
-  },
-  courseText: {
-    fontSize: 12,
-    color: '#758078',
-    fontWeight: '600',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  title: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#35433A',
-  },
-  priorityBadge: {
-    fontSize: 11,
-    color: '#B96D5F',
-    backgroundColor: '#F5D8D3',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginTop: 8,
-  },
-  dueDateText: {
-    fontSize: 12,
-    color: '#B96D5F',
-    fontWeight: '600',
-  },
-  estimatedTimeText: {
-    fontSize: 12,
-    color: '#758078',
-    fontWeight: '600',
-  },
-  description: {
-    fontSize: 13,
-    color: '#758078',
-    marginTop: 10,
-    lineHeight: 18,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    color: '#35433A',
-    fontWeight: '700',
-    marginTop: 18,
-    marginBottom: 10,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressTrack: {
-    flex: 1,
-    height: 10,
-    backgroundColor: '#E9E9E9',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginRight: 12,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#A8BEA3',
-    borderRadius: 10,
-  },
-  progressText: {
-    fontSize: 13,
-    color: '#35433A',
-    fontWeight: '600',
-  },
-  taskList: {
-    gap: 10,
-  },
-  taskCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DDE9D9',
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: '#758078',
-    marginRight: 12,
-  },
-  taskTextGroup: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 14,
-    color: '#35433A',
-    fontWeight: '600',
-  },
-  taskTime: {
-    fontSize: 11,
-    color: '#758078',
-    marginTop: 2,
-  },
-  startButton: {
-    backgroundColor: '#F5D978',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
+  // Same gap below the title as before the shared header (8 + 16).
+  list: {
+    gap: 8,
     marginTop: 24,
   },
-  startButtonText: {
-    color: '#35433A',
-    fontSize: 15,
-    fontWeight: '700',
+  // Spacing follows the Figma Study Planning Screen sections.
+  section: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  emptyNote: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
+  },
+  statusCard: {
+    padding: 20,
+    gap: 10,
+    alignItems: 'center',
+    backgroundColor: colors.softWhite,
+    borderWidth: 1,
+    borderColor: colors.mistGreen,
+    borderRadius: 15,
+  },
+  statusText: {
+    ...textStyles.body,
+    color: colors.deepOlive,
+    textAlign: 'center',
+  },
+  statusNote: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.mistGreen,
+    justifyContent: 'center',
+  },
+  retryText: {
+    ...textStyles.link,
+    color: colors.deepOlive,
+    textAlign: 'center',
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

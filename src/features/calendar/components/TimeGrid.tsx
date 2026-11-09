@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -8,7 +10,12 @@ import {
   isToday,
 } from 'date-fns';
 
+import ChevronIcon from '../../../../assets/icons/calendar/chevron-left.svg';
 import type { CalendarEvent } from '../../../models/CalendarEvent';
+import {
+  isAllDayEvent,
+  layoutAllDayBars,
+} from '../utils/allDayEvents';
 import {
   getDaySegments,
   layoutDaySegments,
@@ -25,6 +32,16 @@ import {
 } from './TimeGrid.styles';
 
 const HOURS_IN_DAY = 24;
+
+// Space between stacked all-day bars.
+const ALL_DAY_LANE_GAP = 2;
+
+// Like Google Calendar, a day shows this many all-day events until the strip
+// is expanded; the rest are counted in a "+N more" line.
+const ALL_DAY_COLLAPSED_LANES = 2;
+
+// Height of the "+N more" line.
+const ALL_DAY_MORE_HEIGHT = 14;
 
 // Figma's hourly frames open with 7 AM near the top; earlier hours are a scroll away.
 const INITIAL_VISIBLE_HOUR =
@@ -139,6 +156,124 @@ export function TimeGrid({
       chipSize
     ];
 
+  // All-day events go in the strip under the day headers, not the hourly grid.
+  const timedEvents =
+    events.filter(
+      (event) =>
+        !isAllDayEvent(
+          event,
+        ),
+    );
+
+  const allDayBars =
+    layoutAllDayBars(
+      events,
+      days,
+    );
+
+  const allDayLaneCount =
+    allDayBars.reduce(
+      (count, bar) =>
+        Math.max(
+          count,
+          bar.lane + 1,
+        ),
+      0,
+    );
+
+  const [
+    isAllDayExpanded,
+    setIsAllDayExpanded,
+  ] =
+    useState(false);
+
+  const canCollapseAllDay =
+    allDayLaneCount >
+    ALL_DAY_COLLAPSED_LANES;
+
+  const isAllDayCollapsed =
+    canCollapseAllDay &&
+    !isAllDayExpanded;
+
+  const shownAllDayLanes =
+    isAllDayCollapsed
+      ? ALL_DAY_COLLAPSED_LANES
+      : allDayLaneCount;
+
+  // How many of each day's all-day events are hidden while collapsed.
+  const hiddenAllDayCounts =
+    days.map(
+      (_, dayIndex) =>
+        isAllDayCollapsed
+          ? allDayBars.filter(
+              (bar) =>
+                bar.lane >=
+                  ALL_DAY_COLLAPSED_LANES &&
+                bar.startIndex <=
+                  dayIndex &&
+                dayIndex <
+                  bar.startIndex +
+                    bar.span,
+            ).length
+          : 0,
+    );
+
+  const allDayLaneHeight =
+    chipMinHeight +
+    ALL_DAY_LANE_GAP;
+
+  const renderMoreButton = (
+    hiddenCount: number,
+  ) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Show ${hiddenCount} more all-day ${
+        hiddenCount === 1
+          ? 'event'
+          : 'events'
+      }`}
+      hitSlop={6}
+      onPress={() =>
+        setIsAllDayExpanded(
+          true,
+        )
+      }
+      style={
+        styles.allDayMore
+      }
+    >
+      <Text
+        numberOfLines={
+          1
+        }
+        style={
+          styles.allDayMoreText
+        }
+      >
+        +{hiddenCount} more
+      </Text>
+    </Pressable>
+  );
+
+  const renderAllDayChip = (
+    event: CalendarEvent,
+  ) => (
+    <EventChip
+      event={
+        event
+      }
+      size={
+        chipSize
+      }
+      style={
+        styles.eventChip
+      }
+      onPress={
+        onEventPress
+      }
+    />
+  );
+
   const minutesToPoints = (
     minutes: number,
   ) =>
@@ -231,10 +366,80 @@ export function TimeGrid({
       >
         {view ===
         'day' ? (
-          renderDayHeader(
-            days[0],
-            hourGutterWidth,
-          )
+          <>
+            {renderDayHeader(
+              days[0],
+              hourGutterWidth,
+            )}
+
+            {/* In Day, all-day events sit beside the date, as in Google Calendar. */}
+            {allDayBars.length >
+              0 && (
+              <View
+                style={
+                  styles.dayAllDayList
+                }
+              >
+                {allDayBars
+                  .filter(
+                    ({
+                      lane,
+                    }) =>
+                      lane <
+                      shownAllDayLanes,
+                  )
+                  .map(
+                    ({
+                      event,
+                    }) => (
+                      <View
+                        key={
+                          event.id
+                        }
+                        style={{
+                          height:
+                            chipMinHeight,
+                        }}
+                      >
+                        {renderAllDayChip(
+                          event,
+                        )}
+                      </View>
+                    ),
+                  )}
+
+                {isAllDayCollapsed &&
+                  renderMoreButton(
+                    hiddenAllDayCounts[0],
+                  )}
+
+                {canCollapseAllDay &&
+                  isAllDayExpanded && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Show fewer all-day events"
+                      hitSlop={6}
+                      onPress={() =>
+                        setIsAllDayExpanded(
+                          false,
+                        )
+                      }
+                      style={
+                        styles.allDayMore
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.allDayMoreText
+                        }
+                      >
+                        Show less
+                      </Text>
+                    </Pressable>
+                  )}
+              </View>
+            )}
+          </>
         ) : (
           <>
             <View
@@ -253,6 +458,154 @@ export function TimeGrid({
           </>
         )}
       </View>
+
+      {/* Week and 2 Day: each all-day event is one bar across its days. */}
+      {view !==
+        'day' &&
+        allDayLaneCount >
+          0 && (
+          <View
+            style={
+              styles.allDayRow
+            }
+          >
+            {/* Like Google Calendar, a chevron in the gutter expands or collapses the strip. */}
+            <View
+              style={[
+                styles.allDayGutter,
+                {
+                  width:
+                    hourGutterWidth,
+                },
+              ]}
+            >
+              {canCollapseAllDay && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isAllDayExpanded
+                      ? 'Show fewer all-day events'
+                      : 'Show all all-day events'
+                  }
+                  hitSlop={10}
+                  onPress={() =>
+                    setIsAllDayExpanded(
+                      (expanded) =>
+                        !expanded,
+                    )
+                  }
+                  style={
+                    isAllDayExpanded
+                      ? styles.chevronUp
+                      : styles.chevronDown
+                  }
+                >
+                  <ChevronIcon
+                    width={7}
+                    height={10}
+                  />
+                </Pressable>
+              )}
+            </View>
+
+            <View
+              style={[
+                styles.allDayArea,
+                {
+                  height:
+                    shownAllDayLanes *
+                      allDayLaneHeight +
+                    (isAllDayCollapsed
+                      ? ALL_DAY_MORE_HEIGHT
+                      : 0),
+                },
+              ]}
+            >
+              {allDayBars
+                .filter(
+                  ({
+                    lane,
+                  }) =>
+                    lane <
+                    shownAllDayLanes,
+                )
+                .map(
+                  ({
+                    event,
+                    startIndex,
+                    span,
+                    lane,
+                  }) => (
+                    <View
+                      key={
+                        event.id
+                      }
+                      style={[
+                        styles.allDayBar,
+                        {
+                          top:
+                            lane *
+                            allDayLaneHeight,
+                          height:
+                            chipMinHeight,
+                          left: `${
+                            (startIndex /
+                              days.length) *
+                            100
+                          }%`,
+                          width: `${
+                            (span /
+                              days.length) *
+                            100
+                          }%`,
+                        },
+                      ]}
+                    >
+                      {renderAllDayChip(
+                        event,
+                      )}
+                    </View>
+                  ),
+                )}
+
+              {hiddenAllDayCounts.map(
+                (
+                  hiddenCount,
+                  dayIndex,
+                ) =>
+                  hiddenCount >
+                    0 && (
+                    <View
+                      key={`more-${dayIndex}`}
+                      style={[
+                        styles.allDayBar,
+                        {
+                          top:
+                            shownAllDayLanes *
+                            allDayLaneHeight,
+                          height:
+                            ALL_DAY_MORE_HEIGHT,
+                          left: `${
+                            (dayIndex /
+                              days.length) *
+                            100
+                          }%`,
+                          width: `${
+                            100 /
+                            days.length
+                          }%`,
+                        },
+                      ]}
+                    >
+                      {renderMoreButton(
+                        hiddenCount,
+                      )}
+                    </View>
+                  ),
+              )}
+            </View>
+          </View>
+        )}
 
       <ScrollView
         style={
@@ -338,7 +691,7 @@ export function TimeGrid({
                 >
                   {layoutDaySegments(
                     getDaySegments(
-                      events,
+                      timedEvents,
                       day,
                     ),
                     (chipMinHeight /

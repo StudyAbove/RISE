@@ -1,6 +1,7 @@
 import {
   Pressable,
   Text,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -8,7 +9,10 @@ import { format, parseISO } from 'date-fns';
 
 import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { eventSourceColors } from '../calendarColors';
-import { styles } from './EventChip.styles';
+import { isAllDayEvent } from '../utils/allDayEvents';
+import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS } from '../utils/eventLabels';
+import { EVENT_CHIP_LOGO_SIZE, styles } from './EventChip.styles';
+import { SourceLogo } from './SourceLogo';
 
 export type EventChipSize =
   | 'mini'
@@ -39,9 +43,20 @@ const SIZE_STYLES = {
   regular: styles.regularChip,
 };
 
+const CONTENT_STYLES = {
+  mini: styles.miniContent,
+  compact: styles.compactContent,
+  regular: styles.regularContent,
+};
+
 /**
  * An event drawn as in Figma: a colored tab (by source) on the left of a pale
- * chip with the title. Titles that don't fit end in "…".
+ * chip, then the source's logo and the title (#82). Titles that don't fit end
+ * in "…".
+ *
+ * Regular chips (2 Day and Day) also name the event's type (#38): on its own
+ * line under the title when there's room for two lines, otherwise after the
+ * title ("Gym · Wellness"). Week and Month chips are too small for it.
  */
 export function EventChip({
   event,
@@ -51,15 +66,41 @@ export function EventChip({
   onPress,
 }: EventChipProps) {
   const timeRange =
-    `${format(parseISO(event.startAt), 'h:mm a')} to ${format(
-      parseISO(event.endAt),
-      'h:mm a',
-    )}`;
+    isAllDayEvent(event)
+      ? 'all day'
+      : `${format(parseISO(event.startAt), 'h:mm a')} to ${format(
+          parseISO(event.endAt),
+          'h:mm a',
+        )}`;
+
+  const typeLabel =
+    event.eventType
+      ? EVENT_TYPE_LABELS[event.eventType]
+      : undefined;
+
+  const showType =
+    size === 'regular' &&
+    typeLabel !== undefined;
+
+  // The type takes the last line when there are two or more; otherwise it
+  // shares the title's line.
+  const typeOnOwnLine =
+    showType &&
+    maxTitleLines >= 2;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${event.title}, ${timeRange}`}
+      // Names the source too, so it isn't told by color and logo alone (#82, AC8),
+      // and the type in every view, even where the chip doesn't show it (#38).
+      accessibilityLabel={[
+        event.title,
+        typeLabel,
+        EVENT_SOURCE_LABELS[event.source],
+        timeRange,
+      ]
+        .filter(Boolean)
+        .join(', ')}
       accessibilityHint="Opens this event"
       onPress={() => {
         onPress?.(event);
@@ -77,12 +118,36 @@ export function EventChip({
         },
       ]}
     >
-      <Text
-        numberOfLines={maxTitleLines}
-        style={styles.title}
-      >
-        {event.title}
-      </Text>
+      <View style={[styles.content, CONTENT_STYLES[size]]}>
+        <SourceLogo
+          testID="event-chip-logo"
+          source={event.source}
+          size={EVENT_CHIP_LOGO_SIZE[size]}
+        />
+        <Text
+          numberOfLines={
+            typeOnOwnLine
+              ? maxTitleLines - 1
+              : maxTitleLines
+          }
+          style={styles.title}
+        >
+          {event.title}
+        </Text>
+        {showType && !typeOnOwnLine && (
+          <Text style={styles.inlineType}>
+            · {typeLabel}
+          </Text>
+        )}
+      </View>
+      {typeOnOwnLine && (
+        <Text
+          numberOfLines={1}
+          style={styles.typeLine}
+        >
+          {typeLabel}
+        </Text>
+      )}
     </Pressable>
   );
 }

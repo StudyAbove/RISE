@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../../components/BackButton';
 import { PageIndicator } from './PageIndicator';
 import { styles } from './OnboardingLayout.styles';
 
@@ -29,6 +30,8 @@ type OnboardingLayoutProps = {
   step: number;
   headerHeight?: number;
   headerAction?: ReactNode;
+  /** Shows a back button next to the wordmark that returns to the previous screen. */
+  showBackButton?: boolean;
   children: ReactNode;
 };
 
@@ -40,6 +43,7 @@ export function OnboardingLayout({
   step,
   headerHeight = DEFAULT_HEADER_HEIGHT,
   headerAction,
+  showBackButton = false,
   children,
 }: OnboardingLayoutProps) {
   const insets = useSafeAreaInsets();
@@ -84,9 +88,13 @@ export function OnboardingLayout({
           },
         ]}
       >
-        <Text style={styles.wordmark} accessibilityRole="header">
-          RISE
-        </Text>
+        <View style={styles.headerLeading}>
+          {showBackButton ? <BackButton /> : null}
+
+          <Text style={styles.wordmark} accessibilityRole="header">
+            RISE
+          </Text>
+        </View>
 
         {headerAction}
       </View>

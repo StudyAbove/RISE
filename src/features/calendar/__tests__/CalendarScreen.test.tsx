@@ -20,6 +20,27 @@ import {
 
 import * as googleTokenService from '../services/googleTokenService';
 
+// The phone's key-value store for saved filters (#79), kept in memory.
+const mockKeyValueStore = new Map<string, string>();
+jest.mock('expo-sqlite/kv-store', () => ({
+  __esModule: true,
+  default: {
+    getItemSync: (key: string) => mockKeyValueStore.get(key) ?? null,
+    setItemSync: (key: string, value: string) => {
+      mockKeyValueStore.set(key, value);
+    },
+  },
+}));
+
+// Calendar search results (#78).
+const mockSearchCalendarEvents = jest.fn();
+
+// The student's synced classes, for the filter sheet's Courses rows (#159).
+const mockFetchCanvasCourses = jest.fn(() => Promise.resolve([] as unknown[]));
+jest.mock('../../../repositories/canvasRepository', () => ({
+  fetchCanvasCourses: () => mockFetchCanvasCourses(),
+}));
+
 const mockGetCalendarEventsInRange =
   jest.fn();
 
@@ -104,6 +125,11 @@ jest.mock(
 jest.mock(
   '../../../repositories/calendarEventsRepository',
   () => ({
+    searchCalendarEvents:
+      (...args: unknown[]) =>
+        mockSearchCalendarEvents(
+          ...args,
+        ),
     getCalendarEventsInRange:
       (...args: unknown[]) =>
         mockGetCalendarEventsInRange(
@@ -129,6 +155,7 @@ jest.mock(
 );
 
 beforeEach(() => {
+  mockKeyValueStore.clear();
   mockCreateCalendarEvent.mockReset();
 
   mockGetCalendarEventsByIdsForSync.mockReset();
@@ -1025,7 +1052,7 @@ describe(
 
               expect(
                 await screen.findByLabelText(
-                  'Biology Lecture, 9:00 AM to 10:30 AM',
+                  'Biology Lecture, RISE, 9:00 AM to 10:30 AM',
                 ),
               ).toBeOnTheScreen();
             }
@@ -1051,7 +1078,7 @@ describe(
 
             expect(
               await screen.findAllByLabelText(
-                'Late-Night Review, 11:30 PM to 1:00 AM',
+                'Late-Night Review, RISE, 11:30 PM to 1:00 AM',
               ),
             ).toHaveLength(
               2,
@@ -2070,27 +2097,29 @@ describe(
     );
 
     it(
-      'shows the search and menu actions as not yet available',
+      'shows search (#78) and the ••• filters (#79) as available',
       async () => {
         await render(
           <CalendarScreen />,
         );
 
-        for (
-          const name of [
-            'Search',
-            'More options',
-          ]
-        ) {
-          expect(
-            screen.getByRole(
-              'button',
-              {
-                name,
-              },
-            ),
-          ).toBeDisabled();
-        }
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name: 'Search',
+            },
+          ),
+        ).toBeEnabled();
+
+        expect(
+          screen.getByRole(
+            'button',
+            {
+              name: 'Show on calendar',
+            },
+          ),
+        ).toBeEnabled();
       },
     );
   },
@@ -2291,7 +2320,7 @@ describe('CalendarScreen: adding an event (#31)', () => {
 
     for (const view of ['Week', '2 Day', 'Day']) {
       await fireEvent.press(screen.getByRole('tab', { name: view }));
-      expect(await screen.findByLabelText('Chem Lab, 9:00 AM to 10:00 AM')).toBeOnTheScreen();
+      expect(await screen.findByLabelText('Chem Lab, RISE, 9:00 AM to 10:00 AM')).toBeOnTheScreen();
     }
   });
 
@@ -2767,10 +2796,13 @@ describe('CalendarScreen: opening an event (#34)', () => {
       ),
     ).toBeOnTheScreen();
 
+    // Looked up inside the review, since the source legend also says RISE.
     expect(
-      screen.getByText(
-        'RISE',
-      ),
+      within(
+        screen.getByTestId(
+          'calendar-conflict-review',
+        ),
+      ).getByText('RISE'),
     ).toBeOnTheScreen();
 
     expect(
@@ -2868,5 +2900,429 @@ describe('CalendarScreen: deleting an event (#80)', () => {
       'The event is still on your calendar. Check your connection and try again.',
     );
     expect(screen.getByRole('header', { name: 'Office Hours' })).toBeOnTheScreen();
+  });
+});
+
+describe('CalendarScreen: where events came from (#82)', () => {
+  // One event from each source. Today in these tests is Friday, November 13, 2026.
+  // A Month cell fits two events, so the Month test spreads them over four days.
+  function makeEvents(days: number[]): CalendarEvent[] {
+    const at = (i: number, hour: number) => new Date(2026, 10, days[i], hour).toISOString();
+    return [
+      { id: 'e-rise', userId: 'user-1', title: 'Study Session', startAt: at(0, 8), endAt: at(0, 9), source: 'rise' },
+      { id: 'e-google', userId: 'user-1', title: 'Dentist', startAt: at(1, 10), endAt: at(1, 11), source: 'google' },
+      { id: 'e-apple', userId: 'user-1', title: 'Club Meeting', startAt: at(2, 12), endAt: at(2, 13), source: 'apple' },
+      { id: 'e-canvas', userId: 'user-1', title: 'Problem Set 5', startAt: at(3, 14), endAt: at(3, 15), source: 'canvas' },
+    ];
+  }
+  const sourceNames = { rise: 'RISE', google: 'Google Calendar', apple: 'Apple Calendar', canvas: 'Canvas' };
+
+
+  it.each(['Month', 'Week', '2 Day', 'Day'])(
+    'shows each source the same way in %s, without hiding the title (AC1-4, AC6-8)',
+    async (view) => {
+      const events = makeEvents(view === 'Month' ? [10, 11, 12, 16] : [13, 13, 13, 13]);
+      mockGetCalendarEventsInRange.mockResolvedValue(events);
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+      for (const event of events) {
+        const chip = await screen.findByLabelText(
+          new RegExp(`^${event.title}, ${sourceNames[event.source]}, \\d`),
+        );
+        expect(within(chip).getByTestId('event-chip-logo')).toBeOnTheScreen();
+        expect(within(chip).getByText(event.title)).toBeOnTheScreen();
+      }
+    },
+  );
+
+  it.each(['Month', 'Week', '2 Day', 'Day'])('shows the legend under the %s grid', async (view) => {
+    mockGetCalendarEventsInRange.mockResolvedValue([]);
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+    expect(screen.getByLabelText(/^Event sources:/)).toBeOnTheScreen();
+  });
+
+  it("names the source in today's card too", async () => {
+    mockGetCalendarEventsInRange.mockResolvedValue(makeEvents([13, 13, 13, 13]));
+    await render(<CalendarScreen />);
+
+    const row = await screen.findByLabelText('Dentist, Google Calendar, 10:00 AM – 11:00 AM');
+    expect(within(row).getByTestId('today-event-logo')).toBeOnTheScreen();
+    expect(within(row).getByText('Dentist')).toBeOnTheScreen();
+  });
+});
+
+describe('CalendarScreen: all-day events', () => {
+  // Today in these tests is Friday, November 13, 2026. Spring Break is Mon 9 – Fri 13,
+  // stored the way Google sends it: midnight to the midnight after the last day.
+  const springBreak: CalendarEvent = {
+    id: 'spring-break',
+    userId: 'user-1',
+    title: 'Spring Break',
+    startAt: new Date(2026, 10, 9).toISOString(),
+    endAt: new Date(2026, 10, 14).toISOString(),
+    source: 'google',
+  };
+  const dentist: CalendarEvent = {
+    id: 'dentist',
+    userId: 'user-1',
+    title: 'Dentist',
+    startAt: new Date(2026, 10, 13, 10).toISOString(),
+    endAt: new Date(2026, 10, 13, 11).toISOString(),
+    source: 'apple',
+  };
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([springBreak, dentist]);
+  });
+
+  it.each(['Week', '2 Day', 'Day'])(
+    'shows an all-day event once, in the all-day strip of %s, not across the hours',
+    async (view) => {
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+      // One bar, even though Spring Break covers several of the visible days.
+      expect(await screen.findAllByLabelText('Spring Break, Google Calendar, all day')).toHaveLength(1);
+      // Timed events still go in the hourly grid.
+      expect(screen.getByLabelText('Dentist, Apple Calendar, 10:00 AM to 11:00 AM')).toBeOnTheScreen();
+    },
+  );
+
+  describe('more than 2 on a day', () => {
+    // Four all-day events on Friday, November 13 (one-day, Google style).
+    const fridayEvents = ['Holiday', 'Birthday', 'Fair', 'Retreat'].map(
+      (title): CalendarEvent => ({
+        id: title,
+        userId: 'user-1',
+        title,
+        startAt: new Date(2026, 10, 13).toISOString(),
+        endAt: new Date(2026, 10, 14).toISOString(),
+        source: 'rise',
+      }),
+    );
+    const shownAllDay = () => screen.queryAllByLabelText(/, RISE, all day$/);
+
+    beforeEach(() => {
+      mockGetCalendarEventsInRange.mockResolvedValue(fridayEvents);
+    });
+
+    it.each(['Week', '2 Day'])('shows 2 and "+2 more" in %s, expands on tap, and collapses with the chevron', async (view) => {
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: view }));
+
+      expect(await screen.findByRole('button', { name: 'Show 2 more all-day events' })).toBeOnTheScreen();
+      expect(screen.getByText('+2 more')).toBeOnTheScreen();
+      expect(shownAllDay()).toHaveLength(2);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show 2 more all-day events' }));
+      expect(shownAllDay()).toHaveLength(4);
+      expect(screen.queryByText('+2 more')).not.toBeOnTheScreen();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show fewer all-day events' }));
+      expect(shownAllDay()).toHaveLength(2);
+    });
+
+    it('shows 2 and "+2 more" beside the date in Day, and "Show less" when expanded', async () => {
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: 'Day' }));
+
+      expect(await screen.findByText('+2 more')).toBeOnTheScreen();
+      expect(shownAllDay()).toHaveLength(2);
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show 2 more all-day events' }));
+      expect(shownAllDay()).toHaveLength(4);
+
+      await fireEvent.press(screen.getByText('Show less'));
+      expect(shownAllDay()).toHaveLength(2);
+    });
+
+    it('has no "+ more" or chevron with 2 or fewer on every day', async () => {
+      mockGetCalendarEventsInRange.mockResolvedValue(fridayEvents.slice(0, 2));
+      await render(<CalendarScreen />);
+      await fireEvent.press(screen.getByRole('tab', { name: 'Week' }));
+
+      expect(await screen.findAllByLabelText(/, RISE, all day$/)).toHaveLength(2);
+      expect(screen.queryByText(/more$/)).not.toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: /all-day events$/ })).not.toBeOnTheScreen();
+    });
+  });
+
+  it("says \"All day\" in today's card", async () => {
+    await render(<CalendarScreen />);
+
+    expect(await screen.findByLabelText('Spring Break, Google Calendar, All day')).toBeOnTheScreen();
+  });
+});
+
+describe('CalendarScreen: "+N more" on Month', () => {
+  // Three events on Wednesday, November 11; a Month cell shows two and "+1 more".
+  const wednesday = ['Lab', 'Lecture', 'Club'].map(
+    (title, i): CalendarEvent => ({
+      id: title,
+      userId: 'user-1',
+      title,
+      startAt: new Date(2026, 10, 11, 9 + i * 2).toISOString(),
+      endAt: new Date(2026, 10, 11, 10 + i * 2).toISOString(),
+      source: 'rise',
+    }),
+  );
+
+  it('opens that day in Day view', async () => {
+    mockGetCalendarEventsInRange.mockResolvedValue(wednesday);
+    await render(<CalendarScreen />);
+
+    await fireEvent.press(await screen.findByRole('button', { name: '1 more event on Wednesday, November 11' }));
+
+    expect(screen.getByRole('tab', { name: 'Day', selected: true })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Wednesday, November 11' })).toBeOnTheScreen();
+    for (const title of ['Lab', 'Lecture', 'Club']) {
+      expect(await screen.findByLabelText(new RegExp(`^${title}, RISE, `))).toBeOnTheScreen();
+    }
+  });
+});
+
+describe('CalendarScreen: filters (#79)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const at = (hour: number) => new Date(2026, 10, 13, hour).toISOString();
+  const events: CalendarEvent[] = [
+    { id: 'chem', userId: 'user-1', title: 'Chem Lab', startAt: at(9), endAt: at(10), source: 'rise', eventType: 'class' },
+    { id: 'dentist', userId: 'user-1', title: 'Dentist', startAt: at(11), endAt: at(12), source: 'google' },
+    { id: 'gym', userId: 'user-1', title: 'Gym', startAt: at(13), endAt: at(14), source: 'apple', eventType: 'wellness' },
+  ];
+
+  // The Month chips; today's card names events with "–" instead of "to".
+  const chip = (title: string) => screen.queryByLabelText(new RegExp(`^${title}, .*, \\d+:\\d+ [AP]M to `));
+
+  async function openFilters() {
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    expect(screen.getByRole('header', { name: 'Show on calendar' })).toBeOnTheScreen();
+  }
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue(events);
+  });
+
+  it('hides a type that is turned off, says so, and remembers it (AC1, AC2, AC6)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Chem Lab')).not.toBeOnTheScreen();
+    expect(chip('Dentist')).toBeOnTheScreen();
+    expect(chip('Gym')).toBeOnTheScreen();
+    expect(screen.getByText('Some events are hidden')).toBeOnTheScreen();
+    expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
+      hiddenTypes: ['class'],
+      hiddenSources: [],
+      hiddenCourses: [],
+    });
+  });
+
+  it('hides events with no type, and a source, together (AC5)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('switch', { name: 'No type' }));
+    await fireEvent.press(screen.getByRole('switch', { name: 'Apple Calendar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Chem Lab')).toBeOnTheScreen();
+    expect(chip('Dentist')).not.toBeOnTheScreen();
+    expect(chip('Gym')).not.toBeOnTheScreen();
+  });
+
+  it('changes nothing when the sheet is closed with ✕', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('switch', { name: 'Classes' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+
+    expect(chip('Chem Lab')).toBeOnTheScreen();
+    expect(screen.queryByText('Some events are hidden')).not.toBeOnTheScreen();
+  });
+
+  it('shows only events within the chosen dates (AC4)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
+
+    await openFilters();
+    await fireEvent.press(screen.getByRole('button', { name: 'From, Any date' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Saturday, November 14' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Chem Lab')).not.toBeOnTheScreen();
+    expect(screen.getByText('No events match your filters')).toBeOnTheScreen();
+  });
+
+  it('says when nothing matches, in the calendar and today\'s card (AC8)', async () => {
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Chem Lab, Class, RISE, 9:00 AM to /);
+
+    await openFilters();
+    for (const name of ['RISE', 'Google Calendar', 'Apple Calendar']) {
+      await fireEvent.press(screen.getByRole('switch', { name }));
+    }
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(screen.getByText('No events match your filters')).toBeOnTheScreen();
+    expect(screen.getByText('No events today match your filters.')).toBeOnTheScreen();
+  });
+
+  it('shows everything again with Show all, and forgets the saved filters (AC7)', async () => {
+    mockKeyValueStore.set('rise.calendarFilters', JSON.stringify({ hiddenTypes: ['class'], hiddenSources: [] }));
+    await render(<CalendarScreen />);
+    await screen.findByLabelText(/^Dentist, Google Calendar, 11:00 AM to /);
+    expect(chip('Chem Lab')).not.toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show all events' }));
+
+    expect(chip('Chem Lab')).toBeOnTheScreen();
+    expect(screen.queryByText('Some events are hidden')).not.toBeOnTheScreen();
+    expect(JSON.parse(mockKeyValueStore.get('rise.calendarFilters') ?? '{}')).toEqual({
+      hiddenTypes: [],
+      hiddenSources: [],
+      hiddenCourses: [],
+    });
+  });
+});
+
+describe('CalendarScreen: assignment events (#159)', () => {
+  it('opens an assignment read-only, with its course and no Edit or Delete', async () => {
+    const assignmentEvent: CalendarEvent = {
+      ...makeEvent('Project 1', new Date(2026, 10, 13, 22, 59), new Date(2026, 10, 13, 23, 59)),
+      source: 'canvas',
+      eventType: 'assignment',
+      assignmentId: 'assignment-1',
+      course: { id: 'course-1', name: 'Software Engineering', code: 'CECS 491B' },
+    };
+    mockGetCalendarEventsInRange.mockResolvedValue([assignmentEvent]);
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+
+    await render(<CalendarScreen />);
+    await fireEvent.press((await screen.findAllByLabelText(/^Project 1, (Assignment, )?Canvas, /))[0]);
+
+    expect(await screen.findByRole('header', { name: 'Read-only calendar event' })).toBeOnTheScreen();
+    expect(screen.getByText('Software Engineering')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+});
+
+describe('CalendarScreen: course filters (#159)', () => {
+  const at = (hour: number) => new Date(2026, 10, 13, hour).toISOString();
+  const project: CalendarEvent = {
+    id: 'project', userId: 'user-1', title: 'Project 1', startAt: at(9), endAt: at(10), source: 'canvas',
+    eventType: 'assignment', assignmentId: 'assignment-1',
+    course: { id: 'cecs-491b', name: 'Software Engineering', code: 'CECS 491B' },
+  };
+  const gym: CalendarEvent = {
+    id: 'gym', userId: 'user-1', title: 'Gym', startAt: at(13), endAt: at(14), source: 'rise', eventType: 'wellness',
+  };
+  const chip = (title: string) => screen.queryAllByLabelText(new RegExp(`^${title}, .*, \\d+:\\d+ [AP]M to `));
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([project, gym]);
+    mockFetchCanvasCourses.mockResolvedValue([
+      { id: 'cecs-491b', name: 'Software Engineering', code: 'CECS 491B', color: 'sunbeam', syncEnabled: true },
+    ]);
+  });
+
+  it('hides a course that is unchecked, keeping events with no course', async () => {
+    await render(<CalendarScreen />);
+    expect((await screen.findAllByLabelText(/^Project 1, /)).length).toBeGreaterThan(0);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'CECS 491B' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Project 1')).toHaveLength(0);
+    expect(chip('Gym').length).toBeGreaterThan(0);
+    expect(screen.getByText('Some events are hidden')).toBeOnTheScreen();
+  });
+
+  it('shows only course work when All other courses is unchecked', async () => {
+    await render(<CalendarScreen />);
+    await screen.findAllByLabelText(/^Gym, /);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Show on calendar' }));
+    await fireEvent.press(await screen.findByRole('checkbox', { name: 'All other courses' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+
+    expect(chip('Gym')).toHaveLength(0);
+    expect(chip('Project 1').length).toBeGreaterThan(0);
+  });
+});
+
+describe('CalendarScreen: search (#78)', () => {
+  // Today in these tests is Friday, November 13, 2026.
+  const project: CalendarEvent = {
+    id: 'project', userId: 'user-1', title: 'CECS 449 Project 1',
+    startAt: new Date(2026, 10, 23, 22, 59).toISOString(), endAt: new Date(2026, 10, 23, 23, 59).toISOString(),
+    source: 'rise', eventType: 'study',
+  };
+
+  async function searchFor(text: string) {
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+    await fireEvent.changeText(screen.getByLabelText('Search calendar'), text);
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+  }
+
+  beforeEach(() => {
+    mockGetCalendarEventsInRange.mockResolvedValue([]);
+    mockGetCalendarEventLinks.mockResolvedValue([]);
+    mockSearchCalendarEvents.mockReset();
+    mockSearchCalendarEvents.mockResolvedValue([project]);
+  });
+
+  it('opens search from the header and finds events (AC1)', async () => {
+    await render(<CalendarScreen />);
+    await searchFor('449');
+
+    expect(mockSearchCalendarEvents).toHaveBeenCalledWith('449');
+    expect(await screen.findByRole('button', { name: /^CECS 449 Project 1, Mon, Nov 23/ })).toBeOnTheScreen();
+  });
+
+  it('opens a result on its day in Day view, with its details (AC6)', async () => {
+    await render(<CalendarScreen />);
+    await searchFor('449');
+
+    // iOS reports the search sheet finished closing; the test Modal is gone as
+    // soon as it's hidden, so keep its onDismiss and call it afterwards.
+    const onDismiss = screen.getByTestId('calendar-search-sheet').props.onDismiss as () => void;
+    await fireEvent.press(await screen.findByRole('button', { name: /^CECS 449 Project 1, / }));
+    await act(async () => {
+      onDismiss();
+    });
+
+    expect(screen.queryByLabelText('Search calendar')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Day', selected: true })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Monday, November 23' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'CECS 449 Project 1' })).toBeOnTheScreen();
+  });
+
+  it('closes with ✕ and leaves the calendar as it was', async () => {
+    await render(<CalendarScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+
+    const onDismiss = screen.getByTestId('calendar-search-sheet').props.onDismiss as () => void;
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    await act(async () => {
+      onDismiss();
+    });
+
+    expect(screen.queryByLabelText('Search calendar')).not.toBeOnTheScreen();
+    expect(screen.getByRole('tab', { name: 'Month', selected: true })).toBeOnTheScreen();
+    expect(screen.queryByRole('header', { name: 'CECS 449 Project 1' })).not.toBeOnTheScreen();
   });
 });

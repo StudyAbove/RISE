@@ -30,6 +30,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 23,
   },
 
+  headerLeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
   wordmark: {
     fontFamily: fonts.heading.extraBold,
     fontSize: 24,

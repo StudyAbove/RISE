@@ -1,6 +1,5 @@
-import { type FC, type ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, type ImageSourcePropType, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import type { SvgProps } from 'react-native-svg';
+import { type ReactNode, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { format, parseISO } from 'date-fns';
 
 import BellIcon from '../../../../assets/icons/calendar/details/bell.svg';
@@ -8,36 +7,19 @@ import CalendarIcon from '../../../../assets/icons/calendar/details/calendar.svg
 import FileTextIcon from '../../../../assets/icons/calendar/details/file-text.svg';
 import MapPinIcon from '../../../../assets/icons/calendar/details/map-pin.svg';
 import CloseIcon from '../../../../assets/icons/calendar/close.svg';
-import AssignmentIcon from '../../../../assets/icons/calendar/event-types/assignment.svg';
-import PersonalIcon from '../../../../assets/icons/calendar/event-types/personal.svg';
-import StudyIcon from '../../../../assets/icons/calendar/event-types/study.svg';
-import WellnessIcon from '../../../../assets/icons/calendar/event-types/wellness.svg';
-import type { CalendarEvent, CalendarEventType, CalendarSource } from '../../../models/CalendarEvent';
+import ClassIcon from '../../../../assets/icons/calendar/event-types/class.svg';
+import type { CalendarEvent } from '../../../models/CalendarEvent';
 import { colors } from '../../../theme/colors';
-import { eventTypeCircleColors } from '../calendarColors';
 import { getLinkedCalendarProviders } from '../services/calendarEventSyncService';
+import { getAllDayRange } from '../utils/allDayEvents';
 import { getDeleteConfirmMessage, getDeleteErrorMessage } from '../utils/deleteEventMessages';
 import { EVENT_SOURCE_LABELS, EVENT_TYPE_LABELS, formatReminder } from '../utils/eventLabels';
-import { styles } from './EventDetailsSheet.styles';
+import { CIRCLE_SIZE, styles } from './EventDetailsSheet.styles';
+import { EventTypeCircle } from './EventTypeCircle';
+import { SourceLogo } from './SourceLogo';
 import { formatEventTime } from './TodayEventsCard';
 
 const BIG_ICON_SIZE = 44;
-
-// The big icon at the top, by event type. Class is an image (see below).
-const TYPE_ICONS: Partial<Record<CalendarEventType, FC<SvgProps>>> = {
-  assignment: AssignmentIcon,
-  study: StudyIcon,
-  personal: PersonalIcon,
-  wellness: WellnessIcon,
-};
-
-// Each source's logo for the "From" row; RISE events use the app icon.
-const SOURCE_LOGOS: Record<CalendarSource, ImageSourcePropType> = {
-  rise: require('../../../../assets/icon.png'),
-  google: require('../../../../assets/icons/google.png'),
-  apple: require('../../../../assets/icons/apple.png'),
-  canvas: require('../../../../assets/icons/canvas/canvas-logo.png'),
-};
 
 interface EventDetailsSheetProps {
   visible: boolean;
@@ -45,7 +27,10 @@ interface EventDetailsSheetProps {
   event: CalendarEvent | null;
   /** An unresolved provider conflict must be resolved before editing/deleting. */
   hasUnresolvedConflict: boolean;
-  /** Provider permissions do not allow this event to be changed in RISE. */
+  /**
+   * The event can't be changed in RISE: provider permissions don't allow it,
+   * or it shows an assignment (#159).
+   */
   readOnly: boolean;
   /** Provider sources for an imported Apple/Google event after deduplication. */
   providerSources: Array<'apple' | 'google'>;
@@ -173,7 +158,13 @@ export function EventDetailsSheet({
 
         {event && (
           <ScrollView contentContainerStyle={styles.content}>
-            <TypeCircle type={event.eventType} />
+            <EventTypeCircle
+              testID="event-type-circle"
+              type={event.eventType}
+              size={CIRCLE_SIZE}
+              iconSize={BIG_ICON_SIZE}
+              style={styles.circle}
+            />
 
             <View style={[styles.card, styles.mainCard]}>
               <Text accessibilityRole="header" style={styles.title}>
@@ -181,7 +172,7 @@ export function EventDetailsSheet({
               </Text>
 
               <DetailRow icon={<CalendarIcon width={25} height={25} />}>
-                {format(parseISO(event.startAt), 'EEEE, MMMM d, yyyy')}
+                {formatEventDate(event)}
                 {'\n'}
                 {formatEventTime(event)}
               </DetailRow>
@@ -192,39 +183,18 @@ export function EventDetailsSheet({
                   event.source !== 'canvas' &&
                   providerSources.length > 1 ? (
                     <View style={styles.multipleSourceLogos}>
-                      {providerSources.map(
-                        (provider) => (
-                          <Image
-                            key={provider}
-                            testID={`event-source-logo-${provider}`}
-                            source={SOURCE_LOGOS[provider]}
-                            style={[
-                              styles.multipleSourceLogo,
-                              provider === 'apple' &&
-                                styles.appleLogo,
-                            ]}
-                            accessibilityIgnoresInvertColors
-                          />
-                        ),
-                      )}
+                      {providerSources.map((provider) => (
+                        <SourceLogo
+                          key={provider}
+                          testID={`event-source-logo-${provider}`}
+                          source={provider}
+                          size={17}
+                          style={styles.multipleSourceLogo}
+                        />
+                      ))}
                     </View>
                   ) : (
-                    <Image
-                      testID="event-source-logo"
-                      source={
-                        SOURCE_LOGOS[
-                          event.source
-                        ]
-                      }
-                      // The Apple logo is white (made for the dark Apple button), so it's darkened here to show on the card.
-                      style={[
-                        styles.sourceLogo,
-                        event.source ===
-                          'apple' &&
-                          styles.appleLogo,
-                      ]}
-                      accessibilityIgnoresInvertColors
-                    />
+                    <SourceLogo testID="event-source-logo" source={event.source} size={22} style={styles.sourceLogo} />
                   )
                 }
               >
@@ -248,6 +218,10 @@ export function EventDetailsSheet({
 
               {event.eventType && (
                 <DetailRow icon={<FileTextIcon width={25} height={25} />}>{EVENT_TYPE_LABELS[event.eventType]}</DetailRow>
+              )}
+
+              {event.course && (
+                <DetailRow icon={<ClassIcon width={25} height={25} />}>{event.course.name}</DetailRow>
               )}
 
               {event.location ? (
@@ -310,7 +284,9 @@ export function EventDetailsSheet({
                 </Text>
 
                 <Text style={styles.readOnlyText}>
-                  This event is controlled by a connected calendar and cannot be edited or deleted in RISE.
+                  {event.assignmentId
+                    ? 'This event shows an assignment\'s due date, so it updates with the assignment and cannot be edited or deleted here.'
+                    : 'This event is controlled by a connected calendar and cannot be edited or deleted in RISE.'}
                 </Text>
               </View>
             ) : (
@@ -395,26 +371,16 @@ export function EventDetailsSheet({
   );
 }
 
-/** The colored circle with the event type's icon, or a calendar for events without a type. */
-function TypeCircle({ type }: { type?: CalendarEventType }) {
-  const Icon = type ? TYPE_ICONS[type] : CalendarIcon;
-
-  return (
-    <View
-      testID="event-type-circle"
-      style={[styles.circle, { backgroundColor: eventTypeCircleColors[type ?? 'none'] }]}
-    >
-      {Icon ? (
-        <Icon width={BIG_ICON_SIZE} height={BIG_ICON_SIZE} />
-      ) : (
-        <Image
-          source={require('../../../../assets/icons/calendar/event-types/class.png')}
-          style={styles.classIcon}
-          accessibilityIgnoresInvertColors
-        />
-      )}
-    </View>
-  );
+/**
+ * "Wednesday, November 18, 2026", or for an all-day event over several days,
+ * "Monday, November 16 – Friday, November 20, 2026".
+ */
+function formatEventDate(event: CalendarEvent): string {
+  const range = getAllDayRange(event);
+  if (range && range.lastDay > range.firstDay) {
+    return `${format(range.firstDay, 'EEEE, MMMM d')} – ${format(range.lastDay, 'EEEE, MMMM d, yyyy')}`;
+  }
+  return format(parseISO(event.startAt), 'EEEE, MMMM d, yyyy');
 }
 
 function DetailRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {

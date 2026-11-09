@@ -64,6 +64,49 @@ export const styles = StyleSheet.create({
   todayNumber: {
     color: colors.softWhite,
   },
+  // The strip of all-day events under the Week and 2 Day headers.
+  allDayRow: {
+    flexDirection: 'row',
+    paddingBottom: 4,
+  },
+  allDayArea: {
+    flex: 1,
+  },
+  allDayGutter: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 4,
+  },
+  // The chevron file points left; turned to point down (expand) or up (collapse).
+  chevronDown: {
+    transform: [{ rotate: '-90deg' }],
+  },
+  chevronUp: {
+    transform: [{ rotate: '90deg' }],
+  },
+  allDayMore: {
+    justifyContent: 'center',
+  },
+  allDayMoreText: {
+    fontFamily: fonts.body.medium,
+    fontSize: 10,
+    lineHeight: 14,
+    color: calendarColors.hourLabel,
+    paddingLeft: 2,
+  },
+  // Lines up with the day columns below, leaving 1pt between neighboring bars.
+  allDayBar: {
+    position: 'absolute',
+    paddingLeft: 1,
+    paddingRight: 1,
+  },
+  // Day's all-day events, stacked beside the date.
+  dayAllDayList: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 2,
+    paddingRight: 8,
+  },
   scrollView: {
     flex: 1,
   },

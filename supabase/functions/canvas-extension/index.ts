@@ -6,6 +6,7 @@
 // POST { action: 'sync', ...canvas data }           → { courses, assignments, removed, syncedAt }
 // multipart + x-rise-extension-action: extractSyllabusDocument → { syllabusInfo }
 // Prototype actions require the paired extension token and save isolated test runs.
+//   (canvas data includes studentName, saved for the greeting if unset)
 // POST { action: 'disconnect' }                     → { disconnected: true }
 //
 // After pairing, the extension sends its token in the x-rise-extension-token
@@ -336,6 +337,25 @@ async function saveCourseChoices(supabase: SupabaseClient, userId: string, body:
   return jsonResponse({ saved: choices.length });
 }
 
+/**
+ * Saves the student's Canvas name for the Home greeting (#56), but only if
+ * their profile doesn't have a name yet, so it never replaces one they set.
+ * A failure here shouldn't fail the sync.
+ */
+async function saveStudentName(supabase: SupabaseClient, userId: string, name: string | null) {
+  if (!name) return;
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ display_name: name, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+    .is('display_name', null);
+
+  if (error) {
+    console.error('Could not save the Canvas name:', error);
+  }
+}
+
 async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknown) {
   const disabledResponse = await checkSyncEnabled(supabase, userId);
 
@@ -432,6 +452,8 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
         }
       }
     }
+
+    await saveStudentName(supabase, userId, payload.studentName);
 
     await supabase.from('canvas_connections').upsert({
       user_id: userId,

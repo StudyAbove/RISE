@@ -23,6 +23,7 @@ import {
   markCalendarEventLinkSynced,
   saveCalendarEventLink,
   updateCalendarEventLinkAllDayMetadata,
+  updateCalendarEventLinkExternalEventId,
   updateCalendarEventLinkWritability,
 } from '../../../repositories/calendarEventLinksRepository';
 
@@ -37,11 +38,21 @@ import {
 import {
   appleCalendarEventExists,
   getAppleCalendarAccess,
+  getAppleCalendarExternalEventId,
   updateAppleCalendarEvent,
 } from './calendarService';
 
 export interface AppleCalendarImportCandidate {
   externalEventId: string;
+
+  /**
+   * Raw EventKit series/event ID.
+   *
+   * Recurring occurrences use an occurrence-specific externalEventId
+   * for RISE persistence, while this value remains the real native ID.
+   */
+  nativeEventId?: string;
+
   externalCalendarId: string;
   calendarTitle: string;
   title: string;
@@ -624,6 +635,16 @@ export async function getAppleCalendarEvents(
 
         return {
           externalEventId:
+            getAppleCalendarExternalEventId(
+              event.id,
+              event.originalStartDate
+                ? new Date(
+                    event.originalStartDate,
+                  ).toISOString()
+                : undefined,
+            ),
+
+          nativeEventId:
             event.id,
 
           externalCalendarId:
@@ -895,9 +916,15 @@ export async function syncAppleCalendarEvents(
    */
   const returnedAppleEventIds =
     new Set(
-      candidates.map(
-        (candidate) =>
+      candidates.flatMap(
+        (candidate) => [
           candidate.externalEventId,
+          ...(candidate.nativeEventId
+            ? [
+                candidate.nativeEventId,
+              ]
+            : []),
+        ],
       ),
     );
 
@@ -1024,10 +1051,68 @@ export async function syncAppleCalendarEvents(
     const candidate
     of candidates
   ) {
-    const existingLink =
+    let existingLink =
       linksByExternalId.get(
         candidate.externalEventId,
       );
+
+    /*
+     * Backward compatibility for recurring events imported before
+     * occurrence-specific Apple identities were introduced.
+     *
+     * Older links stored only the raw EventKit series ID. Adopt that
+     * link only when the candidate belongs to the same native series
+     * and still matches the already-linked RISE occurrence. This keeps
+     * the existing RISE row instead of importing a duplicate Monday.
+     */
+    if (
+      !existingLink &&
+      candidate.nativeEventId &&
+      candidate.nativeEventId !==
+        candidate.externalEventId
+    ) {
+      const legacyLink =
+        linksByExternalId.get(
+          candidate.nativeEventId,
+        );
+
+      const legacyRiseEvent =
+        legacyLink
+          ? riseEventsById.get(
+              legacyLink.calendarEventId,
+            )
+          : undefined;
+
+      if (
+        legacyLink &&
+        legacyRiseEvent &&
+        appleCandidateMatchesRiseEvent(
+          candidate,
+          legacyRiseEvent,
+        )
+      ) {
+        await updateCalendarEventLinkExternalEventId(
+          legacyLink.calendarEventId,
+          'apple',
+          candidate.externalEventId,
+        );
+
+        linksByExternalId.delete(
+          candidate.nativeEventId,
+        );
+
+        existingLink = {
+          ...legacyLink,
+          externalEventId:
+            candidate.externalEventId,
+        };
+
+        linksByExternalId.set(
+          candidate.externalEventId,
+          existingLink,
+        );
+      }
+    }
 
     if (!existingLink) {
       try {

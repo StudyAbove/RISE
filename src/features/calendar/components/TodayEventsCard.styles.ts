@@ -48,7 +48,14 @@ export const styles = StyleSheet.create({
   eventText: {
     flex: 1,
   },
+  // The source logo (#82) and the title.
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   eventTitle: {
+    flexShrink: 1,
     fontFamily: fonts.body.bold,
     fontSize: 14,
     lineHeight: 20,

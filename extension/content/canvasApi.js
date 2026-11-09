@@ -365,6 +365,31 @@ const RiseCanvasApi = (() => {
     return (!Number.isNaN(start) && now >= start) && (!Number.isNaN(end) && now <= end);
   }
 
+  /**
+   * The student's name for Rise's greeting: the name they go by in Canvas
+   * ("short name"), or their full name. Null if Canvas doesn't say; the sync
+   * works without it.
+   */
+  async function getStudentName(origin) {
+    try {
+      const response = await fetch(new URL('/api/v1/users/self', origin).href, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const user = await response.json().catch(() => null);
+      const name = user?.short_name || user?.name;
+
+      return typeof name === 'string' && name.trim() ? name.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** The student's current classes. */
   async function collectCourses(origin) {
     const courses = await getPaged(origin, '/api/v1/courses?enrollment_state=active&include[]=term&include[]=enrollments&per_page=100');
@@ -383,7 +408,7 @@ const RiseCanvasApi = (() => {
 
   /** Everything Rise syncs, in the shape the canvas-extension function expects. */
   async function collect(origin) {
-    const courses = await collectCourses(origin);
+    const [courses, studentName] = await Promise.all([collectCourses(origin), getStudentName(origin)]);
 
     const assignmentLists = await Promise.all(
       courses.map((course) =>
@@ -396,6 +421,7 @@ const RiseCanvasApi = (() => {
 
     return {
       canvasDomain: new URL(origin).hostname,
+      studentName,
       courses,
       assignments: assignmentLists.flat().map(({ assignment, course }) => ({
         id: assignment.id,

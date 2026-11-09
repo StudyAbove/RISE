@@ -24,6 +24,12 @@ interface CalendarHeaderProps {
   onNext: () => void;
   /** Opens the Add Event form. */
   onAddEvent: () => void;
+  /** Opens "Show on calendar", the filters (#79). */
+  onOpenFilters: () => void;
+  /** Opens calendar search (#78). */
+  onOpenSearch: () => void;
+  /** Whether filters are hiding any events, so VoiceOver can say so. */
+  isFiltering?: boolean;
 }
 
 /** Top of the Calendar page: sun-and-hills banner, action icons, and the period label with ‹ › arrows. */
@@ -34,6 +40,9 @@ export function CalendarHeader({
   onPrevious,
   onNext,
   onAddEvent,
+  onOpenFilters,
+  onOpenSearch,
+  isFiltering = false,
 }: CalendarHeaderProps) {
   const insets = useSafeAreaInsets();
 
@@ -51,10 +60,14 @@ export function CalendarHeader({
         accessibilityIgnoresInvertColors
       />
 
-      {/* The ••• menu and search are built in later stories, so they're disabled
-          for now (VoiceOver reads them as "dimmed"). */}
       <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" accessibilityLabel="More options" hitSlop={HIT_SLOP} disabled>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Show on calendar"
+          accessibilityValue={isFiltering ? { text: 'Some events hidden' } : undefined}
+          hitSlop={HIT_SLOP}
+          onPress={onOpenFilters}
+        >
           <View style={styles.iconBox}>
             <MoreIcon width={23} height={5} />
           </View>
@@ -63,7 +76,7 @@ export function CalendarHeader({
           <Pressable accessibilityRole="button" accessibilityLabel="Add event" hitSlop={HIT_SLOP} onPress={onAddEvent}>
             <AddIcon width={24} height={24} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Search" hitSlop={HIT_SLOP} disabled>
+          <Pressable accessibilityRole="button" accessibilityLabel="Search" hitSlop={HIT_SLOP} onPress={onOpenSearch}>
             <View style={styles.iconBox}>
               <SearchIcon width={20.5} height={20.5} />
             </View>

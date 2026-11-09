@@ -431,3 +431,23 @@ entrypoint = "./functions/check-email-exists/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/canvas-extension/index.ts"
+
+# Deletes only the currently authenticated RISE account.
+# The function also validates the caller's JWT before using
+# the service role to perform the hard Auth-user deletion.
+[functions.delete-account]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/delete-account/index.ts"
+
+# Called by the app with the student's session, so Supabase checks the JWT (#57).
+[functions.estimate-assignments]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/estimate-assignments/index.ts"
+
+# Generate saved microtasks for the signed-in student's assignment (#42).
+[functions.generate-microtasks]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/generate-microtasks/index.ts"

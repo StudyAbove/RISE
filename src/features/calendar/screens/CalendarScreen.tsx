@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -57,6 +58,10 @@ import {
 } from '../components/CalendarConflictPickerModal';
 import { EditCalendarEventModal } from '../components/EditCalendarEventModal';
 import { EventDetailsSheet } from '../components/EventDetailsSheet';
+import { EventSourceLegend } from '../components/EventSourceLegend';
+import { CalendarFilterNotice } from '../components/filters/CalendarFilterNotice';
+import { CalendarFilterSheet } from '../components/filters/CalendarFilterSheet';
+import { CalendarSearchSheet } from '../components/search/CalendarSearchSheet';
 import { MonthGrid } from '../components/MonthGrid';
 import { TimeGrid } from '../components/TimeGrid';
 import { TodayEventsCard } from '../components/TodayEventsCard';
@@ -78,6 +83,14 @@ import {
 import {
   getConnectedCalendarProviders,
 } from '../services/connectedCalendars';
+import {
+  subscribeToCalendarRefresh,
+} from '../services/calendarRefreshService';
+
+import {
+  loadCalendarFilters,
+  saveCalendarFilters,
+} from '../services/calendarFilterStorage';
 
 import {
   deleteCalendarEventWithSync,
@@ -92,6 +105,13 @@ import {
 } from '../utils/calendarDates';
 
 import { getAddEventSyncMessage } from '../utils/addEventSyncMessage';
+
+import {
+  DEFAULT_CALENDAR_FILTERS,
+  filterCalendarEvents,
+  isFiltering,
+  type CalendarFilters,
+} from '../utils/calendarFilters';
 
 import { styles } from './CalendarScreen.styles';
 
@@ -198,6 +218,34 @@ export function CalendarScreen() {
     setIsAddingEvent,
   ] =
     useState(false);
+
+  // What "Show on calendar" (#79) hides. The type and source toggles are
+  // saved on the phone; the date range starts empty each time.
+  const [
+    filters,
+    setFilters,
+  ] =
+    useState<CalendarFilters>(
+      loadCalendarFilters,
+    );
+
+  const [
+    isFilterSheetOpen,
+    setIsFilterSheetOpen,
+  ] =
+    useState(false);
+
+  const [
+    isSearchOpen,
+    setIsSearchOpen,
+  ] =
+    useState(false);
+
+  // The search result to show once the search sheet has closed (#78).
+  const searchResultToOpenRef =
+    useRef<CalendarEvent | null>(
+      null,
+    );
 
   // Says when a new event didn't reach a connected Google or Apple calendar (#123).
   const [
@@ -339,6 +387,31 @@ export function CalendarScreen() {
     useCalendarEvents(
       visibleRange.start,
       visibleRange.end,
+    );
+
+  const filtering =
+    isFiltering(filters);
+
+  const visibleEvents =
+    useMemo(
+      () =>
+        filterCalendarEvents(
+          events,
+          filters,
+        ),
+      [events, filters],
+    );
+
+  const applyFilters =
+    useCallback(
+      (
+        nextFilters: CalendarFilters,
+      ) => {
+        setFilters(nextFilters);
+        saveCalendarFilters(nextFilters);
+        setIsFilterSheetOpen(false);
+      },
+      [],
     );
 
   const refreshConflicts =
@@ -1157,6 +1230,26 @@ export function CalendarScreen() {
     runAutomaticSyncIfDue,
   ]);
 
+  /*
+   * Root-level permission handling can finish after this screen's
+   * AppState refresh has already run.
+   *
+   * Listen for a completed provider cleanup so deleted Apple events
+   * disappear immediately without requiring navigation away/back.
+   */
+  useEffect(() => {
+    return subscribeToCalendarRefresh(
+      () => {
+        refreshCalendar();
+
+        void loadLatestSuccessfulSync();
+      },
+    );
+  }, [
+    loadLatestSuccessfulSync,
+    refreshCalendar,
+  ]);
+
   const shift = (
     direction: 1 | -1,
   ) =>
@@ -1168,6 +1261,21 @@ export function CalendarScreen() {
           direction,
         ),
     );
+
+  // "+N more" on Month opens that day in Day view, where every event fits.
+  function handleShowDay(
+    day: Date,
+  ) {
+    setAnchorDate(
+      startOfDay(
+        day,
+      ),
+    );
+
+    setView(
+      'day',
+    );
+  }
 
   /*
    * Load provider-link information before showing Event Details.
@@ -1261,6 +1369,14 @@ export function CalendarScreen() {
       }
     }
 
+    // An assignment's event (#159) follows the assignment, so it's never
+    // editable here.
+    if (
+      event.assignmentId
+    ) {
+      readOnly = true;
+    }
+
     openEditAfterDetailsRef.current =
       false;
 
@@ -1282,6 +1398,52 @@ export function CalendarScreen() {
 
     setDetailsVisible(
       true,
+    );
+  }
+
+  /*
+   * A search result (#78, AC6) opens its day in Day view with its details on
+   * top. iOS can't show Details while the search sheet is still closing, so
+   * that waits for handleSearchDismissed.
+   */
+  function handleSearchResult(
+    event: CalendarEvent,
+  ) {
+    searchResultToOpenRef.current =
+      event;
+
+    setIsSearchOpen(
+      false,
+    );
+
+    // onDismiss only fires on iOS.
+    if (
+      Platform.OS !==
+      'ios'
+    ) {
+      handleSearchDismissed();
+    }
+  }
+
+  function handleSearchDismissed() {
+    const event =
+      searchResultToOpenRef.current;
+
+    searchResultToOpenRef.current =
+      null;
+
+    if (!event) {
+      return;
+    }
+
+    handleShowDay(
+      parseISO(
+        event.startAt,
+      ),
+    );
+
+    void openEventDetails(
+      event,
     );
   }
 
@@ -1856,6 +2018,15 @@ export function CalendarScreen() {
         onAddEvent={() =>
           setIsAddingEvent(true)
         }
+        onOpenFilters={() =>
+          setIsFilterSheetOpen(true)
+        }
+        onOpenSearch={() =>
+          setIsSearchOpen(true)
+        }
+        isFiltering={
+          filtering
+        }
       />
 
       <CalendarViewSwitcher
@@ -1958,6 +2129,22 @@ export function CalendarScreen() {
         </Pressable>
       </View>
 
+      {filtering && (
+        <CalendarFilterNotice
+          noMatches={
+            status ===
+              'ready' &&
+            visibleEvents.length ===
+              0
+          }
+          onShowAll={() =>
+            applyFilters(
+              DEFAULT_CALENDAR_FILTERS,
+            )
+          }
+        />
+      )}
+
       <View
         style={
           styles.body
@@ -1978,7 +2165,7 @@ export function CalendarScreen() {
                 anchorDate
               }
               events={
-                events
+                visibleEvents
               }
               conflictEventIds={
                 conflictEventIds
@@ -1989,11 +2176,19 @@ export function CalendarScreen() {
               onEventPress={
                 handleEventPress
               }
+              onShowDay={
+                handleShowDay
+              }
             />
+
+            <EventSourceLegend />
 
             <TodayEventsCard
               key={
                 todayCardRefreshKey
+              }
+              filters={
+                filters
               }
               onEventPress={
                 handleEventPress
@@ -2001,24 +2196,28 @@ export function CalendarScreen() {
             />
           </ScrollView>
         ) : (
-          <TimeGrid
-            key={
-              view
-            }
-            days={getTimeGridDays(
-              view,
-              anchorDate,
-            )}
-            view={
-              view
-            }
-            events={
-              events
-            }
-            onEventPress={
-              handleEventPress
-            }
-          />
+          <>
+            <TimeGrid
+              key={
+                view
+              }
+              days={getTimeGridDays(
+                view,
+                anchorDate,
+              )}
+              view={
+                view
+              }
+              events={
+                visibleEvents
+              }
+              onEventPress={
+                handleEventPress
+              }
+            />
+
+            <EventSourceLegend />
+          </>
         )}
 
         <CalendarEventsStatus
@@ -2128,6 +2327,36 @@ export function CalendarScreen() {
         }
         onSaved={
           handleEventAdded
+        }
+      />
+
+      <CalendarFilterSheet
+        visible={
+          isFilterSheetOpen
+        }
+        filters={
+          filters
+        }
+        onApply={
+          applyFilters
+        }
+        onClose={() =>
+          setIsFilterSheetOpen(false)
+        }
+      />
+
+      <CalendarSearchSheet
+        visible={
+          isSearchOpen
+        }
+        onClose={() =>
+          setIsSearchOpen(false)
+        }
+        onSelectEvent={
+          handleSearchResult
+        }
+        onDismiss={
+          handleSearchDismissed
         }
       />
     </View>

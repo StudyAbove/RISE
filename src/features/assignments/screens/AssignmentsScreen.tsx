@@ -1,257 +1,282 @@
-/*
-import { TabPlaceholderScreen } from '../../../components/TabPlaceholderScreen';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
-// Main page of the List tab (assignments). Placeholder until the real screen is built.
-export function AssignmentsScreen() {
-  return <TabPlaceholderScreen title="List" showSettingsButton />;
-}
-
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-*/import { useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-
+import { TabPageHeader } from '../../../components/TabPageHeader';
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
-import { SettingsButton } from '../../settings/components/SettingsButton';
+import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { supabase } from '../../../lib/supabase';
+import {
+  fetchAssignments,
+  type Assignment,
+} from '../../../repositories/assignmentsRepository';
+import { colors } from '../../../theme/colors';
+import { textStyles } from '../../../theme/typography';
+import { AssignmentCard } from '../components/AssignmentCard';
+import { SectionHeader } from '../components/SectionHeader';
+import { getAssignmentListSections } from '../utils/assignmentListSections';
 
-type Assignment = {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  progress: number;
-  courseColor: string;
-};
-
-const mockAssignments: Assignment[] = [
-  {
-    id: '1',
-    title: 'Milestone #4',
-    description: 'Wireframes, IA, and interactive prototype',
-    dueDate: 'Fri, Nov 13',
-    progress: 25,
-    courseColor: '#D8B83F',
-  },
-  {
-    id: '2',
-    title: 'Osmosis Lab Report',
-    description: 'Write up results and conclusion',
-    dueDate: 'Fri, Nov 13',
-    progress: 0,
-    courseColor: '#78927B',
-  },
-  {
-    id: '3',
-    title: 'Problem Set #5',
-    description: 'Complete problems 1-10',
-    dueDate: 'Fri, Nov 13',
-    progress: 0,
-    courseColor: '#39598A',
-  },
-  {
-    id: '4',
-    title: 'History Essay',
-    description: 'Write 3-4 pages on topic of choice',
-    dueDate: 'Sun, Nov 15',
-    progress: 0,
-    courseColor: '#B96D5F',
-  },
-  {
-    id: '5',
-    title: 'Agile Kickoff',
-    description: 'Planning and coordinating',
-    dueDate: 'Sun, Nov 22',
-    progress: 0,
-    courseColor: '#D8B83F',
-  },
-  {
-    id: '6',
-    title: 'Homeostasis Questions',
-    description: 'Finish ~30 questions from McGraw',
-    dueDate: 'Tue, Nov 17',
-    progress: 0,
-    courseColor: '#78927B',
-  },
-  {
-    id: '7',
-    title: 'Seminar Readings',
-    description: 'Read three articles to prepare for discussion',
-    dueDate: 'Thur, Nov 19',
-    progress: 0,
-    courseColor: '#B96D5F',
-  },
-];
+type LoadStatus = 'loading' | 'ready' | 'signedOut' | 'error';
 
 export function AssignmentsScreen() {
   const titleRef = useRef<Text>(null);
+  const date = useCurrentDate();
+
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [reloadCount, setReloadCount] = useState(0);
+  const [showPast, setShowPast] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // A pull-to-refresh keeps the list on screen while it reloads.
+  const isPullRefresh = useRef(false);
+
+  // Completed work enters Past immediately.
+  // Unfinished work enters Past after 2 days overdue.
+  // Both remain in Past for 14 days before being hidden from List.
+  const { currentAssignments, pastAssignments } = useMemo(
+    () => getAssignmentListSections(assignments, date),
+    [assignments, date],
+  );
+
+  // Reload when the student opens this tab, pulls down, or taps Try again.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      async function loadAssignments() {
+        if (!isPullRefresh.current) {
+          setStatus('loading');
+          setAssignments([]);
+        }
+
+        try {
+          const { data, error } = await supabase.auth.getSession();
+
+          if (!active) return;
+          if (error) throw error;
+
+          // Skipping the login screen does not create a real session.
+          if (!data.session) {
+            setStatus('signedOut');
+            return;
+          }
+
+          const loadedAssignments = await fetchAssignments();
+
+          if (!active) return;
+
+          setAssignments(loadedAssignments);
+          setStatus('ready');
+        } catch {
+          if (!active) return;
+
+          setAssignments([]);
+          setStatus('error');
+        } finally {
+          isPullRefresh.current = false;
+          setRefreshing(false);
+        }
+      }
+
+      void loadAssignments();
+
+      // Ignore a request's result if the student leaves this screen.
+      return () => {
+        active = false;
+      };
+    }, [reloadCount]),
+  );
+
+  const refreshAssignments = () => {
+    setReloadCount((count) => count + 1);
+  };
+
+  const pullToRefresh = () => {
+    isPullRefresh.current = true;
+    setRefreshing(true);
+    refreshAssignments();
+  };
 
   return (
     <TabScreenScrollView
       focusTargetRef={titleRef}
       contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={pullToRefresh}
+          tintColor={colors.deepOlive}
+          colors={[colors.deepOlive]}
+        />
+      }
     >
-      <View style={styles.headerRow}>
-        <SettingsButton />
-      </View>
-
-      <View style={styles.header}>
-        <Text ref={titleRef} accessibilityRole="header" style={styles.title}>
-          List
-        </Text>
-        <Text style={styles.subtitle}>Look at an overview of the future</Text>
-      </View>
+      {/* The sky, settings button, title and subtitle, shared with Study
+          Plan and Analytics. */}
+      <TabPageHeader
+        title="List"
+        subtitle="Look at an overview of the future"
+        titleRef={titleRef}
+      />
 
       <View style={styles.list}>
-        {mockAssignments.map((assignment) => (
-          <View key={assignment.id} style={styles.card}>
-            <View
-              style={[
-                styles.courseDot,
-                { backgroundColor: assignment.courseColor },
-              ]}
-            />
-
-            <View style={styles.cardContent}>
-              <Text style={styles.assignmentTitle}>{assignment.title}</Text>
-              <Text style={styles.description}>{assignment.description}</Text>
-
-              <View style={styles.dueRow}>
-                <Text style={styles.calendarIcon}>▣</Text>
-                <Text style={styles.dueDate}>Due {assignment.dueDate}</Text>
-              </View>
-
-              <View style={styles.progressRow}>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${assignment.progress}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressText}>{assignment.progress}%</Text>
-              </View>
-            </View>
-
-            <View style={styles.startButton}>
-              <Text style={styles.startButtonText}>▶</Text>
-            </View>
+        {status === 'loading' && (
+          <View style={styles.statusCard}>
+            <ActivityIndicator color={colors.deepOlive} />
+            <Text
+              style={styles.statusText}
+              accessibilityLiveRegion="polite"
+            >
+              Loading your assignments…
+            </Text>
           </View>
-        ))}
+        )}
+
+        {status === 'signedOut' && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>
+              Sign in to RISE to view your assignments.
+            </Text>
+            <Text style={styles.statusNote}>
+              A signed-in account is required to load your saved coursework.
+            </Text>
+          </View>
+        )}
+
+        {status === 'error' && (
+          <View style={styles.statusCard}>
+            <Text accessibilityRole="alert" style={styles.statusText}>
+              Couldn’t load your assignments.
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={refreshAssignments}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {status === 'ready' && assignments.length === 0 && (
+          <View style={styles.statusCard}>
+            <Text style={styles.statusText}>
+              No assignments to display.
+            </Text>
+            <Text style={styles.statusNote}>
+              Connect and sync your Canvas courses to import assignments.
+            </Text>
+          </View>
+        )}
+
+        {status === 'ready' &&
+          assignments.length > 0 &&
+          currentAssignments.length === 0 && (
+            <View style={styles.statusCard}>
+              <Text style={styles.statusText}>You’re all caught up!</Text>
+            </View>
+          )}
+
+        {status === 'ready' &&
+          currentAssignments.map((assignment) => (
+            <AssignmentCard
+              key={assignment.id}
+              assignment={assignment}
+              today={date}
+            />
+          ))}
+
+        {status === 'ready' && pastAssignments.length > 0 && (
+          <View style={styles.pastHeader}>
+            <SectionHeader
+              title="Past"
+              count={pastAssignments.length}
+              linkText={showPast ? 'Hide' : 'Show'}
+              linkLabel={
+                showPast
+                  ? 'Hide past assignments'
+                  : `Show ${pastAssignments.length} past assignments`
+              }
+              linkExpanded={showPast}
+              onLinkPress={() => setShowPast((shown) => !shown)}
+            />
+          </View>
+        )}
+
+        {status === 'ready' &&
+          showPast &&
+          pastAssignments.map((assignment) => (
+            <AssignmentCard
+              key={assignment.id}
+              assignment={assignment}
+              today={date}
+            />
+          ))}
       </View>
     </TabScreenScrollView>
   );
 }
 
+// Card styles now live in the shared AssignmentCard component.
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 18,
     paddingBottom: 36,
-    backgroundColor: '#FAF8F1',
   },
-  headerRow: {
-    minHeight: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  header: {
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#35433A',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#758078',
-    marginTop: 2,
-  },
+  // Same gap below the subtitle as before the shared header (8 + 12).
   list: {
-    gap: 12,
+    gap: 8,
+    marginTop: 20,
   },
-  card: {
-    flexDirection: 'row',
+  statusCard: {
+    padding: 20,
+    gap: 10,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.softWhite,
     borderWidth: 1,
-    borderColor: '#DDE9D9',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderColor: colors.mistGreen,
+    borderRadius: 15,
   },
-  courseDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#35433A',
-    marginRight: 12,
-    alignSelf: 'flex-start',
-    marginTop: 4,
+  statusText: {
+    ...textStyles.body,
+    color: colors.deepOlive,
+    textAlign: 'center',
   },
-  cardContent: {
-    flex: 1,
+  statusNote: {
+    ...textStyles.caption,
+    color: colors.mutedGrayGreen,
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  assignmentTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#35433A',
-  },
-  description: {
-    fontSize: 12,
-    color: '#758078',
-    marginTop: 2,
-  },
-  dueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  calendarIcon: {
-    fontSize: 12,
-    color: '#B96D5F',
-    marginRight: 4,
-  },
-  dueDate: {
-    fontSize: 12,
-    color: '#B96D5F',
-    fontWeight: '600',
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 5,
-    backgroundColor: '#E9E9E9',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginRight: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#A8BEA3',
-    borderRadius: 8,
-  },
-  progressText: {
-    fontSize: 10,
-    color: '#758078',
-    width: 28,
-  },
-  startButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#DDE9D9',
-    alignItems: 'center',
+  retryButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.mistGreen,
     justifyContent: 'center',
-    marginLeft: 10,
   },
-  startButtonText: {
-    color: '#35433A',
-    fontSize: 13,
-    marginLeft: 2,
+  retryText: {
+    ...textStyles.link,
+    color: colors.deepOlive,
+    textAlign: 'center',
+  },
+  pastHeader: {
+    marginTop: 16,
+    marginBottom: 2,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });
