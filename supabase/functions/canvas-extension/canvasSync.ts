@@ -8,6 +8,7 @@ const MAX_ASSIGNMENTS = 5000;
 const MAX_TITLE_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 5000;
 const MAX_SYLLABUS_LENGTH = 50000;
+const MAX_LATE_WORK_LENGTH = 10000;
 
 export type SyncedCourse = {
   canvasCourseId: string;
@@ -168,7 +169,7 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
     professor_email: professorEmail,
     class_location: readText(review.class_location, 500),
     grading_method: gradingMethod,
-    late_work: readText(review.late_work, 200),
+    late_work: readText(review.late_work, MAX_LATE_WORK_LENGTH),
     office_hours: officeHours,
     topics,
   };
