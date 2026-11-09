@@ -46,6 +46,15 @@ jest.mock('../../../repositories/microtasksRepository', () => ({
   MicrotaskGenerationError: class extends Error {},
 }));
 
+// Recorded study sessions (#49); nothing is saved for real.
+const mockRecordStudySession = jest.fn();
+const mockGetStudySecondsForAssignment = jest.fn();
+
+jest.mock('../../../repositories/studySessionsRepository', () => ({
+  recordStudySession: (session: unknown) => mockRecordStudySession(session),
+  getStudySecondsForAssignment: (assignmentId: string) => mockGetStudySecondsForAssignment(assignmentId),
+}));
+
 jest.mock('../../../hooks/useCurrentDate', () => ({
   useCurrentDate: () => new Date(2026, 10, 9, 12, 0),
 }));
@@ -205,6 +214,10 @@ beforeEach(() => {
   mockFetchAssignmentById.mockReset();
   mockFetchMicrotasks.mockReset();
   mockSetCompleted.mockReset();
+  mockRecordStudySession.mockReset();
+  mockRecordStudySession.mockResolvedValue(true);
+  mockGetStudySecondsForAssignment.mockReset();
+  mockGetStudySecondsForAssignment.mockResolvedValue(0);
 
   mockFetchAssignmentById.mockImplementation(
     async (assignmentId: string) =>
@@ -715,5 +728,148 @@ describe('focus timer expiration and session time', () => {
     expect(
       screen.getByText('Total study time: 20:00'),
     ).toBeTruthy();
+  });
+});
+
+describe('recording study sessions (#49)', () => {
+  const assignment = assignments[0];
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  async function studyFor(seconds: number) {
+    await act(async () => {
+      jest.advanceTimersByTime(seconds * 1000);
+    });
+  }
+
+  function recorded() {
+    expect(mockRecordStudySession).toHaveBeenCalledTimes(1);
+    return mockRecordStudySession.mock.calls[0][0] as {
+      assignmentId: string;
+      startedAt: Date;
+      endedAt: Date;
+      focusedSeconds: number;
+    };
+  }
+
+  it('records the focused time for the assignment when the session ends with Done (AC1, AC2, AC4)', async () => {
+    jest.useFakeTimers({ now: new Date(2026, 10, 9, 12, 0) });
+    const navigationRef = await openAssignment(assignment);
+    await startSession(assignment);
+
+    await studyFor(2 * 60);
+    expect(mockRecordStudySession).not.toHaveBeenCalled();
+
+    await endWithoutCompleting();
+    await waitFor(() => {
+      expect(navigationRef.getCurrentRoute()?.name).toBe('AssignmentDetails');
+    });
+
+    const session = recorded();
+    expect(session.assignmentId).toBe(assignment.id);
+    expect(session.focusedSeconds).toBe(120);
+    expect(session.endedAt.getTime()).toBeGreaterThanOrEqual(session.startedAt.getTime() + 120 * 1000);
+  });
+
+  it('records the time studied before leaving early with Back', async () => {
+    jest.useFakeTimers({ now: new Date(2026, 10, 9, 12, 0) });
+    await openAssignment(assignment);
+    await startSession(assignment);
+
+    await studyFor(90);
+    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    // Time doesn't count while "Are you sure?" is open.
+    await studyFor(30);
+    await fireEvent.press(screen.getByRole('button', { name: 'Confirm going back' }));
+
+    await waitFor(() => {
+      expect(mockRecordStudySession).toHaveBeenCalled();
+    });
+    expect(recorded().focusedSeconds).toBe(90);
+  });
+
+  it('keeps one session through a break, recorded once at the end', async () => {
+    jest.useFakeTimers({ now: new Date(2026, 10, 9, 12, 0) });
+    const navigationRef = await openAssignment(assignment);
+    await startSession(assignment);
+
+    await studyFor(60);
+    await fireEvent.press(screen.getByRole('button', { name: 'Take a break' }));
+    await waitFor(() => {
+      expect(navigationRef.getCurrentRoute()?.name).toBe('TakeABreak');
+    });
+    await studyFor(5 * 60);
+    expect(mockRecordStudySession).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    await screen.findByText('Task 1 of 1');
+    await studyFor(60);
+    await endWithoutCompleting();
+
+    await waitFor(() => {
+      expect(navigationRef.getCurrentRoute()?.name).toBe('AssignmentDetails');
+    });
+    // The break's five minutes aren't study time.
+    expect(recorded().focusedSeconds).toBe(120);
+  });
+
+  it('still returns to the assignment when recording fails', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockRecordStudySession.mockRejectedValue(new Error('offline'));
+    jest.useFakeTimers({ now: new Date(2026, 10, 9, 12, 0) });
+    const navigationRef = await openAssignment(assignment);
+    await startSession(assignment);
+
+    await studyFor(2 * 60);
+    await endWithoutCompleting();
+
+    await waitFor(() => {
+      expect(navigationRef.getCurrentRoute()?.name).toBe('AssignmentDetails');
+    });
+    expect(console.log).toHaveBeenCalledWith('Could not record the study session:', 'offline');
+  });
+});
+
+describe('recorded study time on the assignment (#49, AC3)', () => {
+  const assignment = assignments[0];
+
+  it('shows the time studied on this assignment', async () => {
+    mockGetStudySecondsForAssignment.mockResolvedValue(45 * 60);
+    await openAssignment(assignment);
+
+    expect(await screen.findByText('Studied 45m')).toBeTruthy();
+    expect(mockGetStudySecondsForAssignment).toHaveBeenCalledWith(assignment.id);
+  });
+
+  it('shows nothing before any time is recorded', async () => {
+    await openAssignment(assignment);
+
+    expect(screen.queryByText(/^Studied /)).toBeNull();
+  });
+
+  it('updates after returning from a session', async () => {
+    jest.useFakeTimers({ now: new Date(2026, 10, 9, 12, 0) });
+    await openAssignment(assignment);
+    await startSession(assignment);
+
+    mockGetStudySecondsForAssignment.mockResolvedValue(120);
+    await act(async () => {
+      jest.advanceTimersByTime(2 * 60 * 1000);
+    });
+    await endWithoutCompleting();
+
+    expect(await screen.findByText('Studied 2m')).toBeTruthy();
+    jest.useRealTimers();
+  });
+
+  it('still shows the assignment when the time can\'t load', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetStudySecondsForAssignment.mockRejectedValue(new Error('offline'));
+    await openAssignment(assignment);
+
+    expect(await screen.findByText(`Instructions for ${assignment.title}.`)).toBeTruthy();
+    expect(screen.queryByText(/^Studied /)).toBeNull();
   });
 });
