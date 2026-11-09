@@ -20,9 +20,13 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "sidePanel"],
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
   "host_permissions": [
     "https://*.instructure.com/*",
+    "https://docs.google.com/document/*",
     "https://*.supabase.co/*",
     "http://127.0.0.1:54321/*"
   ],
@@ -30,6 +34,11 @@
     {
       "matches": ["https://*.instructure.com/*"],
       "js": ["config.js", "content/messages.js", "content/canvasApi.js", "content/courseColors.js", "content/riseModal.js", "content/canvas.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://docs.google.com/document/*"],
+      "js": ["content/syllabusCapture.js"],
       "run_at": "document_idle"
     }
   ],

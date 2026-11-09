@@ -94,7 +94,34 @@
 
   // Requests from the toolbar popup.
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === 'syncNow') {
+    if (message?.type === 'captureSyllabusPage') {
+      const match = location.pathname.match(/\/courses\/(\d+)/);
+      const text = document.body?.innerText?.trim() ?? '';
+      const attachments = [...document.querySelectorAll('a[href]')]
+        .map((link) => {
+          const href = link.href;
+          const apiEndpoint = link.getAttribute('data-api-endpoint');
+          const fileMatch = `${apiEndpoint || ''} ${href}`.match(/\/files\/(\d+)/);
+          const title = link.getAttribute('download') || link.textContent.trim() || link.title || href.split('/').pop();
+          const fileLike = fileMatch || /\.(pdf|docx?|txt)(?:[?#]|$)/i.test(href) || /\.(pdf|docx?|txt)$/i.test(title);
+          if (!fileLike || !/^https:\/\//i.test(href)) return null;
+          return { title: title.slice(0, 240), url: href, apiEndpoint, fileId: fileMatch?.[1] ?? null };
+        })
+        .filter(Boolean)
+        .filter((item, index, all) => all.findIndex((candidate) => candidate.url === item.url) === index)
+        .slice(0, 20);
+      sendResponse({
+        ok: true,
+        result: {
+          url: location.href,
+          title: document.title,
+          courseCanvasId: match?.[1] ?? null,
+          text: text.slice(0, 80000),
+          attachments,
+        },
+      });
+      return;
+    } else if (message?.type === 'syncNow') {
       syncNow({ announce: true, force: true });
     } else if (message?.type === 'openClasses') {
       openClassPicker();

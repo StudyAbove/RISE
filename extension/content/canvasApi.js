@@ -126,6 +126,26 @@ const RiseCanvasApi = (() => {
     return { kind: 'document', name: fileName, type, blob };
   }
 
+  /** Downloads a file linked from the page the student selected as the syllabus. */
+  async function downloadSyllabusAttachment(origin, courseId, attachment) {
+    const endpoint = attachment?.apiEndpoint;
+    const link = new URL(attachment?.url || '', origin);
+    if (link.origin !== origin) throw new Error('The linked syllabus file must be hosted on the same Canvas site.');
+
+    const endpointUrl = endpoint ? new URL(endpoint, origin) : null;
+    if (endpointUrl && endpointUrl.origin !== origin) throw new Error('Canvas linked a file outside this Canvas site.');
+    const match = (endpointUrl?.pathname || link.pathname).match(/\/files\/(\d+)/);
+    if (!match) throw new Error('Canvas did not provide a valid file link.');
+
+    const metadataPath = endpointUrl?.pathname || `/api/v1/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(match[1])}`;
+    const metadata = await getCanvasObject(origin, metadataPath, 'syllabus file');
+    return downloadSyllabusFile(origin, {
+      ...metadata,
+      display_name: metadata.display_name || attachment.title,
+      url: metadata.url || metadata.download_url,
+    });
+  }
+
   /** Search syllabus files before falling back to Canvas's HTML syllabus/page. */
   async function findSyllabusSource(origin, courseId) {
     const filesPath = `/api/v1/courses/${encodeURIComponent(courseId)}/files?per_page=100`;
@@ -288,5 +308,5 @@ const RiseCanvasApi = (() => {
     };
   }
 
-  return { collect, collectCourses, findSyllabusSource, findHtmlSyllabus };
+  return { collect, collectCourses, findSyllabusSource, findHtmlSyllabus, downloadSyllabusAttachment };
 })();

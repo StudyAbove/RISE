@@ -140,6 +140,56 @@ function scheduleAutoSync() {
   chrome.alarms.create(AUTO_SYNC_ALARM, { periodInMinutes: AUTO_SYNC_MINUTES });
 }
 
+async function extractConfirmedSyllabusSource(flow, course, captured, attachment = null) {
+  let extracted;
+  let sourceName = captured.title || 'Selected page';
+  let sourceType = captured.sourceType || 'Canvas page';
+
+  if (attachment) {
+    const source = await RiseCanvasApi.downloadSyllabusAttachment(flow.origin, course.canvasCourseId, attachment);
+    sourceName = source.name || attachment.title || 'Syllabus document';
+    sourceType = source.kind === 'text'
+      ? 'Text document'
+      : source.type === 'application/pdf' ? 'PDF' : 'DOCX';
+    if (source.kind === 'text') {
+      extracted = await callRise({
+        action: 'extractSyllabusText',
+        courseId: course.courseId,
+        courseName: course.name,
+        syllabusText: source.text.slice(0, 50000),
+      }, await getToken());
+    } else {
+      const form = new FormData();
+      form.set('courseId', course.courseId);
+      form.set('courseName', course.name);
+      form.set('file', source.blob, source.name);
+      extracted = await callRiseFormData(form, 'extractSyllabusDocument', await getToken());
+    }
+  } else {
+    if (!captured.text?.trim()) throw new Error('No readable page text or document was found. Open the syllabus page or select one of its linked files.');
+    extracted = await callRise({
+      action: 'extractSyllabusText',
+      courseId: course.courseId,
+      courseName: course.name,
+      syllabusText: captured.text.slice(0, 50000),
+    }, await getToken());
+  }
+
+  const review = {
+    ...course,
+    aiPull: true,
+    hasSyllabus: true,
+    sourceName,
+    sourceType,
+    syllabusInfo: extracted.syllabusInfo ?? {},
+  };
+  await chrome.storage.local.set({
+    syllabusSourceFlow: { ...flow, status: 'review', review, captured: null },
+    syllabusSourceError: null,
+  });
+  return { review };
+}
+
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   scheduleAutoSync();
 
@@ -192,6 +242,10 @@ const messageHandlers = {
         isCurrentTerm,
         syncEnabled: isCurrentTerm && course.syncEnabled,
       };
+    }).sort((a, b) => {
+      const aIsCurrentStudent = a.isCurrentTerm && a.courseRole === 'student';
+      const bIsCurrentStudent = b.isCurrentTerm && b.courseRole === 'student';
+      return Number(bIsCurrentStudent) - Number(aIsCurrentStudent);
     });
   },
 
@@ -206,6 +260,102 @@ const messageHandlers = {
 
   async saveManualSyllabus({ courseId, syllabusInfo }) {
     return callRise({ action: 'saveManualSyllabus', courseId, syllabusInfo }, await getToken());
+  },
+
+  async startSyllabusSourceFlow({ courses }, sender) {
+    if (!sender.tab?.id) throw new Error('Open Canvas in a browser tab to start AI Pull.');
+    // Open the side panel directly from the user's click before doing async work.
+    const opening = chrome.sidePanel.open({ tabId: sender.tab.id });
+    const flow = {
+      tabId: sender.tab.id,
+      origin: new URL(sender.tab.url).origin,
+      courses: (courses ?? []).map((course) => ({
+        courseId: course.courseId,
+        canvasCourseId: String(course.canvasCourseId ?? ''),
+        code: course.code ?? '',
+        term: course.term ?? '',
+        name: course.name ?? course.code ?? 'Class',
+      })),
+      index: 0,
+      status: 'find-source',
+    };
+    if (!flow.courses.length) throw new Error('Choose at least one class first.');
+    await chrome.storage.local.set({ syllabusSourceFlow: flow });
+    await opening;
+    return { started: true };
+  },
+
+  async captureSyllabusPage() {
+    const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
+    const course = flow?.courses?.[flow.index];
+    if (!course) throw new Error('There is no active syllabus search. Start AI Pull from Canvas.');
+
+    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!activeTab?.id) throw new Error('Select the tab that has the syllabus open, then try again.');
+    let captured;
+    try {
+      const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'captureSyllabusPage' });
+      if (!response?.ok) throw new Error(response?.error || 'This page could not be read.');
+      captured = response.result;
+    } catch {
+      throw new Error('This page is not supported yet. Open a Canvas page or a Google Docs document in the same tab.');
+    }
+
+    if (!captured?.text?.trim() && !captured?.attachments?.length) {
+      throw new Error('No readable text or linked document was found. Open the syllabus itself, then try again.');
+    }
+    if (captured.courseCanvasId && course.canvasCourseId && captured.courseCanvasId !== course.canvasCourseId) {
+      throw new Error(`This page belongs to a different Canvas class. Find the syllabus for ${course.name} first.`);
+    }
+
+    const updatedFlow = { ...flow, tabId: activeTab.id };
+    const attachments = captured.attachments ?? [];
+    if (attachments.length) {
+      await chrome.storage.local.set({
+        syllabusSourceFlow: { ...updatedFlow, status: 'choose-source', captured },
+        syllabusSourceError: null,
+      });
+      return { choosingSource: true };
+    }
+
+    const pageType = new URL(captured.url).hostname === 'docs.google.com' ? 'Google Docs' : 'Canvas page';
+    return extractConfirmedSyllabusSource(updatedFlow, course, {
+      ...captured,
+      title: captured.title || pageType,
+      sourceType: pageType,
+    });
+  },
+
+  async chooseSyllabusSource({ attachmentIndex }) {
+    const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
+    const course = flow?.courses?.[flow.index];
+    if (!course || flow.status !== 'choose-source' || !flow.captured) {
+      throw new Error('Confirm a syllabus page before choosing a source.');
+    }
+    if (attachmentIndex == null) return extractConfirmedSyllabusSource(flow, course, flow.captured);
+    const attachment = flow.captured.attachments?.[attachmentIndex];
+    if (!attachment) throw new Error('That document is no longer available. Confirm the syllabus page again.');
+    return extractConfirmedSyllabusSource(flow, course, flow.captured, attachment);
+  },
+
+  async saveSyllabusSourceReview({ syllabusInfo }) {
+    const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
+    const course = flow?.courses?.[flow.index];
+    if (!course || flow.status !== 'review') throw new Error('Pull the syllabus before saving its details.');
+    await callRise({ action: 'saveManualSyllabus', courseId: course.courseId, syllabusInfo }, await getToken());
+    const nextIndex = flow.index + 1;
+    if (nextIndex >= flow.courses.length) {
+      await chrome.storage.local.set({ syllabusSourceFlow: { ...flow, status: 'done', review: null } });
+      syncFromCanvas(flow.origin).catch(() => {});
+    } else {
+      await chrome.storage.local.set({ syllabusSourceFlow: { ...flow, index: nextIndex, status: 'find-source', review: null } });
+    }
+    return { done: nextIndex >= flow.courses.length };
+  },
+
+  async cancelSyllabusSourceFlow() {
+    await chrome.storage.local.remove(['syllabusSourceFlow', 'syllabusSourceError']);
+    return { cancelled: true };
   },
 
   /** Search Canvas documents first, then HTML, and extract each selected syllabus. */
@@ -312,14 +462,14 @@ const messageHandlers = {
   },
 };
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = messageHandlers[message?.type];
 
   if (!handler) {
     return false;
   }
 
-  handler(message).then(
+  handler(message, sender).then(
     (result) => sendResponse({ ok: true, result }),
     (error) => sendResponse({ ok: false, error: error.message, code: error.code }),
   );

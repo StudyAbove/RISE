@@ -513,29 +513,20 @@ const RiseModal = (() => {
       const errorText = overlay.querySelector('[data-slot="method-error"]');
       aiButton.disabled = true;
       manualButton.disabled = true;
-      aiButton.textContent = 'Searching Canvas…';
+      aiButton.textContent = 'Opening…';
       errorText.hidden = true;
       try {
-        await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
-        const { reviews } = await sendToRise({
-          type: 'pullSyllabusReviews',
-          origin: location.origin,
+        const starting = sendToRise({
+          type: 'startSyllabusSourceFlow',
           courses: courses.map(({ courseId, canvasCourseId, code, term, name }) => ({
             courseId, canvasCourseId, code, term, name,
           })),
         });
-        showSyllabusReviews({
-          reviews,
-          manual: true,
-          onDone: onSelected,
-          onSave: (syllabusInfo, course) => sendToRise({
-            type: 'saveManualSyllabus',
-            courseId: course.courseId,
-            syllabusInfo,
-          }),
-        });
+        await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
+        await starting;
+        close();
       } catch (error) {
-        errorText.textContent = error.message || 'Could not search Canvas for syllabi.';
+        errorText.textContent = error.message || 'Could not open the syllabus finder.';
         errorText.hidden = false;
         aiButton.disabled = false;
         manualButton.disabled = false;
@@ -785,5 +776,5 @@ const RiseModal = (() => {
     setTimeout(() => toast.remove(), 4000);
   }
 
-  return { showNote, showWelcome, showClassPicker, showSyllabusReviews, showSyncResult, showToast };
+  return { showNote, showWelcome, showClassPicker, showSyllabusReviews, showSyncResult, showToast, dismiss: close };
 })();

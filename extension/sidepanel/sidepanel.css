@@ -1,0 +1,23 @@
+:root { color-scheme: light; font: 14px/1.45 Arial, sans-serif; color: #26362a; background: #f7f8f5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { padding: 18px; }
+header { display: flex; align-items: center; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid #dce4da; font-weight: 700; }
+header img { width: 30px; height: 30px; }
+h1 { font-size: 21px; line-height: 1.25; margin: 20px 0 8px; }
+p { margin: 8px 0 14px; color: #56665a; }
+.class { color: #526c56; font-weight: 700; margin: 18px 0 0; }
+.step { font-size: 12px; color: #65746a; }
+label { display: block; font-weight: 600; margin: 13px 0 5px; }
+input, select, textarea { width: 100%; border: 1px solid #cbd5c9; border-radius: 7px; padding: 10px; background: white; color: #26362a; font: inherit; }
+textarea { min-height: 116px; resize: vertical; font: 12px/1.4 ui-monospace, monospace; }
+button { width: 100%; border: 0; border-radius: 8px; padding: 12px 14px; margin-top: 14px; color: white; background: #78927b; font: inherit; font-weight: 700; cursor: pointer; }
+button.secondary { background: #dde9d9; color: #26362a; }
+button:disabled { opacity: .6; cursor: wait; }
+.error { padding: 10px; border-radius: 7px; color: #853d37; background: #f7e8e5; margin-top: 12px; }
+.note { padding: 10px; border-radius: 7px; background: #edf2eb; color: #526c56; }
+.group { margin-top: 18px; padding-top: 14px; border-top: 1px solid #dce4da; }
+.group h2 { font-size: 16px; margin: 0 0 10px; }
+.entry-card { border: 1px solid #dce4da; border-radius: 9px; padding: 10px; margin: 10px 0; background: white; }
+.remove { padding: 8px; margin-top: 8px; }
+.hidden { display: none; }
