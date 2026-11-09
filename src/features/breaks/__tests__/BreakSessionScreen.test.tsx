@@ -64,9 +64,9 @@ describe('BreakSessionScreen (#23)', () => {
   });
 
   it.each([
-    ['stretch', '15:00', '15-minute break'],
-    ['hydrate', '5:00', '5-minute break'],
-    ['walk', '15:00', '15-minute break'],
+    ['stretch', '15:00', 'Suggested time: 15 min'],
+    ['hydrate', '5:00', 'Suggested time: 5 min'],
+    ['walk', '15:00', 'Suggested time: 15 min'],
   ])(
     'starts %s with its saved duration',
     async (breakId, timerText, durationText) => {
@@ -88,43 +88,24 @@ describe('BreakSessionScreen (#23)', () => {
     expect(screen.getByText('4:50')).toBeTruthy();
   });
 
-  it('stops at zero and waits for the student to return', async () => {
+  it('returns automatically once the break reaches zero', async () => {
     await render(breakScreen('hydrate'));
 
-    await advanceTime(5 * 60 * 1000);
-
-    expect(screen.getByText('0:00')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Your break is finished. Ready to get back?',
-      ),
-    ).toBeTruthy();
+    await advanceTime(5 * 60 * 1000 - 1000);
+    expect(screen.getByText('0:01')).toBeTruthy();
     expect(mockGoBack).not.toHaveBeenCalled();
+
+    await advanceTime(1000);
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
 
     await advanceTime(60 * 1000);
-
-    expect(screen.getByText('0:00')).toBeTruthy();
-    expect(mockGoBack).not.toHaveBeenCalled();
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
   it('allows returning before the break finishes', async () => {
     await render(breakScreen('walk'));
 
     await advanceTime(30 * 1000);
-
-    await fireEvent.press(
-      screen.getByRole('button', {
-        name: 'Return from break',
-      }),
-    );
-
-    expect(mockGoBack).toHaveBeenCalledTimes(1);
-  });
-
-  it('allows returning after the break finishes', async () => {
-    await render(breakScreen('hydrate'));
-
-    await advanceTime(5 * 60 * 1000);
 
     await fireEvent.press(
       screen.getByRole('button', {

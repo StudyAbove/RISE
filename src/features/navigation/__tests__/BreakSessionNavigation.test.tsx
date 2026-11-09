@@ -197,41 +197,31 @@ describe('break countdown navigation (#23)', () => {
       expect(mockSetCompleted).not.toHaveBeenCalled();
     },
   );
-
-  it('waits at zero until the student returns, without completing a task', async () => {
+    it('automatically resumes the same focus task when the break expires', async () => {
     const navigationRef = await openFocusSession();
 
     await advanceTime(30 * 1000);
     await startBreak('Hydrate');
 
-    await advanceTime(5 * 60 * 1000);
-
+    await advanceTime(5 * 60 * 1000 - 1000);
     expect(navigationRef.getCurrentRoute()?.name).toBe('BreakSession');
-    expect(screen.getByText('0:00')).toBeTruthy();
-    expect(
-      screen.getByText('Your break is finished. Ready to get back?'),
-    ).toBeTruthy();
+    expect(screen.getByText('0:01')).toBeTruthy();
 
-    // Waiting longer must not restart Focus or mark the task complete.
-    await advanceTime(60 * 1000);
+    await advanceTime(1000);
 
-    expect(navigationRef.getCurrentRoute()?.name).toBe('BreakSession');
-    expect(mockSetCompleted).not.toHaveBeenCalled();
-
-    await fireEvent.press(
-      screen.getByRole('button', {
-        name: 'Return from break',
-      }),
-    );
-
-    await waitFor(() => {
-      expect(navigationRef.getCurrentRoute()?.name).toBe('FocusSession');
+    expect(navigationRef.getCurrentRoute()).toMatchObject({
+      name: 'FocusSession',
+      params: {
+        assignmentId: 'test-assignment',
+        microtasks: [{ id: 'test-task' }],
+      },
     });
-
+    expect(screen.getByText('Organize notes')).toBeTruthy();
     expect(screen.getByText('14:30')).toBeTruthy();
-    expect(
-      screen.getByText('Total study time: 0:30'),
-    ).toBeTruthy();
+    expect(screen.getByText('Total study time: 0:30')).toBeTruthy();
     expect(mockSetCompleted).not.toHaveBeenCalled();
+
+    await advanceTime(1000);
+    expect(screen.getByText('14:29')).toBeTruthy();
   });
 });

@@ -12,12 +12,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import DoneIcon from '../../../../assets/icons/focus-session-done.svg';
-import { BackButton } from '../../../components/BackButton';
 import { colors } from '../../../theme/colors';
 import { fonts, textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
 import { useFocusCountdown } from '../../studySessions/hooks/useFocusCountdown';
 import { BREAK_CATALOG } from '../data/breakTypes';
+import { useEffect, useRef } from 'react';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -78,9 +78,21 @@ export function BreakSessionScreen({ route, navigation }: Props) {
         )
       : 0;
 
-  // The break-selection screen will be replaced by this screen.
-  // Going back therefore returns to the screen that opened the break.
+  const returningRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocused || !validBreak || !hasEnded || returningRef.current) {
+      return;
+    }
+
+    returningRef.current = true;
+    navigation.goBack();
+  }, [isFocused, validBreak, hasEnded, navigation]);
+
   function returnFromBreak() {
+    if (returningRef.current) return;
+
+    returningRef.current = true;
     navigation.goBack();
   }
 
@@ -96,7 +108,6 @@ export function BreakSessionScreen({ route, navigation }: Props) {
       ]}
     >
       <View style={styles.header}>
-        <BackButton onPress={returnFromBreak} />
 
         <View style={styles.headingGroup}>
           <Text accessibilityRole="header" style={styles.title}>
@@ -108,19 +119,12 @@ export function BreakSessionScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
-        <View style={styles.headerSpacer} />
       </View>
 
       {validBreak ? (
         <>
           <View style={styles.timerContainer}>
-            <Text style={styles.breakTitle}>
-              {selectedBreak.label}
-            </Text>
 
-            <Text style={styles.durationText}>
-              {selectedBreak.durationMinutes}-minute break
-            </Text>
 
             <View
               style={[
@@ -178,13 +182,12 @@ export function BreakSessionScreen({ route, navigation }: Props) {
               </Text>
             </View>
 
-            <Text
-              style={styles.timerNote}
-              accessibilityLiveRegion="polite"
-            >
-              {hasEnded
-                ? 'Your break is finished. Ready to get back?'
-                : 'Take a moment to recharge.'}
+            <Text style={styles.durationText}>
+              Suggested time: {selectedBreak.durationMinutes} min
+            </Text>
+
+            <Text style={styles.timerNote}>
+              {"Feel free to end early whenever you're ready"}
             </Text>
           </View>
         </>
@@ -250,21 +253,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 3,
   },
-  headerSpacer: {
-    width: 44,
-  },
+
   timerContainer: {
     alignItems: 'center',
     marginTop: 30,
     gap: 12,
   },
-  breakTitle: {
-    fontFamily: fonts.body.medium,
-    fontSize: 16,
-    lineHeight: 22,
-    color: colors.deepOlive,
-    textAlign: 'center',
-  },
+
   durationText: {
     ...textStyles.caption,
     color: colors.mutedGrayGreen,
