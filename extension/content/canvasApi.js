@@ -230,6 +230,108 @@ const RiseCanvasApi = (() => {
     return null;
   }
 
+  /** Finds the strongest Canvas route to a syllabus without reading it yet. */
+  async function findLikelySyllabusPath(origin, courseId) {
+    const candidates = [];
+    const add = (url, title, kind, score) => {
+      if (!url) return;
+      const target = new URL(url, origin);
+      if (target.protocol !== 'https:') return;
+      candidates.push({ url: target.href, title: title || 'Syllabus', kind, score });
+    };
+
+    try {
+      const course = await getCanvasObject(
+        origin,
+        `/api/v1/courses/${encodeURIComponent(courseId)}?include[]=syllabus_body`,
+        'course syllabus',
+      );
+      if (htmlToText(course.syllabus_body || '', MAX_SYLLABUS_LENGTH)) {
+        add(`/courses/${encodeURIComponent(courseId)}/assignments/syllabus`, 'Course syllabus', 'Canvas syllabus page', 90);
+      }
+    } catch {
+      // A syllabus may still be available as a file or module item.
+    }
+
+    const files = await getPaged(origin, `/api/v1/courses/${encodeURIComponent(courseId)}/files?per_page=100`).catch(() => []);
+    for (const file of files) {
+      if (!supportedSyllabusFile(file)) continue;
+      const fileId = file.id;
+      if (fileId == null) continue;
+      add(`/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(fileId)}?wrap=1`, syllabusFileName(file), 'Canvas document', 100);
+    }
+
+    const pages = await getPaged(origin, `/api/v1/courses/${encodeURIComponent(courseId)}/pages?per_page=100`).catch(() => []);
+    for (const pageSummary of pages.filter((page) => /syllabus/i.test(page.title || ''))) {
+      add(`/courses/${encodeURIComponent(courseId)}/pages/${encodeURIComponent(pageSummary.url)}`, pageSummary.title, 'Canvas page', 105);
+      try {
+        const page = await getCanvasObject(
+          origin,
+          `/api/v1/courses/${encodeURIComponent(courseId)}/pages/${encodeURIComponent(pageSummary.url)}`,
+          'syllabus page',
+        );
+        const anchors = [...String(page.body || '').matchAll(/<a\b[^>]*href\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi)];
+        for (const anchor of anchors) {
+          const href = anchor[2].replace(/&amp;/g, '&');
+          const linkText = htmlToText(anchor[3], 240);
+          try {
+            const target = new URL(href, origin);
+            if (target.hostname === 'docs.google.com' && (/syllabus/i.test(linkText) || /syllabus/i.test(page.title || ''))) {
+              add(target.href, linkText || page.title, 'Google Docs', 115);
+            }
+          } catch {
+            // Ignore malformed links in a page body.
+          }
+        }
+      } catch {
+        // The Canvas page itself remains a useful candidate if its body is unavailable.
+      }
+    }
+
+    const modules = await getPaged(
+      origin,
+      `/api/v1/courses/${encodeURIComponent(courseId)}/modules?include[]=items&search_term=syllabus&per_page=100`,
+    ).catch(() => []);
+    for (const module of modules) {
+      let items = Array.isArray(module.items) ? module.items : [];
+      if (!items.length && module.id != null) {
+        items = await getPaged(origin, `/api/v1/courses/${encodeURIComponent(courseId)}/modules/${encodeURIComponent(module.id)}/items?per_page=100`).catch(() => []);
+      }
+      for (const item of items) {
+        const title = String(item?.title || module.name || 'Syllabus');
+        const hasSyllabusContext = /syllabus/i.test(title) || /syllabus/i.test(module.name || '');
+        if (!hasSyllabusContext) continue;
+        const score = /syllabus/i.test(item?.title || '') ? 110 : 75;
+        if (item.type === 'Page' && item.page_url) {
+          add(`/courses/${encodeURIComponent(courseId)}/pages/${encodeURIComponent(item.page_url)}`, title, 'Canvas page', score);
+        } else if (item.type === 'File' && item.content_id != null) {
+          try {
+            const file = await getCanvasObject(
+              origin,
+              `/api/v1/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(item.content_id)}`,
+              'syllabus file',
+            );
+            const name = syllabusFileName(file) || title;
+            if (supportedSyllabusFile(file, title)) {
+              add(`/courses/${encodeURIComponent(courseId)}/files/${encodeURIComponent(item.content_id)}?wrap=1`, name, 'Canvas document', score + 5);
+            }
+          } catch {
+            // Ignore inaccessible module files and consider the other candidates.
+          }
+        } else if (item.type === 'ExternalUrl' && item.external_url) {
+          const url = new URL(item.external_url, origin);
+          if (url.hostname === 'docs.google.com') add(url.href, title, 'Google Docs', score + 5);
+        }
+      }
+    }
+
+    const unique = [...new Map(candidates.map((candidate) => [candidate.url, candidate])).values()];
+    unique.sort((a, b) => b.score - a.score);
+    if (!unique.length) return null;
+    const { score, ...best } = unique[0];
+    return { ...best, confidence: score >= 100 ? 'high' : score >= 90 ? 'medium' : 'low' };
+  }
+
   function isSubmitted(submission) {
     return Boolean(submission && (submission.submitted_at || submission.workflow_state === 'graded'));
   }
@@ -308,5 +410,5 @@ const RiseCanvasApi = (() => {
     };
   }
 
-  return { collect, collectCourses, findSyllabusSource, findHtmlSyllabus, downloadSyllabusAttachment };
+  return { collect, collectCourses, findSyllabusSource, findHtmlSyllabus, findLikelySyllabusPath, downloadSyllabusAttachment };
 })();

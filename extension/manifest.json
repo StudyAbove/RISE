@@ -33,12 +33,12 @@
   "content_scripts": [
     {
       "matches": ["https://*.instructure.com/*"],
-      "js": ["config.js", "content/messages.js", "content/canvasApi.js", "content/courseColors.js", "content/riseModal.js", "content/canvas.js"],
+      "js": ["config.js", "content/messages.js", "content/canvasApi.js", "content/courseColors.js", "content/riseModal.js", "content/syllabusEvidence.js", "content/canvas.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://docs.google.com/document/*"],
-      "js": ["content/syllabusCapture.js"],
+      "js": ["content/syllabusEvidence.js", "content/syllabusCapture.js"],
       "run_at": "document_idle"
     }
   ],

@@ -108,7 +108,12 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
 
   const officeHoursRaw = review.office_hours ?? [];
   const topicsRaw = review.topics ?? [];
-  if (!Array.isArray(officeHoursRaw) || officeHoursRaw.length > 30 || !Array.isArray(topicsRaw) || topicsRaw.length > 50) {
+  if (
+    !Array.isArray(officeHoursRaw)
+    || officeHoursRaw.length > 30
+    || !Array.isArray(topicsRaw)
+    || (gradingMethod === 'weighted_categories' && topicsRaw.length > 50)
+  ) {
     throw new InvalidPayloadError('The syllabus review has too many entries.');
   }
 
@@ -140,7 +145,7 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
     };
   });
 
-  const topics = topicsRaw.map((item, index) => {
+  const topics = gradingMethod === 'weighted_categories' ? topicsRaw.map((item, index) => {
     if (!isRecord(item)) {
       throw new InvalidPayloadError('Each grading topic must be an object.');
     }
@@ -155,7 +160,7 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
     }
 
     return { title, percentage, total_count: totalCount == null ? null : totalCount as number };
-  });
+  }) : [];
 
   const professorEmail = readText(review.professor_email, 254);
   if (professorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(professorEmail)) {

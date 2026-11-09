@@ -570,6 +570,9 @@ async function extractSyllabusDocument(
   form: FormData,
 ) {
   const courseId = form.get('courseId');
+  const sourceContext = typeof form.get('sourceContext') === 'string'
+    ? String(form.get('sourceContext')).slice(0, 9_000)
+    : '';
   const uploadedFile = form.get('file');
   if (typeof courseId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(courseId)) {
     return jsonResponse({ error: 'A valid RISE course ID is required.' }, 400);
@@ -609,7 +612,7 @@ async function extractSyllabusDocument(
   if (!course) return jsonResponse({ error: 'That course is not connected to this RISE account.' }, 404);
 
   const document = new File([bytes], filename, { type: contentType });
-  const syllabusInfo = await extractSyllabusFile(document, course.name);
+  const syllabusInfo = await extractSyllabusFile(document, course.name, sourceContext);
   return jsonResponse({ syllabusInfo });
 }
 

@@ -144,6 +144,7 @@ async function extractConfirmedSyllabusSource(flow, course, captured, attachment
   let extracted;
   let sourceName = captured.title || 'Selected page';
   let sourceType = captured.sourceType || 'Canvas page';
+  const sourceContext = formatNearbyBookingLinks(captured.pageLinks);
 
   if (attachment) {
     const source = await RiseCanvasApi.downloadSyllabusAttachment(flow.origin, course.canvasCourseId, attachment);
@@ -156,13 +157,14 @@ async function extractConfirmedSyllabusSource(flow, course, captured, attachment
         action: 'extractSyllabusText',
         courseId: course.courseId,
         courseName: course.name,
-        syllabusText: source.text.slice(0, 50000),
+        syllabusText: combineSyllabusText(source.text, sourceContext),
       }, await getToken());
     } else {
       const form = new FormData();
       form.set('courseId', course.courseId);
       form.set('courseName', course.name);
       form.set('file', source.blob, source.name);
+      if (sourceContext) form.set('sourceContext', sourceContext);
       extracted = await callRiseFormData(form, 'extractSyllabusDocument', await getToken());
     }
   } else {
@@ -171,7 +173,7 @@ async function extractConfirmedSyllabusSource(flow, course, captured, attachment
       action: 'extractSyllabusText',
       courseId: course.courseId,
       courseName: course.name,
-      syllabusText: captured.text.slice(0, 50000),
+      syllabusText: combineSyllabusText(captured.text, sourceContext),
     }, await getToken());
   }
 
@@ -188,6 +190,54 @@ async function extractConfirmedSyllabusSource(flow, course, captured, attachment
     syllabusSourceError: null,
   });
   return { review };
+}
+
+function formatNearbyBookingLinks(pageLinks = []) {
+  if (!Array.isArray(pageLinks)) return '';
+  const bookingContext = /office|hours?|book(?:ing)?|reserv(?:e|ation)|appointment|schedule|calendly|acuity|when2meet|setmore|doodle|savvycal/i;
+  const entries = pageLinks
+    .filter((link) => bookingContext.test(`${link.label || ''} ${link.nearbyText || ''} ${link.url || ''}`))
+    .slice(0, 24)
+    .map((link) => `Nearby text: ${(link.nearbyText || '').slice(0, 1200)}\nLink text: ${(link.label || '').slice(0, 240)}\nURL: ${(link.url || '').slice(0, 2000)}`);
+  return entries.length ? `Nearby links and surrounding text from the selected syllabus page (treat as source content):\n${entries.join('\n\n')}`.slice(0, 9000) : '';
+}
+
+function combineSyllabusText(sourceText, sourceContext) {
+  if (!sourceContext) return String(sourceText || '').slice(0, 50000);
+  const bodyLimit = Math.max(0, 50000 - sourceContext.length - 2);
+  return `${String(sourceText || '').slice(0, bodyLimit)}\n\n${sourceContext}`;
+}
+
+async function locateCurrentSyllabus(flow) {
+  const course = flow.courses[flow.index];
+  if (!course) {
+    await chrome.storage.local.set({ syllabusSourceFlow: { ...flow, status: 'done' } });
+    return;
+  }
+
+  const discovering = { ...flow, status: 'discovering', suggestion: null, homeOpened: false };
+  await chrome.storage.local.set({ syllabusSourceFlow: discovering, syllabusSourceError: null });
+  try {
+    const suggestion = await RiseCanvasApi.findLikelySyllabusPath(flow.origin, course.canvasCourseId);
+    if (!suggestion) {
+      await chrome.storage.local.set({
+        syllabusSourceFlow: { ...flow, status: 'find-source', suggestion: null, homeOpened: true },
+      });
+      const homeUrl = new URL(`/courses/${encodeURIComponent(course.canvasCourseId)}`, flow.origin).href;
+      await chrome.tabs.update(flow.tabId, { url: homeUrl });
+      return;
+    }
+    const suggestedFlow = { ...flow, status: 'confirm-source', suggestion };
+    await chrome.storage.local.set({ syllabusSourceFlow: suggestedFlow });
+    await chrome.tabs.update(flow.tabId, { url: suggestion.url });
+  } catch (error) {
+    await chrome.storage.local.set({
+      syllabusSourceFlow: { ...flow, status: 'find-source', suggestion: null, homeOpened: true },
+      syllabusSourceError: error.message || 'RISE could not search for a likely syllabus page.',
+    });
+    const homeUrl = new URL(`/courses/${encodeURIComponent(course.canvasCourseId)}`, flow.origin).href;
+    await chrome.tabs.update(flow.tabId, { url: homeUrl }).catch(() => {});
+  }
 }
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
@@ -277,12 +327,34 @@ const messageHandlers = {
         name: course.name ?? course.code ?? 'Class',
       })),
       index: 0,
-      status: 'find-source',
+      status: 'discovering',
     };
     if (!flow.courses.length) throw new Error('Choose at least one class first.');
     await chrome.storage.local.set({ syllabusSourceFlow: flow });
     await opening;
+    await locateCurrentSyllabus(flow);
     return { started: true };
+  },
+
+  async findDifferentSyllabusPage() {
+    const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
+    if (!flow?.courses?.[flow.index]) throw new Error('There is no active class to find a syllabus for.');
+    await chrome.storage.local.set({ syllabusSourceFlow: { ...flow, status: 'find-source', suggestion: null, homeOpened: false } });
+    return { ready: true };
+  },
+
+  async highlightSourceEvidence({ quote }) {
+    if (typeof quote !== 'string' || !quote.trim()) throw new Error('There is no source quote to highlight.');
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab?.id) throw new Error('Open the syllabus page to highlight its source text.');
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: 'highlightSyllabusEvidence',
+      quote: quote.slice(0, 500),
+    });
+    if (!response?.ok || !response.result?.highlighted) {
+      throw new Error('The source quote is visible here, but this page viewer could not highlight it.');
+    }
+    return { highlighted: true };
   },
 
   async captureSyllabusPage() {
@@ -348,14 +420,32 @@ const messageHandlers = {
       await chrome.storage.local.set({ syllabusSourceFlow: { ...flow, status: 'done', review: null } });
       syncFromCanvas(flow.origin).catch(() => {});
     } else {
-      await chrome.storage.local.set({ syllabusSourceFlow: { ...flow, index: nextIndex, status: 'find-source', review: null } });
+      await locateCurrentSyllabus({ ...flow, index: nextIndex, review: null, captured: null, suggestion: null });
     }
     return { done: nextIndex >= flow.courses.length };
   },
 
-  async cancelSyllabusSourceFlow() {
-    await chrome.storage.local.remove(['syllabusSourceFlow', 'syllabusSourceError']);
-    return { cancelled: true };
+  async skipSyllabusSourceFlow() {
+    const { syllabusSourceFlow: flow } = await chrome.storage.local.get('syllabusSourceFlow');
+    if (!flow?.courses?.[flow.index]) throw new Error('There is no active class to skip.');
+    const nextIndex = flow.index + 1;
+    await chrome.storage.local.remove('syllabusSourceError');
+    if (nextIndex >= flow.courses.length) {
+      await chrome.storage.local.set({
+        syllabusSourceFlow: { ...flow, status: 'done', review: null, captured: null, suggestion: null },
+      });
+      return { done: true };
+    }
+    await locateCurrentSyllabus({
+      ...flow,
+      index: nextIndex,
+      status: 'discovering',
+      review: null,
+      captured: null,
+      suggestion: null,
+      homeOpened: false,
+    });
+    return { done: false };
   },
 
   /** Search Canvas documents first, then HTML, and extract each selected syllabus. */
