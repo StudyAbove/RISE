@@ -37,17 +37,6 @@
       const message = `Synced ${plural(result.courses, 'class', 'classes')} and ${plural(result.assignments, 'assignment')} to Rise.`;
       RiseModal.showSyncResult({ message: `✅ ${message}` });
 
-      // The sync function can return one structured review record per tracked
-      // class. Keep the student in this per-class confirmation flow until each
-      // record has been saved.
-      if (Array.isArray(result.syllabusReviews) && result.syllabusReviews.length > 0) {
-        RiseModal.showSyllabusReviews({
-          reviews: result.syllabusReviews,
-          onSave: (review) => sendToRise({ type: 'saveSyllabusReview', review }),
-        });
-        return;
-      }
-
       if (announce) {
         RiseModal.showToast(message);
       }

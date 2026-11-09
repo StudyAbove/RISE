@@ -307,6 +307,7 @@ async function listCourses(supabase: SupabaseClient, userId: string, body: unkno
 
   return jsonResponse({
     courses: savedCourses.map((course) => ({
+      courseId: course.id,
       canvasCourseId: course.canvas_course_id,
       name: course.name,
       code: course.code,
@@ -650,49 +651,26 @@ async function saveExtractedSyllabus(supabase: SupabaseClient, userId: string, c
 }
 
 async function saveManualSyllabus(supabase: SupabaseClient, userId: string, body: Record<string, unknown>) {
-  const courseCode = typeof body.courseCode === 'string' ? body.courseCode.trim().slice(0, 100) : '';
+  const courseId = typeof body.courseId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.courseId)
+    ? body.courseId
+    : '';
   const source = body.syllabusInfo;
-  if (!courseCode || !source || typeof source !== 'object' || Array.isArray(source)) {
-    return jsonResponse({ error: 'A course code and syllabus details are required.' }, 400);
+  if (!courseId || !source || typeof source !== 'object' || Array.isArray(source)) {
+    return jsonResponse({ error: 'A RISE course ID and syllabus details are required.' }, 400);
   }
   const info = source as Record<string, unknown>;
   const text = (key: string, max: number) => typeof info[key] === 'string' ? (info[key] as string).trim().slice(0, max) || null : null;
-  const gradingMode = info.grading_mode === 'weighted_categories' ? 'weighted_categories' : 'points';
-  const officeHours = Array.isArray(info.office_hours) ? info.office_hours.slice(0, 30).map((entry) => {
-    const row = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
-    return {
-      day_of_week: Number.isInteger(row.day_of_week) ? row.day_of_week : null,
-      start_time: typeof row.start_time === 'string' ? row.start_time || null : null,
-      end_time: typeof row.end_time === 'string' ? row.end_time || null : null,
-      office_location: typeof row.office_location === 'string' ? row.office_location.trim().slice(0, 500) || null : null,
-      required_booking: row.required_booking === true,
-      booking_link: typeof row.booking_link === 'string' ? row.booking_link.trim().slice(0, 2000) || null : null,
-    };
-  }) : [];
-  const topics = Array.isArray(info.topics) ? info.topics.slice(0, 50).map((entry) => {
-    const row = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
-    return {
-      title: typeof row.title === 'string' ? row.title.trim().slice(0, 100) : '',
-      percentage: typeof row.percentage === 'number' && Number.isFinite(row.percentage) ? row.percentage : null,
-      total_count: Number.isInteger(row.total_count) ? row.total_count : null,
-    };
-  }).filter((row) => row.title) : [];
-  const syllabusInfo = {
-    course_overview: null,
-    professor_name: text('professor_name', 200),
-    professor_email: text('professor_email', 254),
-    late_work: text('late_work', 10000),
-    grading_mode: gradingMode,
-    office_hours: officeHours,
-    topics,
-  } as Awaited<ReturnType<typeof extractSyllabusInfo>>;
-  const syllabusId = await saveExtractedSyllabus(supabase, userId, courseCode, syllabusInfo);
-  const { error: locationError } = await supabase.rpc('set_syllabus_class_location', {
+  const { data: syllabusId, error } = await supabase.rpc('save_manual_syllabus_by_course_id', {
     p_user_id: userId,
-    p_course_code: courseCode,
-    p_class_location: text('class_location', 500),
+    p_course_id: courseId,
+    p_info: {
+      late_work: text('late_work', 10000),
+      professor_name: text('professor_name', 200),
+      professor_email: text('professor_email', 254),
+      class_location: text('class_location', 500),
+    },
   });
-  if (locationError) throw locationError;
+  if (error) throw error;
   return jsonResponse({ saved: true, syllabusId });
 }
 

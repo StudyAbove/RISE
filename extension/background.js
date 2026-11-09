@@ -181,6 +181,10 @@ const messageHandlers = {
     return callRise({ action: 'saveSyllabusReview', review }, await getToken());
   },
 
+  async saveManualSyllabus({ courseId, syllabusInfo }) {
+    return callRise({ action: 'saveManualSyllabus', courseId, syllabusInfo }, await getToken());
+  },
+
   /** Opening Canvas or pressing Sync now. Skips if a sync just ran, unless forced. */
   async syncNow({ origin, force }) {
     const { lastSync } = await chrome.storage.local.get('lastSync');

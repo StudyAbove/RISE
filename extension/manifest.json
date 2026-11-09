@@ -21,7 +21,11 @@
     "service_worker": "background.js"
   },
   "permissions": ["storage", "alarms"],
-  "host_permissions": ["https://*.instructure.com/*", "https://*.supabase.co/*"],
+  "host_permissions": [
+    "https://*.instructure.com/*",
+    "https://*.supabase.co/*",
+    "http://127.0.0.1:54321/*"
+  ],
   "content_scripts": [
     {
       "matches": ["https://*.instructure.com/*"],

@@ -148,42 +148,51 @@ const RiseModal = (() => {
         </div>
       </div>`,
 
-    syllabusReview: ({ index, total }) => `
-      <form class="dialog dialog--review" role="dialog" aria-modal="true" aria-labelledby="rise-title" novalidate>
+    syllabusReview: ({ index, total, manual = false }) => `
+      <form class="dialog dialog--review${manual ? ' dialog--manual-card' : ''}" role="dialog" aria-modal="true" aria-labelledby="rise-title" novalidate>
         <div class="brand brand--start"><img src="${asset('images/rise-logo.svg')}" alt="">Rise</div>
         <p class="review-progress" data-slot="progress"></p>
-        <h2 class="title title--start" id="rise-title">Review class information</h2>
+        <button class="review-next" type="button" data-action="next" aria-label="Save and go to the next class" ${manual && index < total - 1 ? '' : 'hidden'}>→</button>
+        <h2 class="title title--start" id="rise-title" data-slot="title">Review class information</h2>
         <p class="subtitle subtitle--start" data-slot="course-name"></p>
         <p class="review-note" data-slot="syllabus-note"></p>
 
-        <div class="review-grid">
-          <label class="review-field">Professor name
-            <input name="professorName" maxlength="100" placeholder="Unavailable">
-          </label>
-          <label class="review-field">Professor email
-            <input name="professorEmail" type="email" maxlength="100" placeholder="Unavailable">
-          </label>
-        </div>
-
         <section class="review-section">
+          ${manual ? '' : '<h3>Syllabi</h3>'}
+          <div class="review-grid">
+            <label class="review-field">Professor name
+              <input name="professorName" maxlength="100" placeholder="Unavailable">
+            </label>
+            <label class="review-field">Professor email
+              <input name="professorEmail" type="email" maxlength="254" placeholder="Unavailable">
+            </label>
+          </div>
+          ${manual ? `<label class="review-field">Class location
+            <input name="classLocation" maxlength="500" placeholder="Class location">
+          </label>` : ''}
+          <label class="review-field">Late-work policy
+            <textarea name="lateWork" placeholder="Late-work policy"></textarea>
+          </label>
+          ${manual ? '' : `<label class="review-field">Grading method
+            <select name="gradingMethod">
+              <option value="points">Points</option>
+              <option value="weighted_categories">Weighted categories</option>
+            </select>
+          </label>`}
+        </section>
+
+        ${manual ? '' : `<section class="review-section">
           <div class="review-section-heading"><h3>Office hours</h3><button class="small-button" type="button" data-action="add-office-hour">Add time</button></div>
           <div class="review-rows" data-slot="office-hours"></div>
-        </section>
+        </section>`}
 
-        <label class="review-field">Grading mode
-          <select name="gradingMode"><option value="points">Points</option><option value="weighted_categories">Weighted categories</option></select>
-        </label>
-        <section class="review-section">
-          <div class="review-section-heading"><h3>Grading percentages</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
+        ${manual ? '' : `<section class="review-section">
+          <div class="review-section-heading"><h3>Grading topics</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
           <div class="review-rows" data-slot="topics"></div>
-        </section>
-
-        <label class="review-field">Late-work policy
-          <textarea name="lateWork" placeholder="Unavailable — add or correct the policy"></textarea>
-        </label>
+        </section>`}
 
         <p class="error" role="alert" hidden></p>
-        <button class="button button--gold" type="submit">Confirm and continue</button>
+        <button class="button button--gold" type="submit" ${manual && index < total - 1 ? 'hidden' : ''}>${manual ? 'Done' : 'Confirm and continue'}</button>
       </form>`,
   };
 
@@ -322,8 +331,9 @@ const RiseModal = (() => {
         await sendToRise({ type: 'pair', email, code, origin: location.origin });
         showClassPicker({
           isSetup: true,
-          onSaved: () => {
+          onSaved: (courses) => {
             showSyllabusMethod({
+              courses,
               onSelected: () => {
                 showConnected(email);
                 onConnected();
@@ -452,7 +462,7 @@ const RiseModal = (() => {
           type: 'saveCourseChoices',
           choices: courses.map(({ canvasCourseId, color, syncEnabled }) => ({ canvasCourseId, color, syncEnabled })),
         });
-        onSaved();
+        onSaved(courses.filter((course) => course.syncEnabled));
       } catch (error) {
         showError(error.message);
         saveButton.disabled = false;
@@ -467,12 +477,28 @@ const RiseModal = (() => {
     overlay.querySelector('[data-action="close"]').addEventListener('click', close);
   }
 
-  function showSyllabusMethod({ onSelected }) {
+  function showSyllabusMethod({ courses, onSelected }) {
     const overlay = render('syllabusMethod');
 
     overlay.querySelector('[data-action="manual"]').addEventListener('click', async () => {
       await chrome.storage.local.set({ syllabusEntryPreference: 'manual' });
-      onSelected();
+      const reviews = courses.map((course) => ({
+        courseId: course.courseId,
+        courseCode: course.code,
+        courseName: course.name,
+        syllabusInfo: {},
+      }));
+
+      showSyllabusReviews({
+        reviews,
+        manual: true,
+        onDone: onSelected,
+        onSave: (syllabusInfo, course) => sendToRise({
+          type: 'saveManualSyllabus',
+          courseId: course.courseId,
+          syllabusInfo,
+        }),
+      });
     });
     overlay.querySelector('[data-action="ai"]').addEventListener('click', async () => {
       await chrome.storage.local.set({ syllabusEntryPreference: 'ai' });
@@ -480,7 +506,7 @@ const RiseModal = (() => {
     });
   }
 
-  function showSyllabusReviews({ reviews, onSave }) {
+  function showSyllabusReviews({ reviews, onSave, manual = false, onDone = close }) {
     const queue = [...reviews];
     let index = 0;
 
@@ -492,7 +518,7 @@ const RiseModal = (() => {
       input.name = name;
       input.type = type;
       input.value = value ?? '';
-      if (name === 'title') input.maxLength = 50;
+      if (name === 'title') input.maxLength = 100;
       if (type === 'time') input.step = '60';
       label.append(input);
       parent.append(label);
@@ -519,6 +545,7 @@ const RiseModal = (() => {
       row.append(dayLabel);
       appendInput(row, 'Start', 'start', value.start, 'time');
       appendInput(row, 'End', 'end', value.end, 'time');
+      if (manual) appendInput(row, 'Office location', 'office_location', value.office_location);
 
       const bookingLabel = document.createElement('label');
       bookingLabel.className = 'review-checkbox';
@@ -560,36 +587,40 @@ const RiseModal = (() => {
 
     function renderReview() {
       if (index >= queue.length) {
-        close();
+        onDone();
         return;
       }
 
       const review = queue[index];
-      const overlay = render('syllabusReview', { index, total: queue.length });
+      const overlay = render('syllabusReview', { index, total: queue.length, manual });
       const form = overlay.querySelector('form');
       const data = review.syllabusInfo ?? review;
       const topicData = data.topics ?? data.grading_scale?.topics ?? [];
       const courseName = review.courseName ?? review.name ?? 'Class';
 
       overlay.querySelector('[data-slot="progress"]').textContent = `Class ${index + 1} of ${queue.length}`;
-      overlay.querySelector('[data-slot="course-name"]').textContent = courseName;
+      overlay.querySelector('[data-slot="course-name"]').textContent = manual ? '' : courseName;
+      overlay.querySelector('[data-slot="title"]').textContent = manual ? courseName : 'Review class information';
       overlay.querySelector('[data-slot="syllabus-note"]').textContent = review.hasSyllabus === false
         ? 'RISE could not find a syllabus for this class. Add the details you know below.'
         : 'Check the information found in the syllabus and correct anything that needs updating.';
+      if (manual) overlay.querySelector('[data-slot="syllabus-note"]').hidden = true;
 
-      form.elements.gradingMode.value = data.grading_mode ?? 'points';
+      if (!manual) form.elements.gradingMethod.value = data.grading_method ?? data.grading_mode ?? 'points';
       form.elements.professorName.value = data.professorName ?? data.professor_name ?? '';
       form.elements.professorEmail.value = data.professorEmail ?? data.professor_email ?? '';
       form.elements.lateWork.value = data.late_work ?? data.lateWork ?? '';
+      if (manual) form.elements.classLocation.value = data.class_location ?? '';
 
       const officeHours = overlay.querySelector('[data-slot="office-hours"]');
       const topicsContainer = overlay.querySelector('[data-slot="topics"]');
-      (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
-      topicData.forEach((item) => appendTopic(topicsContainer, item));
+      if (!manual) (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
+      if (!manual) topicData.forEach((item) => appendTopic(topicsContainer, item));
 
-      overlay.querySelector('[data-action="add-office-hour"]').addEventListener('click', () => appendOfficeHour(officeHours));
-      overlay.querySelector('[data-action="add-topic"]').addEventListener('click', () => appendTopic(topicsContainer));
+      overlay.querySelector('[data-action="add-office-hour"]')?.addEventListener('click', () => appendOfficeHour(officeHours));
+      overlay.querySelector('[data-action="add-topic"]')?.addEventListener('click', () => appendTopic(topicsContainer));
       const errorText = form.querySelector('.error');
+      overlay.querySelector('[data-action="next"]').addEventListener('click', () => form.requestSubmit());
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -608,15 +639,18 @@ const RiseModal = (() => {
           professor_name: optionalText(form.elements.professorName.value),
           professor_email: optionalText(form.elements.professorEmail.value),
           late_work: optionalText(form.elements.lateWork.value),
-          grading_mode: form.elements.gradingMode.value,
-          office_hours: valueByRow('office-hours', (row) => ({
-            day_of_week: row.querySelector('[name="dayOfWeek"]').value === '' ? null : Number(row.querySelector('[name="dayOfWeek"]').value),
-            start_time: optionalText(row.querySelector('[name="start"]').value),
-            end_time: optionalText(row.querySelector('[name="end"]').value),
-            required_booking: row.querySelector('[name="required_booking"]').checked,
-            booking_link: optionalText(row.querySelector('[name="booking_link"]').value),
-          })),
-          topics: valueByRow('topics', (row) => ({
+          class_location: manual ? optionalText(form.elements.classLocation.value) : null,
+          ...(manual ? {} : {
+            grading_mode: form.elements.gradingMethod.value,
+            grading_method: form.elements.gradingMethod.value,
+            office_hours: valueByRow('office-hours', (row) => ({
+              day_of_week: row.querySelector('[name="dayOfWeek"]').value === '' ? null : Number(row.querySelector('[name="dayOfWeek"]').value),
+              start_time: optionalText(row.querySelector('[name="start"]').value),
+              end_time: optionalText(row.querySelector('[name="end"]').value),
+              required_booking: row.querySelector('[name="required_booking"]').checked,
+              booking_link: optionalText(row.querySelector('[name="booking_link"]').value),
+            })),
+            topics: valueByRow('topics', (row) => ({
               title: row.querySelector('[name="title"]').value.trim(),
               percentage: row.querySelector('[name="percentage"]').value === ''
                 ? null
@@ -625,29 +659,32 @@ const RiseModal = (() => {
                 ? null
                 : Number(row.querySelector('[name="total_count"]').value),
             })),
+          }),
         };
 
         try {
-          if (confirmed.office_hours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
+          if (!manual && confirmed.office_hours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
             throw new Error('For each office-hours entry, add a day, start time, and end time.');
           }
-          if (confirmed.topics.some((item) => !item.title || item.percentage == null)) {
+          if (!manual && confirmed.topics.some((item) => !item.title || item.percentage == null)) {
             throw new Error('For each grading topic, add a title and percentage.');
           }
 
-          await onSave(confirmed);
+          await onSave(confirmed, review);
           index += 1;
-          renderReview();
+          if (manual && index >= queue.length) onDone();
+          else renderReview();
         } catch (error) {
           errorText.textContent = error.message || 'Could not save this review. Please try again.';
           errorText.hidden = false;
           button.disabled = false;
-          button.textContent = 'Confirm and continue';
+          button.textContent = manual && index === queue.length - 1 ? 'Done' : 'Confirm and continue';
         }
       });
     }
 
     if (queue.length) renderReview();
+    else onDone();
   }
 
   /** Updates the status box on the "You're connected" screen, if it's open. */

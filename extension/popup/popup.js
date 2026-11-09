@@ -54,8 +54,16 @@ async function sendToCanvasTab(messageType, fallbackQuery) {
   const [canvasTab] = await chrome.tabs.query(CANVAS_TABS);
 
   if (canvasTab) {
-    await chrome.tabs.sendMessage(canvasTab.id, { type: messageType }).catch(() => {});
-    await chrome.tabs.update(canvasTab.id, { active: true });
+    try {
+      await chrome.tabs.sendMessage(canvasTab.id, { type: messageType });
+      await chrome.tabs.update(canvasTab.id, { active: true });
+    } catch {
+      // An already-open Canvas tab may predate an extension reload and have no
+      // content script. Reload it through the URL flow so the script runs.
+      const canvasUrl = new URL(canvasTab.url);
+      canvasUrl.searchParams.set('rise', fallbackQuery);
+      await chrome.tabs.update(canvasTab.id, { url: canvasUrl.toString(), active: true });
+    }
   } else {
     await chrome.tabs.create({ url: `${self.RISE_CONFIG.canvasUrl}/?rise=${fallbackQuery}` });
   }
