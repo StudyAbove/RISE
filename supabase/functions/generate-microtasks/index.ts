@@ -14,6 +14,7 @@ import { z } from 'npm:zod@4.6.7';
 import {
   buildMicrotaskPrompt,
   InvalidMicrotaskPlanError,
+  MAX_MICROTASK_PLAN_MINUTES,
   MICROTASK_SYSTEM_PROMPT,
   readMicrotaskPlan,
   type AssignmentToBreakDown,
@@ -276,7 +277,12 @@ Deno.serve(async (req) => {
         code: 'estimate_required',
       }, 409);
     }
-
+    if (totalMinutes > MAX_MICROTASK_PLAN_MINUTES) {
+      return jsonResponse({
+        error: 'This assignment is estimated at more than 18 hours and cannot fit into one microtask plan.',
+        code: 'estimate_exceeds_plan_limit',
+      }, 422);
+    }
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 

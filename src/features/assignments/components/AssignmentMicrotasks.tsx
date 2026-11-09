@@ -301,6 +301,13 @@ export function AssignmentMicrotasks({
         );
       } else if (
         error instanceof MicrotaskGenerationError &&
+        error.code === 'estimate_exceeds_plan_limit'
+      ) {
+        setNotice(
+          'This assignment is estimated at more than 18 hours. A microtask plan can cover up to 18 hours.',
+        );
+      } else if (
+        error instanceof MicrotaskGenerationError &&
         ['ai_unavailable', 'not_configured'].includes(error.code)
       ) {
         setNotice(
