@@ -90,6 +90,7 @@ function renderCourses(courses) {
       : 'No syllabus text';
     heading.append(nameWrap, badge);
     card.append(heading);
+    card.append(createManualSyllabusForm(course));
 
     if (course.hasSyllabus) {
       const details = document.createElement('details');
@@ -207,6 +208,137 @@ function renderCourses(courses) {
 
     coursesEl.append(card);
   }
+}
+
+function createManualSyllabusForm(course) {
+  const details = document.createElement('details');
+  details.className = 'manual-syllabus';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Enter syllabus details manually';
+  details.append(summary);
+
+  const form = document.createElement('form');
+  form.className = 'manual-form';
+  form.addEventListener('submit', (event) => event.preventDefault());
+  const field = (labelText, name, type = 'text') => {
+    const label = document.createElement('label');
+    label.textContent = labelText;
+    const input = type === 'textarea' ? document.createElement('textarea') : document.createElement('input');
+    if (type !== 'textarea') input.type = type;
+    input.name = name;
+    label.append(input);
+    return { label, input };
+  };
+
+  const professor = field('Professor last name', 'professor_name');
+  const email = field('Professor email', 'professor_email', 'email');
+  const lateWork = field('Late-work policy', 'late_work', 'textarea');
+  const classLocation = field('Class location', 'class_location');
+  const gradingLabel = document.createElement('label');
+  gradingLabel.textContent = 'Grading mode';
+  const gradingMode = document.createElement('select');
+  gradingMode.name = 'grading_mode';
+  for (const [value, label] of [['points', 'Points'], ['weighted_categories', 'Weighted categories']]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    gradingMode.append(option);
+  }
+  gradingLabel.append(gradingMode);
+  form.append(professor.label, email.label, lateWork.label, classLocation.label, gradingLabel);
+
+  const hours = document.createElement('fieldset');
+  const hoursLegend = document.createElement('legend');
+  hoursLegend.textContent = 'Office hours';
+  const hoursRows = document.createElement('div');
+  hoursRows.className = 'manual-rows';
+  const addHours = document.createElement('button');
+  addHours.type = 'button';
+  addHours.className = 'button button--secondary';
+  addHours.textContent = 'Add office-hours instance';
+  const addHourRow = () => {
+    const row = document.createElement('fieldset');
+    row.className = 'manual-row manual-office-hour';
+    const legend = document.createElement('legend');
+    legend.textContent = `Office-hours instance ${hoursRows.children.length + 1}`;
+    const day = document.createElement('select');
+    day.setAttribute('aria-label', 'Office-hour day');
+    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach((name, index) => {
+      const option = document.createElement('option'); option.value = String(index); option.textContent = name; day.append(option);
+    });
+    const start = document.createElement('input'); start.type = 'time'; start.setAttribute('aria-label', 'Start time');
+    const end = document.createElement('input'); end.type = 'time'; end.setAttribute('aria-label', 'End time');
+    const location = document.createElement('input'); location.type = 'text'; location.placeholder = 'Office location or Virtual'; location.setAttribute('aria-label', 'Office location');
+    const required = document.createElement('input'); required.type = 'checkbox'; required.setAttribute('aria-label', 'Booking required');
+    const link = document.createElement('input'); link.type = 'url'; link.placeholder = 'Booking link (optional)'; link.setAttribute('aria-label', 'Booking link');
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.className = 'button button--secondary';
+    remove.addEventListener('click', () => {
+      row.remove();
+      [...hoursRows.children].forEach((item, index) => {
+        item.querySelector('legend').textContent = `Office-hours instance ${index + 1}`;
+      });
+    });
+    row.append(legend, day, start, end, location, required, link, remove); hoursRows.append(row);
+  };
+  addHours.addEventListener('click', addHourRow);
+  hours.append(hoursLegend, hoursRows, addHours);
+
+  const topics = document.createElement('fieldset');
+  topics.hidden = true;
+  const topicsLegend = document.createElement('legend'); topicsLegend.textContent = 'Grading topics';
+  const topicRows = document.createElement('div'); topicRows.className = 'manual-rows';
+  const addTopic = document.createElement('button'); addTopic.type = 'button'; addTopic.className = 'button button--secondary'; addTopic.textContent = 'Add grading topic';
+  addTopic.addEventListener('click', () => {
+    const row = document.createElement('div'); row.className = 'manual-row';
+    const title = document.createElement('input'); title.placeholder = 'Topic'; title.setAttribute('aria-label', 'Grading topic');
+    const percentage = document.createElement('input'); percentage.type = 'number'; percentage.min = '0'; percentage.max = '100'; percentage.step = '0.01'; percentage.placeholder = '%'; percentage.setAttribute('aria-label', 'Percentage worth');
+    const count = document.createElement('input'); count.type = 'number'; count.min = '1'; count.step = '1'; count.placeholder = 'Count'; count.setAttribute('aria-label', 'Number of assignments');
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.className = 'button button--secondary'; remove.addEventListener('click', () => row.remove());
+    row.append(title, percentage, count, remove); topicRows.append(row);
+  });
+  topics.append(topicsLegend, topicRows, addTopic);
+  gradingMode.addEventListener('change', () => {
+    topics.hidden = gradingMode.value !== 'weighted_categories';
+  });
+
+  const save = document.createElement('button'); save.type = 'button'; save.className = 'button'; save.textContent = 'Save manual details';
+  const message = document.createElement('p'); message.className = 'manual-status'; message.setAttribute('role', 'status');
+  save.addEventListener('click', async () => {
+    if (!connection.token) { message.textContent = 'Connect your RISE account first.'; return; }
+    save.disabled = true; message.textContent = 'Saving…';
+    const info = {
+      professor_name: professor.input.value.trim() || null,
+      professor_email: email.input.value.trim() || null,
+      late_work: lateWork.input.value.trim() || null,
+      class_location: classLocation.input.value.trim() || null,
+      grading_mode: gradingMode.value,
+      office_hours: [...hoursRows.children].map((row) => {
+        const [day, start, end, location, required, link] = row.querySelectorAll('select,input');
+        return { day_of_week: Number(day.value), start_time: start.value || null, end_time: end.value || null, office_location: location.value.trim() || null, required_booking: required.checked, booking_link: link.value.trim() || null };
+      }).filter((item) => item.start_time || item.end_time || item.office_location || item.booking_link),
+      topics: gradingMode.value === 'weighted_categories' ? [...topicRows.children].map((row) => {
+        const [title, percentage, count] = row.querySelectorAll('input');
+        return { title: title.value.trim(), percentage: percentage.value === '' ? null : Number(percentage.value), total_count: count.value === '' ? null : Number(count.value) };
+      }).filter((item) => item.title) : [],
+    };
+    try {
+      await syncCourseToRise(course);
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/canvas-extension`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-rise-extension-token': connection.token },
+        body: JSON.stringify({ action: 'saveManualSyllabus', courseCode: course.code, syllabusInfo: info }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not save manual syllabus details.');
+      message.textContent = 'Manual syllabus details saved.';
+      course.manualSaved = true;
+    } catch (error) {
+      message.textContent = error.message || 'Could not save manual syllabus details.';
+    } finally { save.disabled = false; }
+  });
+  form.append(hours, topics, save, message);
+  details.append(form);
+  return details;
 }
 
 async function pullSyllabi() {
