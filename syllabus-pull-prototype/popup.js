@@ -236,15 +236,15 @@ function createManualSyllabusForm(course) {
   const classLocation = field('Class location', 'class_location');
   const gradingLabel = document.createElement('label');
   gradingLabel.textContent = 'Grading mode';
-  const gradingMode = document.createElement('select');
-  gradingMode.name = 'grading_mode';
+  const gradingMethod = document.createElement('select');
+  gradingMethod.name = 'grading_method';
   for (const [value, label] of [['points', 'Points'], ['weighted_categories', 'Weighted categories']]) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = label;
-    gradingMode.append(option);
+    gradingMethod.append(option);
   }
-  gradingLabel.append(gradingMode);
+  gradingLabel.append(gradingMethod);
   form.append(professor.label, email.label, lateWork.label, classLocation.label, gradingLabel);
 
   const hours = document.createElement('fieldset');
@@ -297,8 +297,8 @@ function createManualSyllabusForm(course) {
     row.append(title, percentage, count, remove); topicRows.append(row);
   });
   topics.append(topicsLegend, topicRows, addTopic);
-  gradingMode.addEventListener('change', () => {
-    topics.hidden = gradingMode.value !== 'weighted_categories';
+  gradingMethod.addEventListener('change', () => {
+    topics.hidden = gradingMethod.value !== 'weighted_categories';
   });
 
   const save = document.createElement('button'); save.type = 'button'; save.className = 'button'; save.textContent = 'Save manual details';
@@ -311,12 +311,12 @@ function createManualSyllabusForm(course) {
       professor_email: email.input.value.trim() || null,
       late_work: lateWork.input.value.trim() || null,
       class_location: classLocation.input.value.trim() || null,
-      grading_mode: gradingMode.value,
+      grading_method: gradingMethod.value,
       office_hours: [...hoursRows.children].map((row) => {
         const [day, start, end, location, required, link] = row.querySelectorAll('select,input');
         return { day_of_week: Number(day.value), start_time: start.value || null, end_time: end.value || null, office_location: location.value.trim() || null, required_booking: required.checked, booking_link: link.value.trim() || null };
       }).filter((item) => item.start_time || item.end_time || item.office_location || item.booking_link),
-      topics: gradingMode.value === 'weighted_categories' ? [...topicRows.children].map((row) => {
+      topics: gradingMethod.value === 'weighted_categories' ? [...topicRows.children].map((row) => {
         const [title, percentage, count] = row.querySelectorAll('input');
         return { title: title.value.trim(), percentage: percentage.value === '' ? null : Number(percentage.value), total_count: count.value === '' ? null : Number(count.value) };
       }).filter((item) => item.title) : [],

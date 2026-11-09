@@ -10,7 +10,7 @@ export type ExtractedSyllabusInfo = {
     required_booking: boolean;
     booking_link: string | null;
   }[];
-  grading_mode: 'points' | 'weighted_categories';
+  grading_method: 'points' | 'weighted_categories';
   topics: {
     title: string;
     percentage: number | null;
@@ -24,7 +24,7 @@ const EMPTY_SYLLABUS_INFO: ExtractedSyllabusInfo = {
   professor_name: null,
   professor_email: null,
   office_hours: [],
-  grading_mode: 'points',
+  grading_method: 'points',
   topics: [],
   late_work: null,
 };
@@ -52,7 +52,7 @@ const SYLLABUS_SCHEMA = {
         required: ['day_of_week', 'start_time', 'end_time', 'office_location', 'required_booking', 'booking_link'],
       },
     },
-    grading_mode: { type: 'string', enum: ['points', 'weighted_categories'] },
+    grading_method: { type: 'string', enum: ['points', 'weighted_categories'] },
     topics: {
       type: 'array',
       items: {
@@ -73,7 +73,7 @@ const SYLLABUS_SCHEMA = {
     'professor_name',
     'professor_email',
     'office_hours',
-    'grading_mode',
+    'grading_method',
     'topics',
     'late_work',
   ],

@@ -549,7 +549,7 @@ async function saveSyllabusReview(
       course_overview: review.course_overview,
       professor_name: review.professor_name,
       professor_email: review.professor_email,
-      grading_mode: review.grading_mode,
+      grading_method: review.grading_method,
       late_work: review.late_work,
       office_hours: review.office_hours,
       topics: review.topics,
@@ -660,6 +660,43 @@ async function saveManualSyllabus(supabase: SupabaseClient, userId: string, body
   }
   const info = source as Record<string, unknown>;
   const text = (key: string, max: number) => typeof info[key] === 'string' ? (info[key] as string).trim().slice(0, max) || null : null;
+  const gradingMethod = ['weighted_categories', 'points', 'other'].includes(String(info.grading_method))
+    ? String(info.grading_method)
+    : 'points';
+  const officeHours = Array.isArray(info.office_hours) ? info.office_hours.map((entry) => {
+    const item = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
+    const day = item.day_of_week;
+    const dayOfWeek = typeof day === 'number' && Number.isInteger(day) && day >= 0 && day <= 6 ? day : null;
+    const time = (key: string) => typeof item[key] === 'string' && /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(item[key] as string)
+      ? (item[key] as string).slice(0, 8)
+      : null;
+    return {
+      day_of_week: dayOfWeek,
+      start_time: time('start_time'),
+      end_time: time('end_time'),
+      office_location: typeof item.office_location === 'string' ? item.office_location.trim().slice(0, 500) || null : null,
+      required_booking: item.required_booking === true,
+      booking_link: typeof item.booking_link === 'string' ? item.booking_link.trim().slice(0, 2000) || null : null,
+    };
+  }) : [];
+  if (officeHours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
+    return jsonResponse({ error: 'Each office-hours entry needs a day, start time, and end time.' }, 400);
+  }
+  const topics = gradingMethod === 'weighted_categories' && Array.isArray(info.topics)
+    ? info.topics.map((entry) => {
+      const item = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry as Record<string, unknown> : {};
+      const percentage = typeof item.percentage === 'number' && item.percentage >= 0 && item.percentage <= 100 ? item.percentage : null;
+      const totalCount = typeof item.total_count === 'number' && Number.isInteger(item.total_count) && item.total_count > 0 ? item.total_count : null;
+      return {
+        title: typeof item.title === 'string' ? item.title.trim().slice(0, 100) || null : null,
+        percentage,
+        total_count: totalCount,
+      };
+    })
+    : [];
+  if (topics.some((item) => !item.title || item.percentage == null)) {
+    return jsonResponse({ error: 'Each grading topic needs a title and a percentage from 0 to 100.' }, 400);
+  }
   const { data: syllabusId, error } = await supabase.rpc('save_manual_syllabus_by_course_id', {
     p_user_id: userId,
     p_course_id: courseId,
@@ -668,6 +705,9 @@ async function saveManualSyllabus(supabase: SupabaseClient, userId: string, body
       professor_name: text('professor_name', 200),
       professor_email: text('professor_email', 254),
       class_location: text('class_location', 500),
+      grading_method: gradingMethod,
+      office_hours: officeHours,
+      topics,
     },
   });
   if (error) throw error;

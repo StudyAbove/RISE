@@ -147,6 +147,44 @@
   margin-top: 12px;
 }
 
+.dialog--manual-card .review-section[hidden] {
+  display: none;
+}
+
+.manual-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  border-bottom: 1px solid #dce3dc;
+}
+
+.manual-tabs button {
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #657268;
+  font: 600 11px/16px var(--font-body);
+  cursor: pointer;
+}
+
+.manual-tabs button[aria-selected="true"] {
+  border-bottom-color: #78927b;
+  color: #344c38;
+}
+
+.dialog--manual-card .review-row--office {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dialog--manual-card .review-row--office .review-checkbox {
+  grid-column: 1 / -1;
+}
+
+.dialog--manual-card .review-row--office .small-button--remove {
+  justify-self: start;
+}
+
 .dialog--manual-card .button--gold {
   min-height: 36px;
   height: auto;

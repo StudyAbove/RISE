@@ -40,7 +40,7 @@ export type SavedSyllabusReview = {
   course_overview: string | null;
   professor_name: string | null;
   professor_email: string | null;
-  grading_mode: 'points' | 'weighted_categories';
+  grading_method: 'points' | 'weighted_categories';
   late_work: string | null;
   office_hours: {
     day_of_week: number;
@@ -99,9 +99,9 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
     throw new InvalidPayloadError('Confirm the syllabus information before saving it.');
   }
 
-  const gradingMode = review.grading_mode;
-  if (gradingMode !== 'points' && gradingMode !== 'weighted_categories') {
-    throw new InvalidPayloadError('Choose a valid grading mode.');
+  const gradingMethod = review.grading_method;
+  if (gradingMethod !== 'points' && gradingMethod !== 'weighted_categories') {
+    throw new InvalidPayloadError('Choose a valid grading method.');
   }
 
   const officeHoursRaw = review.office_hours ?? [];
@@ -165,7 +165,7 @@ export function parseSyllabusReview(body: unknown): SavedSyllabusReview {
     course_overview: readText(review.course_overview, 5000),
     professor_name: readText(review.professor_name, 100),
     professor_email: professorEmail,
-    grading_mode: gradingMode,
+    grading_method: gradingMethod,
     late_work: readText(review.late_work, 200),
     office_hours: officeHours,
     topics,

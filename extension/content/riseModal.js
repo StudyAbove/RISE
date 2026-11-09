@@ -157,7 +157,12 @@ const RiseModal = (() => {
         <p class="subtitle subtitle--start" data-slot="course-name"></p>
         <p class="review-note" data-slot="syllabus-note"></p>
 
-        <section class="review-section">
+        ${manual ? `<div class="manual-tabs" role="tablist" aria-label="Class information">
+          <button type="button" role="tab" aria-selected="true" data-tab="details">Class Details</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="office-hours">Office Hours</button>
+        </div>` : ''}
+
+        <section class="review-section" data-panel="details">
           ${manual ? '' : '<h3>Syllabi</h3>'}
           <div class="review-grid">
             <label class="review-field">Professor name
@@ -173,23 +178,23 @@ const RiseModal = (() => {
           <label class="review-field">Late-work policy
             <textarea name="lateWork" placeholder="Late-work policy"></textarea>
           </label>
-          ${manual ? '' : `<label class="review-field">Grading method
+          <label class="review-field">Grading method
             <select name="gradingMethod">
+              <option value="weighted_categories">${manual ? 'Percentage' : 'Weighted categories'}</option>
               <option value="points">Points</option>
-              <option value="weighted_categories">Weighted categories</option>
+              ${manual ? '<option value="other">Other</option>' : ''}
             </select>
-          </label>`}
+          </label>
+          <section class="review-section" data-slot="topics-section" ${manual ? 'hidden' : ''}>
+            <div class="review-section-heading"><h3>Grading topics</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
+            <div class="review-rows" data-slot="topics"></div>
+          </section>
         </section>
 
-        ${manual ? '' : `<section class="review-section">
+        <section class="review-section" data-panel="office-hours" ${manual ? 'hidden' : ''}>
           <div class="review-section-heading"><h3>Office hours</h3><button class="small-button" type="button" data-action="add-office-hour">Add time</button></div>
           <div class="review-rows" data-slot="office-hours"></div>
-        </section>`}
-
-        ${manual ? '' : `<section class="review-section">
-          <div class="review-section-heading"><h3>Grading topics</h3><button class="small-button" type="button" data-action="add-topic">Add topic</button></div>
-          <div class="review-rows" data-slot="topics"></div>
-        </section>`}
+        </section>
 
         <p class="error" role="alert" hidden></p>
         <button class="button button--gold" type="submit" ${manual && index < total - 1 ? 'hidden' : ''}>${manual ? 'Done' : 'Confirm and continue'}</button>
@@ -543,9 +548,9 @@ const RiseModal = (() => {
       day.value = value.day_of_week ?? value.dayOfWeek ?? '';
       dayLabel.append(day);
       row.append(dayLabel);
-      appendInput(row, 'Start', 'start', value.start, 'time');
-      appendInput(row, 'End', 'end', value.end, 'time');
       if (manual) appendInput(row, 'Office location', 'office_location', value.office_location);
+      appendInput(row, 'Start', 'start', value.start_time ?? value.start, 'time');
+      appendInput(row, 'End', 'end', value.end_time ?? value.end, 'time');
 
       const bookingLabel = document.createElement('label');
       bookingLabel.className = 'review-checkbox';
@@ -606,7 +611,7 @@ const RiseModal = (() => {
         : 'Check the information found in the syllabus and correct anything that needs updating.';
       if (manual) overlay.querySelector('[data-slot="syllabus-note"]').hidden = true;
 
-      if (!manual) form.elements.gradingMethod.value = data.grading_method ?? data.grading_mode ?? 'points';
+      form.elements.gradingMethod.value = data.grading_method ?? 'points';
       form.elements.professorName.value = data.professorName ?? data.professor_name ?? '';
       form.elements.professorEmail.value = data.professorEmail ?? data.professor_email ?? '';
       form.elements.lateWork.value = data.late_work ?? data.lateWork ?? '';
@@ -614,8 +619,29 @@ const RiseModal = (() => {
 
       const officeHours = overlay.querySelector('[data-slot="office-hours"]');
       const topicsContainer = overlay.querySelector('[data-slot="topics"]');
-      if (!manual) (data.office_hours?.length ? data.office_hours : [{}]).forEach((item) => appendOfficeHour(officeHours, item));
-      if (!manual) topicData.forEach((item) => appendTopic(topicsContainer, item));
+      (data.office_hours?.length ? data.office_hours : (manual ? [] : [{}])).forEach((item) => appendOfficeHour(officeHours, item));
+      topicData.forEach((item) => appendTopic(topicsContainer, item));
+
+      const topicsSection = overlay.querySelector('[data-slot="topics-section"]');
+      const refreshTopicsVisibility = () => {
+        topicsSection.hidden = form.elements.gradingMethod.value !== 'weighted_categories';
+      };
+      form.elements.gradingMethod.addEventListener('change', refreshTopicsVisibility);
+      refreshTopicsVisibility();
+
+      if (manual) {
+        overlay.querySelectorAll('[data-tab]').forEach((tab) => {
+          tab.addEventListener('click', () => {
+            const selectedPanel = tab.dataset.tab;
+            overlay.querySelectorAll('[data-tab]').forEach((item) => {
+              item.setAttribute('aria-selected', String(item === tab));
+            });
+            overlay.querySelectorAll('[data-panel]').forEach((panel) => {
+              panel.hidden = panel.dataset.panel !== selectedPanel;
+            });
+          });
+        });
+      }
 
       overlay.querySelector('[data-action="add-office-hour"]')?.addEventListener('click', () => appendOfficeHour(officeHours));
       overlay.querySelector('[data-action="add-topic"]')?.addEventListener('click', () => appendTopic(topicsContainer));
@@ -640,17 +666,17 @@ const RiseModal = (() => {
           professor_email: optionalText(form.elements.professorEmail.value),
           late_work: optionalText(form.elements.lateWork.value),
           class_location: manual ? optionalText(form.elements.classLocation.value) : null,
-          ...(manual ? {} : {
-            grading_mode: form.elements.gradingMethod.value,
-            grading_method: form.elements.gradingMethod.value,
-            office_hours: valueByRow('office-hours', (row) => ({
+          grading_method: form.elements.gradingMethod.value,
+          office_hours: valueByRow('office-hours', (row) => ({
               day_of_week: row.querySelector('[name="dayOfWeek"]').value === '' ? null : Number(row.querySelector('[name="dayOfWeek"]').value),
               start_time: optionalText(row.querySelector('[name="start"]').value),
               end_time: optionalText(row.querySelector('[name="end"]').value),
+              office_location: optionalText(row.querySelector('[name="office_location"]')?.value ?? ''),
               required_booking: row.querySelector('[name="required_booking"]').checked,
               booking_link: optionalText(row.querySelector('[name="booking_link"]').value),
-            })),
-            topics: valueByRow('topics', (row) => ({
+          })),
+          topics: form.elements.gradingMethod.value === 'weighted_categories'
+            ? valueByRow('topics', (row) => ({
               title: row.querySelector('[name="title"]').value.trim(),
               percentage: row.querySelector('[name="percentage"]').value === ''
                 ? null
@@ -658,15 +684,15 @@ const RiseModal = (() => {
               total_count: row.querySelector('[name="total_count"]').value === ''
                 ? null
                 : Number(row.querySelector('[name="total_count"]').value),
-            })),
-          }),
+            }))
+            : [],
         };
 
         try {
-          if (!manual && confirmed.office_hours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
+          if (confirmed.office_hours.some((item) => item.day_of_week == null || !item.start_time || !item.end_time)) {
             throw new Error('For each office-hours entry, add a day, start time, and end time.');
           }
-          if (!manual && confirmed.topics.some((item) => !item.title || item.percentage == null)) {
+          if (confirmed.topics.some((item) => !item.title || item.percentage == null)) {
             throw new Error('For each grading topic, add a title and percentage.');
           }
 

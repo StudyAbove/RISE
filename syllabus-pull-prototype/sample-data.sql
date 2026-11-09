@@ -29,7 +29,7 @@ begin
         course_overview,
         professor_name,
         professor_email,
-        grading_mode,
+        grading_method,
         late_work,
         syllabus_info_confirmed_at
     ) values (
@@ -52,7 +52,7 @@ begin
         course_overview = excluded.course_overview,
         professor_name = excluded.professor_name,
         professor_email = excluded.professor_email,
-        grading_mode = excluded.grading_mode,
+        grading_method = excluded.grading_method,
         late_work = excluded.late_work,
         syllabus_info_confirmed_at = excluded.syllabus_info_confirmed_at
     returning id into v_course_id;
