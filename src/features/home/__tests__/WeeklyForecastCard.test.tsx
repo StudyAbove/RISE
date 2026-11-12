@@ -49,7 +49,7 @@ describe('WeeklyForecastCard', () => {
   });
 
   it('opens the class’s week when its class is tapped', async () => {
-    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
+    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} onHelpPress={jest.fn()} />);
 
     await fireEvent.press(screen.getByRole('button', { name: 'EE 381 this week' }));
 
@@ -60,7 +60,7 @@ describe('WeeklyForecastCard', () => {
   });
 
   it('opens the assignment when its row is tapped', async () => {
-    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
+    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} onHelpPress={jest.fn()} />);
 
     await fireEvent.press(
       screen.getByRole('button', { name: /BIO 200 - Osmosis Lab Report/ }),
@@ -70,7 +70,7 @@ describe('WeeklyForecastCard', () => {
   });
 
   it('shows the week, its summary, and what to start first with due times and estimates', async () => {
-    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
+    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} onHelpPress={jest.fn()} />);
 
     expect(screen.getByText('Heavy week ahead')).toBeOnTheScreen();
     expect(screen.getByText(heavyWeek.summary)).toBeOnTheScreen();
@@ -95,7 +95,7 @@ describe('WeeklyForecastCard', () => {
           totalMinutes: 0,
           recommended: [],
         }}
-        now={now}
+        now={now} onHelpPress={jest.fn()}
       />,
     );
 
@@ -103,24 +103,28 @@ describe('WeeklyForecastCard', () => {
     expect(screen.queryByText('Recommended to get ahead')).not.toBeOnTheScreen();
   });
 
-  it('shows Help, but not as a button yet', async () => {
-    await render(<WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} />);
-
-    expect(screen.getByText('Help')).toBeOnTheScreen();
-    expect(screen.queryByRole('button', { name: 'Help' })).not.toBeOnTheScreen();
-  });
-
   it('shows loading and error states', async () => {
     const { rerender } = await render(
-      <WeeklyForecastCard status="loading" forecast={null} now={now} />,
+      <WeeklyForecastCard status="loading" forecast={null} now={now} onHelpPress={jest.fn()} />,
     );
 
     expect(screen.getByText('Looking at your week…')).toBeOnTheScreen();
 
-    await rerender(<WeeklyForecastCard status="error" forecast={null} now={now} />);
+    await rerender(<WeeklyForecastCard status="error" forecast={null} now={now} onHelpPress={jest.fn()} />);
 
     expect(
       screen.getByText('RISE couldn’t load your week. Check your connection and try again.'),
     ).toBeOnTheScreen();
+  });
+
+  it('opens the help menu from Help', async () => {
+    const onHelpPress = jest.fn();
+
+    await render(
+      <WeeklyForecastCard status="ready" forecast={heavyWeek} now={now} onHelpPress={onHelpPress} />,
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Help' }));
+
+    expect(onHelpPress).toHaveBeenCalledTimes(1);
   });
 });

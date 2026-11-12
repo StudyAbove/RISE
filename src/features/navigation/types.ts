@@ -21,6 +21,10 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
   AssignmentDetails: { assignmentId: string };
+  // The tools in the "Feeling stuck?" help menu (#70).
+  Breathing: undefined;
+  ExtensionEmail: undefined;
+  OfficeHours: undefined;
   /** One class's assignments due this week, opened from the Weekly Forecast (#61). */
   ClassWeek: { courseId: string; courseLabel: string };
   FocusSession: {
