@@ -10,6 +10,11 @@ import { BreathingScreen } from '../screens/BreathingScreen';
 import { ExtensionEmailScreen } from '../screens/ExtensionEmailScreen';
 import { OfficeHoursScreen } from '../screens/OfficeHoursScreen';
 
+// The extension page loads the student's classes when it opens.
+jest.mock('../../../repositories/canvasRepository', () => ({
+  fetchCanvasCourses: async () => [],
+}));
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // Stands in for Home: a Help button that opens the popup, wired the same way.
