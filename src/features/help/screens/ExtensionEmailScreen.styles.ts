@@ -38,12 +38,27 @@ export const styles = StyleSheet.create({
     borderColor: colors.mistGreen,
     backgroundColor: colors.softWhite,
   },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 14,
+  },
   subject: {
     fontFamily: fonts.body.semiBold,
     fontSize: 9.5,
     lineHeight: 14,
     color: colors.deepOlive,
-    marginBottom: 14,
+  },
+  // TextInputs add their own padding; remove it so the editable email lines
+  // up like plain text in the card.
+  subjectInput: {
+    flex: 1,
+    padding: 0,
+  },
+  bodyInput: {
+    padding: 0,
+    textAlignVertical: 'top',
   },
   previewText: {
     fontFamily: fonts.body.regular,
