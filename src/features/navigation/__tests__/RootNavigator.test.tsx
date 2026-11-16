@@ -59,6 +59,9 @@ const mockDisconnectAppleCalendarWithCleanup =
 const mockNotifyCalendarRefresh =
   jest.fn();
 
+const mockRefreshAcademicDeadlineReminders =
+  jest.fn();
+
 let mockAppStateChangeHandler:
   | ((
       state: string,
@@ -221,6 +224,17 @@ jest.mock(
 );
 
 jest.mock(
+  '../../notifications/services/academicReminderService',
+  () => ({
+    refreshAcademicDeadlineReminders:
+      (...args: unknown[]) =>
+        mockRefreshAcademicDeadlineReminders(
+          ...args,
+        ),
+  }),
+);
+
+jest.mock(
   '../../calendar/components/CalendarSyncSuccessModal',
   () => {
     const {
@@ -356,6 +370,9 @@ describe(
   );
 
       jest.clearAllMocks();
+
+      mockRefreshAcademicDeadlineReminders
+        .mockResolvedValue(0);
 
       authStateCallback =
         undefined;
@@ -1187,6 +1204,70 @@ describe(
         ).not.toBeOnTheScreen();
       },
     );
+    it(
+      'refreshes academic deadline reminders after authenticated startup',
+      async () => {
+        setSignedInMocks();
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'RISE',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        await waitFor(() => {
+          expect(
+            mockRefreshAcademicDeadlineReminders,
+          ).toHaveBeenCalledTimes(1);
+        });
+      },
+    );
+
+    it(
+      'refreshes academic deadline reminders when the app returns to the foreground',
+      async () => {
+        setSignedInMocks();
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'RISE',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        await waitFor(() => {
+          expect(
+            mockRefreshAcademicDeadlineReminders,
+          ).toHaveBeenCalledTimes(1);
+        });
+
+        expect(
+          mockAppStateChangeHandler,
+        ).not.toBeNull();
+
+        await act(
+          async () => {
+            mockAppStateChangeHandler?.(
+              'active',
+            );
+          },
+        );
+
+        await waitFor(() => {
+          expect(
+            mockRefreshAcademicDeadlineReminders,
+          ).toHaveBeenCalledTimes(2);
+        });
+      },
+    );
+
 
     it(
       'recovers a pending first Apple connection after returning with Full Access',
