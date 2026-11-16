@@ -104,8 +104,8 @@ describe('ExtensionEmailScreen (#72)', () => {
       dueAt: milestoneDue,
       reason: 'I was sick this week.',
     });
-    expect(await screen.findByText(`Subject: ${email.subject}`)).toBeOnTheScreen();
-    expect(screen.getByText(email.body)).toBeOnTheScreen();
+    expect(await screen.findByDisplayValue(email.subject)).toBeOnTheScreen();
+    expect(screen.getByDisplayValue(email.body)).toBeOnTheScreen();
   });
 
   it('lets the student type an assignment that isn’t in the list', async () => {
@@ -164,5 +164,38 @@ describe('ExtensionEmailScreen (#72)', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t write the email. Please try again.');
     });
     expect(screen.getByRole('button', { name: 'Generate email' })).toBeOnTheScreen();
+  });
+});
+
+describe('Editing the extension email (#73)', () => {
+  it('copies the student’s edited subject and message instead of the original', async () => {
+    await render(<ExtensionEmailScreen />);
+
+    await chooseClass('CECS 491B');
+    await chooseAssignment('Peer review');
+    await fireEvent.press(screen.getByRole('button', { name: 'Generate email' }));
+
+    const editedSubject = 'Extension request: Peer review (CECS 491B)';
+    const editedBody = 'Dear Professor Lee,\n\nCould I have until Monday for the peer review?\n\nThank you,\nJulia';
+
+    await fireEvent.changeText(await screen.findByLabelText('Email subject'), editedSubject);
+    await fireEvent.changeText(screen.getByLabelText('Email message'), editedBody);
+    await fireEvent.press(screen.getByRole('button', { name: 'Copy email' }));
+
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(`Subject: ${editedSubject}\n\n${editedBody}`);
+  });
+
+  it('shows Copy email again after an edit, so "Copied!" isn’t out of date', async () => {
+    await render(<ExtensionEmailScreen />);
+
+    await chooseClass('CECS 491B');
+    await chooseAssignment('Peer review');
+    await fireEvent.press(screen.getByRole('button', { name: 'Generate email' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Copy email' }));
+    expect(await screen.findByRole('button', { name: 'Copied!' })).toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByLabelText('Email message'), 'Dear Professor,\n\nA new message.');
+
+    expect(screen.getByRole('button', { name: 'Copy email' })).toBeOnTheScreen();
   });
 });

@@ -43,7 +43,7 @@ function assignmentLabel(assignment: OpenAssignment) {
 /**
  * "Ask for an extension", opened from the help menu (#70). The student picks
  * a class and assignment, and Claude writes a short, polite email to the
- * professor that they can copy and send (#72).
+ * professor that they can edit (#73), copy and send (#72).
  */
 export function ExtensionEmailScreen() {
   const [courses, setCourses] = useState<CanvasCourse[]>([]);
@@ -173,6 +173,12 @@ export function ExtensionEmailScreen() {
     }
   }
 
+  function editEmail(changes: Partial<ExtensionEmail>) {
+    setEmail((current) => (current ? { ...current, ...changes } : current));
+    // "Copied!" no longer describes what's on screen after an edit.
+    setCopied(false);
+  }
+
   async function copyEmail() {
     if (!email) return;
 
@@ -259,9 +265,25 @@ export function ExtensionEmailScreen() {
             <Text style={styles.previewText}>Writing your email…</Text>
           </View>
         ) : email ? (
+          // Editable so the student can personalize the email before copying it (#73).
           <>
-            <Text style={styles.subject}>Subject: {email.subject}</Text>
-            <Text style={styles.previewText}>{email.body}</Text>
+            <View style={styles.subjectRow}>
+              <Text style={styles.subject}>Subject:</Text>
+              <TextInput
+                accessibilityLabel="Email subject"
+                value={email.subject}
+                onChangeText={(subject) => editEmail({ subject })}
+                style={[styles.subject, styles.subjectInput]}
+              />
+            </View>
+            <TextInput
+              accessibilityLabel="Email message"
+              value={email.body}
+              onChangeText={(body) => editEmail({ body })}
+              multiline
+              scrollEnabled={false}
+              style={[styles.previewText, styles.bodyInput]}
+            />
           </>
         ) : (
           <Text style={[styles.previewText, styles.templateText]}>{EMAIL_PREVIEW_TEMPLATE}</Text>
