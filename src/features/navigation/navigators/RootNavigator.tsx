@@ -16,6 +16,7 @@ import {
 
 import { AssignmentDetailsScreen } from '../../assignments/screens/AssignmentDetailsScreen';
 import { ClassWeekScreen } from '../../home/screens/ClassWeekScreen';
+import { StreakScreen } from '../../streak/screens/StreakScreen';
 import { TakeABreakScreen } from '../../breaks/screens/TakeABreakScreen';
 import { BreakSessionScreen } from '../../breaks/screens/BreakSessionScreen';
 import CheckInboxScreen from '../../auth/screens/CheckInboxScreen';
@@ -684,6 +685,10 @@ export function RootNavigator({
             <Stack.Screen
               name="ClassWeek"
               component={ClassWeekScreen}
+            />
+            <Stack.Screen
+              name="Streak"
+              component={StreakScreen}
             />
             <Stack.Screen
               name="FocusSession"
