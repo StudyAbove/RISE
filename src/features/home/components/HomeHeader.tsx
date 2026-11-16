@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 
 import { TextGlow } from '../../../components/TextGlow';
 import { SettingsButton } from '../../settings/components/SettingsButton';
+import { StreakIndicator } from '../../streak/components/StreakIndicator';
 import { formatLongDate, getTimeOfDayGreeting } from '../utils/greeting';
 import { styles } from './HomeHeader.styles';
 
@@ -14,7 +15,10 @@ interface HomeHeaderProps {
   greetingRef?: RefObject<Text | null>;
 }
 
-/** Top of the Home page: RISE wordmark and settings gear, then the greeting and today's date. */
+/**
+ * Top of the Home page: RISE wordmark, streak pill, and settings gear, then
+ * the greeting and today's date.
+ */
 export function HomeHeader({ date, firstName, greetingRef }: HomeHeaderProps) {
   const greeting = getTimeOfDayGreeting(date);
 
@@ -22,7 +26,10 @@ export function HomeHeader({ date, firstName, greetingRef }: HomeHeaderProps) {
     <View>
       <View style={styles.topRow}>
         <Text style={styles.wordmark}>RISE</Text>
-        <SettingsButton />
+        <View style={styles.topRowActions}>
+          <StreakIndicator />
+          <SettingsButton />
+        </View>
       </View>
 
       <View style={styles.titleBlock}>

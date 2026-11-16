@@ -27,6 +27,8 @@ export type RootStackParamList = {
   OfficeHours: undefined;
   /** One class's assignments due this week, opened from the Weekly Forecast (#61). */
   ClassWeek: { courseId: string; courseLabel: string };
+  /** Streak details, opened from the streak indicator on Home (#7). */
+  Streak: undefined;
   FocusSession: {
     assignmentId: string;
     assignmentTitle: string;

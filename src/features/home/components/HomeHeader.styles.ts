@@ -11,6 +11,11 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  topRowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   wordmark: {
     fontFamily: fonts.heading.extraBold,
     fontSize: 24,
