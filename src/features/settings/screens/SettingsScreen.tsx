@@ -16,11 +16,15 @@ import {
 } from 'react-native-safe-area-context';
 
 import WarningIcon from '../../../../assets/icons/warning.svg';
+import DeleteAccountIcon from '../../../../assets/icons/settings-delete-account.svg';
+import CalendarIcon from '../../../../assets/icons/settings-calendar.svg';
+import SettingsChevronIcon from '../../../../assets/icons/settings-chevron-right.svg';
 
 import {
   BackButton,
 } from '../../../components/BackButton';
 import { CanvasSettingsRow } from '../../canvas/components/CanvasSettingsRow';
+import { NotificationSettingsRow } from '../components/NotificationSettingsRow';
 
 import {
   CalendarConnectionModal,
@@ -57,19 +61,9 @@ const trashIcon =
     '../../../../assets/icons/trash.png',
   );
 
-const deleteAccountIcon =
-  require(
-    '../../../../assets/icons/settings-delete-account.png',
-  );
-
 const deleteAccountWarningIcon =
   require(
     '../../../../assets/icons/delete-account-warning.png',
-  );
-
-const calendarIcon =
-  require(
-    '../../../../assets/icons/calendar.png',
   );
 
 const chevronRightIcon =
@@ -492,10 +486,9 @@ export function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Delete Account"
         >
-          <Image
-            source={
-              deleteAccountIcon
-            }
+          <DeleteAccountIcon
+            width={24}
+            height={24}
             style={
               styles.logoutIcon
             }
@@ -518,30 +511,26 @@ export function SettingsScreen() {
               styles.settingsChevronContainer
             }
           >
-            <Image
-              source={
-                chevronRightIcon
-              }
-              style={
-                styles.settingsChevron
-              }
+            <SettingsChevronIcon
+              width={24}
+              height={24}
             />
           </View>
         </Pressable>
+
+        <CanvasSettingsRow />
 
         <View
           style={[
             styles.logoutCard,
             {
-              marginBottom:
-                16,
+              marginBottom: 16,
             },
           ]}
         >
-          <Image
-            source={
-              calendarIcon
-            }
+          <CalendarIcon
+            width={24}
+            height={24}
             style={
               styles.logoutIcon
             }
@@ -551,8 +540,7 @@ export function SettingsScreen() {
             style={[
               styles.logoutText,
               {
-                flex:
-                  1,
+                flex: 1,
               },
             ]}
           >
@@ -566,45 +554,21 @@ export function SettingsScreen() {
             style={({
               pressed,
             }) => [
-              {
-                width:
-                  44,
-
-                height:
-                  44,
-
-                alignItems:
-                  'center',
-
-                justifyContent:
-                  'center',
-              },
-
+              styles.settingsChevronContainer,
               pressed &&
                 styles.pressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Open calendar settings"
           >
-            <Image
-              source={
-                chevronRightIcon
-              }
-              style={{
-                width:
-                  24,
-
-                height:
-                  24,
-
-                resizeMode:
-                  'contain',
-              }}
+            <SettingsChevronIcon
+              width={24}
+              height={24}
             />
           </Pressable>
         </View>
 
-        <CanvasSettingsRow />
+        <NotificationSettingsRow />
 
         <Pressable
           style={({
