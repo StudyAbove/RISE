@@ -66,6 +66,10 @@ import {
 } from '../../settings/screens/SettingsScreen';
 
 import {
+  refreshAcademicDeadlineReminders,
+} from '../../notifications/services/academicReminderService';
+
+import {
   DEV_SKIP_AUTH,
 } from '../../../lib/devFlags';
 
@@ -514,6 +518,16 @@ export function RootNavigator({
     void checkAppleCalendarState(
       true,
     );
+
+    void refreshAcademicDeadlineReminders()
+      .catch(
+        (error) => {
+          console.log(
+            'Could not refresh academic deadline reminders:',
+            error,
+          );
+        },
+      );
   }, [
     hasCompletedOnboarding,
     isLoading,
@@ -556,6 +570,21 @@ export function RootNavigator({
           void checkAppleCalendarState(
             mountedWhileInactiveRef.current,
           );
+
+          if (
+            isSignedIn &&
+            hasCompletedOnboarding
+          ) {
+            void refreshAcademicDeadlineReminders()
+              .catch(
+                (error) => {
+                  console.log(
+                    'Could not refresh academic deadline reminders:',
+                    error,
+                  );
+                },
+              );
+          }
         },
       );
 
