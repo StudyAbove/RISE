@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent, type Text } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 
 import { TabScreenScrollView } from '../../../components/TabScreenScrollView';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
+import { HELP_OPTION_SCREENS, HelpPopup, type HelpOption } from '../../help/components/HelpPopup';
 import { HighPriorityTasks } from '../components/HighPriorityTasks';
 import { HomeHeader } from '../components/HomeHeader';
 import { HomeSkyBackdrop } from '../components/HomeSkyBackdrop';
@@ -36,6 +38,15 @@ export function HomeScreen() {
   // Where the header (and so the date line) ends, so the sky can line up with it.
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
 
+  const navigation = useNavigation();
+  const [helpVisible, setHelpVisible] = useState(false);
+
+  // Close the help menu and open the tool the student picked.
+  const openHelpOption = (option: HelpOption) => {
+    setHelpVisible(false);
+    navigation.navigate(HELP_OPTION_SCREENS[option]);
+  };
+
   const handleHeaderLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent) => {
     setHeaderBottom(layout.y + layout.height);
   };
@@ -53,12 +64,23 @@ export function HomeScreen() {
         <HomeHeader date={date} firstName={firstName} greetingRef={greetingRef} />
       </View>
       {status !== 'signedOut' && (
-        <WeeklyForecastCard status={status} forecast={forecast} now={date} />
+        <WeeklyForecastCard
+          status={status}
+          forecast={forecast}
+          now={date}
+          onHelpPress={() => setHelpVisible(true)}
+        />
       )}
       {/* The forecast card shows loading and errors for both sections. */}
       {status === 'ready' && (
         <HighPriorityTasks tasks={highPriorityTasks} now={date} />
       )}
+
+      <HelpPopup
+        visible={helpVisible}
+        onSelect={openHelpOption}
+        onClose={() => setHelpVisible(false)}
+      />
     </TabScreenScrollView>
   );
 }

@@ -451,3 +451,9 @@ entrypoint = "./functions/estimate-assignments/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/generate-microtasks/index.ts"
+
+# Writes an extension request email for the signed-in student (#72).
+[functions.generate-extension-email]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/generate-extension-email/index.ts"

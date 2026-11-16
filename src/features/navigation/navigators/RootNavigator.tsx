@@ -15,6 +15,9 @@ import {
 } from '@react-navigation/native-stack';
 
 import { AssignmentDetailsScreen } from '../../assignments/screens/AssignmentDetailsScreen';
+import { BreathingScreen } from '../../help/screens/BreathingScreen';
+import { ExtensionEmailScreen } from '../../help/screens/ExtensionEmailScreen';
+import { OfficeHoursScreen } from '../../help/screens/OfficeHoursScreen';
 import { ClassWeekScreen } from '../../home/screens/ClassWeekScreen';
 import { StreakScreen } from '../../streak/screens/StreakScreen';
 import { TakeABreakScreen } from '../../breaks/screens/TakeABreakScreen';
@@ -682,6 +685,9 @@ export function RootNavigator({
               name="AssignmentDetails"
               component={AssignmentDetailsScreen}
             />
+            <Stack.Screen name="Breathing" component={BreathingScreen} />
+            <Stack.Screen name="ExtensionEmail" component={ExtensionEmailScreen} />
+            <Stack.Screen name="OfficeHours" component={OfficeHoursScreen} />
             <Stack.Screen
               name="ClassWeek"
               component={ClassWeekScreen}

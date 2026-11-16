@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="help-icon">
+<path id="Line 1" d="M10 0.833333V3.33333" stroke-width="1.5" stroke="#69836C"/>
+<path id="Line 2" d="M12.9167 3.75L14.5833 2.08333" stroke-width="1.5" stroke="#69836C"/>
+<path id="Line 4" d="M5.41667 2.08333L7.08333 3.75" stroke-width="1.5" stroke="#69836C"/>
+<path id="Ellipse 3" d="M15 9.58333C15 12.1146 12.7614 14.1667 10 14.1667C7.23858 14.1667 5 12.1146 5 9.58333C5 7.05203 7.23858 5 10 5C12.7614 5 15 7.05203 15 9.58333Z" stroke-width="1.5" stroke="#69836C"/>
+<path id="Rectangle 3" d="M7.91667 18.3333H12.0833C12.3135 18.3333 12.5 18.1468 12.5 17.9167C12.5 17.6865 12.3135 17.5 12.0833 17.5H7.91667C7.68655 17.5 7.5 17.6865 7.5 17.9167C7.5 18.1468 7.68655 18.3333 7.91667 18.3333Z" stroke-width="1.5" stroke-linecap="round" stroke="#69836C"/>
+<path id="Rectangle 4" d="M7.91667 17.5H12.0833C12.5436 17.5 12.9167 17.1269 12.9167 16.6667C12.9167 16.2064 12.5436 15.8333 12.0833 15.8333H7.91667C7.45643 15.8333 7.08333 16.2064 7.08333 16.6667C7.08333 17.1269 7.45643 17.5 7.91667 17.5Z" stroke-width="1.5" stroke-linecap="round" stroke="#69836C"/>
+<rect id="Rectangle 2" x="6.66667" y="14.1667" width="6.66667" height="1.66667" rx="0.833333" stroke-width="1.5" stroke-linecap="round" stroke="#69836C"/>
+</g>
+</svg>
