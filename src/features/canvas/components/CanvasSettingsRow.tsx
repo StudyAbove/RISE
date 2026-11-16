@@ -3,10 +3,9 @@ import { Image, Pressable, Text } from 'react-native';
 
 import { CanvasSettingsModal } from './CanvasSettingsModal';
 import { styles } from './CanvasSettingsRow.styles';
+import SettingsChevronIcon from '../../../../assets/icons/settings-chevron-right.svg';
 
-const canvasLogo = require('../../../../assets/icons/canvas/canvas-logo.png');
-const chevronRightIcon = require('../../../../assets/icons/chevron-right.png');
-
+const canvasLogo = require('../../../../assets/icons/settings-canvas-figma.png');
 /** "Canvas" row in Settings, matching the Calendar row. Opens Canvas Settings. */
 export function CanvasSettingsRow() {
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -17,13 +16,26 @@ export function CanvasSettingsRow() {
         accessibilityRole="button"
         accessibilityLabel="Open Canvas settings"
         onPress={() => setIsModalVisible(true)}
-        style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.pressed,
+        ]}
       >
         <Image source={canvasLogo} style={styles.icon} accessibilityIgnoresInvertColors />
 
         <Text style={styles.label}>Canvas</Text>
 
-        <Image source={chevronRightIcon} style={styles.chevron} />
+        <Pressable
+          style={
+            styles.chevronContainer
+          }
+          pointerEvents="none"
+        >
+          <SettingsChevronIcon
+            width={24}
+            height={24}
+          />
+        </Pressable>
       </Pressable>
 
       <CanvasSettingsModal visible={isModalVisible} onClose={() => setIsModalVisible(false)} />

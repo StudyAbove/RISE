@@ -19,9 +19,10 @@ export const styles = StyleSheet.create({
   },
 
   icon: {
-    width: 24,
-    height: 24,
-    marginRight: 18,
+    width: 26,
+    height: 26,
+    marginRight: 16,
+    resizeMode: 'contain',
   },
 
   label: {
@@ -32,11 +33,11 @@ export const styles = StyleSheet.create({
   },
 
   // Sits where the Calendar row's 44 × 44 chevron button does.
-  chevron: {
-    width: 24,
-    height: 24,
-    marginRight: 10,
-    resizeMode: 'contain',
+  chevronContainer: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   pressed: {
