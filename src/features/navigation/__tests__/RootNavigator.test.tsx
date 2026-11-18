@@ -62,6 +62,9 @@ const mockNotifyCalendarRefresh =
 const mockRefreshAcademicDeadlineReminders =
   jest.fn();
 
+const mockOpenPendingAcademicNotification =
+  jest.fn();
+
 let mockAppStateChangeHandler:
   | ((
       state: string,
@@ -224,6 +227,17 @@ jest.mock(
 );
 
 jest.mock(
+  '../../notifications/services/notificationNavigationService',
+  () => ({
+    openPendingAcademicNotification:
+      (...args: unknown[]) =>
+        mockOpenPendingAcademicNotification(
+          ...args,
+        ),
+  }),
+);
+
+jest.mock(
   '../../notifications/services/academicReminderService',
   () => ({
     refreshAcademicDeadlineReminders:
@@ -373,6 +387,9 @@ describe(
 
       mockRefreshAcademicDeadlineReminders
         .mockResolvedValue(0);
+
+      mockOpenPendingAcademicNotification
+        .mockReturnValue(false);
 
       authStateCallback =
         undefined;
@@ -1204,6 +1221,29 @@ describe(
         ).not.toBeOnTheScreen();
       },
     );
+    it(
+      'opens a pending academic notification after authenticated startup',
+      async () => {
+        setSignedInMocks();
+
+        await renderNavigator();
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'RISE',
+            ),
+          ).toBeOnTheScreen();
+        });
+
+        await waitFor(() => {
+          expect(
+            mockOpenPendingAcademicNotification,
+          ).toHaveBeenCalledTimes(1);
+        });
+      },
+    );
+
     it(
       'refreshes academic deadline reminders after authenticated startup',
       async () => {
