@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { RootNavigator } from './src/features/navigation/navigators/RootNavigator';
+import { navigationRef } from './src/features/navigation/navigationRef';
+import {
+  handleAcademicNotificationResponse,
+  openPendingAcademicNotification,
+} from './src/features/notifications/services/notificationNavigationService';
 import { supabase } from './src/lib/supabase';
 import { fontAssets } from './src/theme/fontAssets';
 
@@ -28,6 +34,58 @@ export default function App() {
       SplashScreen.hideAsync();
     }
   }, [isReady]);
+
+  /*
+   * Open an assignment when the student taps one of RISE's
+   * academic deadline notifications (#30).
+   *
+   * The listener covers RISE while it is running. The last-response
+   * check covers a notification that launched RISE from a closed state.
+   */
+  useEffect(() => {
+    function handleResponse(
+      response: Notifications.NotificationResponse,
+    ) {
+      handleAcademicNotificationResponse(
+        response,
+      );
+    }
+
+    const subscription =
+      Notifications
+        .addNotificationResponseReceivedListener(
+          handleResponse,
+        );
+
+    void Notifications
+      .getLastNotificationResponseAsync()
+      .then(
+        async (response) => {
+          if (!response) {
+            return;
+          }
+
+          handleResponse(response);
+
+          /*
+           * Prevent the same cold-start notification from reopening
+           * again on a later app launch.
+           */
+          await Notifications
+            .clearLastNotificationResponseAsync();
+        },
+      )
+      .catch((error) => {
+        console.log(
+          'Could not read the last notification response:',
+          error,
+        );
+      });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Handle Supabase authentication links that open RISE.
   useEffect(() => {
@@ -126,7 +184,12 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer
+        ref={navigationRef}
+        onReady={
+          openPendingAcademicNotification
+        }
+      >
         <RootNavigator authLinkError={authLinkError} />
       </NavigationContainer>
 

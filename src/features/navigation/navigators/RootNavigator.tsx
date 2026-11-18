@@ -68,6 +68,9 @@ import {
 import {
   refreshAcademicDeadlineReminders,
 } from '../../notifications/services/academicReminderService';
+import {
+  openPendingAcademicNotification,
+} from '../../notifications/services/notificationNavigationService';
 
 import {
   DEV_SKIP_AUTH,
@@ -528,6 +531,12 @@ export function RootNavigator({
           );
         },
       );
+
+    /*
+     * A notification may have launched RISE before authentication
+     * finished. AssignmentDetails is available now, so open it.
+     */
+    openPendingAcademicNotification();
   }, [
     hasCompletedOnboarding,
     isLoading,
