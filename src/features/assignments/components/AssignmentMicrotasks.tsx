@@ -50,8 +50,8 @@ export function AssignmentMicrotasks({
   // Ignore old requests after this component reloads or unmounts.
   const requestVersion = useRef(0);
 
-  // Prevent repeated taps from starting multiple generation requests.
-  const generationInProgress = useRef(false);
+  // Prevent duplicate generation within the current load.
+  const generationInProgress = useRef<number | null>(null);
 
   useEffect(() => {
     const version = ++requestVersion.current;
@@ -60,6 +60,7 @@ export function AssignmentMicrotasks({
       setStatus('loading');
       setTasks([]);
       setNotice('');
+      setGenerating(false);
 
       try {
         const savedTasks = await fetchMicrotasks(assignment.id);
@@ -68,6 +69,15 @@ export function AssignmentMicrotasks({
 
         setTasks(savedTasks);
         setStatus('ready');
+
+        if (
+          savedTasks.length === 0 &&
+          hasSavedEstimate &&
+          !assignment.completed
+        ) {
+          await generateTasks();
+          return;
+        }
 
         if (savedTasks.length > 0) {
           try {
@@ -104,7 +114,12 @@ export function AssignmentMicrotasks({
     return () => {
       requestVersion.current += 1;
     };
-  }, [assignment.id, assignment.estimatedMinutes, reloadCount]);
+  }, [
+    assignment.id,
+    assignment.estimatedMinutes,
+    assignment.completed,
+    reloadCount,
+  ]);
 
   const hasSavedEstimate =
     assignment.estimatedMinutes !== null &&
@@ -246,16 +261,17 @@ export function AssignmentMicrotasks({
     }
   }
   async function generateTasks() {
+    const version = requestVersion.current;
+
     if (
-      generationInProgress.current ||
+      generationInProgress.current === version ||
       !hasSavedEstimate ||
       assignment.completed
     ) {
       return;
     }
 
-    generationInProgress.current = true;
-    const version = requestVersion.current;
+    generationInProgress.current = version;
 
     setGenerating(true);
     setNotice('');
@@ -317,7 +333,9 @@ export function AssignmentMicrotasks({
         setNotice('Couldn’t create microtasks. Please try again.');
       }
     } finally {
-      generationInProgress.current = false;
+      if (generationInProgress.current === version) {
+        generationInProgress.current = null;
+      }
 
       if (requestVersion.current === version) {
         setGenerating(false);
@@ -421,42 +439,47 @@ export function AssignmentMicrotasks({
         </Text>
       )}
 
-        {status === 'ready' && tasks.length === 0 && (
-          <View style={styles.messageCard}>
-          <Text style={styles.messageText}>
-            No microtasks available yet.
-          </Text>
+      {status === 'ready' && tasks.length === 0 && (
+        <View style={styles.messageCard}>
+          {generating ? (
+            <>
+              <ActivityIndicator color={colors.deepOlive} />
 
-          {!hasSavedEstimate && !assignment.completed && (
-            <Text style={styles.messageText}>
-              A saved assignment time estimate is needed before creating
-              microtasks.
-            </Text>
-          )}
+              <Text
+                style={styles.messageText}
+                accessibilityLiveRegion="polite"
+              >
+                Creating microtasks…
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.messageText}>
+                No microtasks available yet.
+              </Text>
 
-          {hasSavedEstimate && !assignment.completed && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{
-                disabled: generating,
-                busy: generating,
-              }}
-              disabled={generating}
-              onPress={() => void generateTasks()}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                generating && styles.disabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              {generating && (
-                <ActivityIndicator color={colors.deepOlive} />
+              {!hasSavedEstimate && !assignment.completed && (
+                <Text style={styles.messageText}>
+                  A saved assignment time estimate is needed before
+                  creating microtasks.
+                </Text>
               )}
 
-              <Text style={styles.buttonText}>
-                {generating ? 'Creating microtasks…' : 'Create microtasks'}
-              </Text>
-            </Pressable>
+              {hasSavedEstimate &&
+                !assignment.completed &&
+                notice !== '' && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => void generateTasks()}
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.buttonText}>Try again</Text>
+                  </Pressable>
+                )}
+            </>
           )}
         </View>
       )}

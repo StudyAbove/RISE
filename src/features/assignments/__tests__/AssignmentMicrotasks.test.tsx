@@ -118,21 +118,7 @@ describe('AssignmentMicrotasks', () => {
     expect(mockFetch).toHaveBeenCalledWith(assignment.id);
   });
 
-  it('shows the empty state without automatically requesting generation', async () => {
-    await render(<AssignmentMicrotasks assignment={assignment} />);
-
-    expect(
-      await screen.findByText('No microtasks available yet.'),
-    ).toBeTruthy();
-
-    expect(
-      screen.getByRole('button', { name: 'Create microtasks' }),
-    ).toBeTruthy();
-
-    expect(mockGenerate).not.toHaveBeenCalled();
-  });
-
-  it('generates tasks after the student requests them and reads saved results', async () => {
+  it('automatically generates missing tasks and reads the saved results', async () => {
     mockFetch
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([savedTask({ estimatedMinutes: 80 })]);
@@ -144,12 +130,6 @@ describe('AssignmentMicrotasks', () => {
 
     await render(<AssignmentMicrotasks assignment={assignment} />);
 
-    const button = await screen.findByRole('button', {
-      name: 'Create microtasks',
-    });
-
-    await fireEvent.press(button);
-
     expect(
       await screen.findByText('Organize experimental data'),
     ).toBeTruthy();
@@ -158,6 +138,52 @@ describe('AssignmentMicrotasks', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(screen.getByText('0 / 1 tasks')).toBeTruthy();
+
+    expect(
+      screen.queryByRole('button', { name: 'Create microtasks' }),
+    ).toBeNull();
+  });
+
+  it('shows generation progress without starting duplicate requests', async () => {
+    let finishGeneration!: (
+      result: Awaited<ReturnType<typeof requestMicrotaskGeneration>>,
+    ) => void;
+
+    mockFetch
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([savedTask()]);
+
+    mockGenerate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishGeneration = resolve;
+        }),
+    );
+
+    const view = await render(
+      <AssignmentMicrotasks assignment={assignment} />,
+    );
+
+    expect(
+      await screen.findByText('Creating microtasks…'),
+    ).toBeTruthy();
+
+    await view.rerender(
+      <AssignmentMicrotasks assignment={{ ...assignment }} />,
+    );
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('button', { name: 'Try again' }),
+    ).toBeNull();
+
+    await act(async () => {
+      finishGeneration({ status: 'ready', created: true });
+    });
+
+    expect(
+      await screen.findByText('Organize experimental data'),
+    ).toBeTruthy();
   });
 
   it('does not offer generation without a saved assignment estimate', async () => {
@@ -183,7 +209,11 @@ describe('AssignmentMicrotasks', () => {
       .mockRejectedValueOnce(new Error('Connection failed'))
       .mockResolvedValueOnce([]);
 
-    await render(<AssignmentMicrotasks assignment={assignment} />);
+    await render(
+      <AssignmentMicrotasks
+        assignment={{ ...assignment, estimatedMinutes: null }}
+      />,
+    );
 
     expect(
       await screen.findByText('Couldn’t load microtasks.'),
@@ -208,11 +238,7 @@ describe('AssignmentMicrotasks', () => {
 
     await render(<AssignmentMicrotasks assignment={assignment} />);
 
-    await fireEvent.press(
-      await screen.findByRole('button', {
-        name: 'Create microtasks',
-      }),
-    );
+
 
     expect(
       await screen.findByText(
@@ -570,5 +596,123 @@ describe('AssignmentMicrotasks selection and undo', () => {
         name: 'Mark Step 1 complete',
       }),
     ).toBeTruthy();
+  });
+});
+describe('automatic microtask generation', () => {
+  it('does not generate tasks for a submitted assignment', async () => {
+    await render(
+      <AssignmentMicrotasks
+        assignment={{ ...assignment, completed: true }}
+      />,
+    );
+
+    expect(
+      await screen.findByText('No microtasks available yet.'),
+    ).toBeTruthy();
+
+    expect(mockGenerate).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: 'Try again' }),
+    ).toBeNull();
+  });
+
+  it('allows retry after automatic generation fails', async () => {
+    mockGenerate
+      .mockRejectedValueOnce(new Error('Connection failed'))
+      .mockResolvedValueOnce({ status: 'ready', created: true });
+
+    mockFetch
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([savedTask()]);
+
+    await render(<AssignmentMicrotasks assignment={assignment} />);
+
+    expect(
+      await screen.findByText(
+        'Couldn’t create microtasks. Please try again.',
+      ),
+    ).toBeTruthy();
+
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Try again' }),
+    );
+
+    expect(
+      await screen.findByText('Organize experimental data'),
+    ).toBeTruthy();
+
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores an old generation result after switching assignments', async () => {
+    let finishFirst!: (
+      result: Awaited<ReturnType<typeof requestMicrotaskGeneration>>,
+    ) => void;
+
+    const secondAssignment = {
+      ...assignment,
+      id: 'assignment-2',
+      title: 'Second assignment',
+    };
+
+    mockGenerate
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ status: 'ready', created: true });
+
+    mockFetch.mockImplementation(async (assignmentId) => {
+      if (
+        assignmentId === secondAssignment.id &&
+        mockGenerate.mock.calls.some(
+          ([id]) => id === secondAssignment.id,
+        )
+      ) {
+        return [
+          savedTask({
+            id: 'second-task',
+            assignmentId: secondAssignment.id,
+            title: 'Review the second assignment',
+          }),
+        ];
+      }
+
+      return [];
+    });
+
+    const view = await render(
+      <AssignmentMicrotasks assignment={assignment} />,
+    );
+
+    await screen.findByText('Creating microtasks…');
+
+    await view.rerender(
+      <AssignmentMicrotasks assignment={secondAssignment} />,
+    );
+
+    expect(
+      await screen.findByText('Review the second assignment'),
+    ).toBeTruthy();
+
+    await act(async () => {
+      finishFirst({ status: 'ready', created: true });
+    });
+
+    expect(
+      screen.getByText('Review the second assignment'),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Organize experimental data'),
+    ).toBeNull();
+
+    expect(screen.queryByText('Creating microtasks…')).toBeNull();
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 });
