@@ -11,10 +11,15 @@ import { styles } from './HighPriorityTasks.styles';
 interface HighPriorityTasksProps {
   tasks: HighPriorityTask[];
   now: Date;
+  finishedPriorityWork?: boolean;
 }
 
 /** "High Priority Tasks" on Home (#58): due soon first, then get-ahead work. */
-export function HighPriorityTasks({ tasks, now }: HighPriorityTasksProps) {
+export function HighPriorityTasks({
+  tasks,
+  now,
+  finishedPriorityWork = false,
+}: HighPriorityTasksProps) {
   const navigation = useNavigation();
   const shownTasks = tasks.slice(0, MAX_HIGH_PRIORITY_TASKS);
 
@@ -36,10 +41,21 @@ export function HighPriorityTasks({ tasks, now }: HighPriorityTasksProps) {
       </View>
 
       {shownTasks.length === 0 ? (
-        <View style={styles.caughtUp} accessible>
-          <Text style={styles.caughtUpTitle}>You’re all caught up!</Text>
+        <View
+          style={styles.caughtUp}
+          accessible
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.caughtUpTitle}>
+            {finishedPriorityWork
+              ? 'Nice work! You finished your high-priority tasks.'
+              : 'You’re all caught up!'}
+          </Text>
+
           <Text style={styles.caughtUpText}>
-            Nothing is due in the next 24 hours, and there’s no big work to start yet.
+            {finishedPriorityWork
+              ? 'Take a moment to enjoy your progress.'
+              : 'Nothing is due in the next 24 hours, and there’s no big work to start yet.'}
           </Text>
         </View>
       ) : (

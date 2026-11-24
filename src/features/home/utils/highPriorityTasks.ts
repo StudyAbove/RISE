@@ -105,3 +105,50 @@ export function getHighPriorityTasks(
     ...getAhead.map((assignment) => ({ assignment, reason: 'getAhead' as const })),
   ];
 }
+/**
+ * Celebrate submitted priority work completed today, only when no
+ * unfinished priority work remains.
+ *
+ * Missing completion dates and completed microtasks alone do not qualify.
+ */
+export function hasFinishedPriorityWorkToday(
+  assignments: Assignment[],
+  now: Date,
+  eventMinutesByDay: Map<number, number> = new Map(),
+): boolean {
+  if (
+    getHighPriorityTasks(assignments, now, eventMinutesByDay).length > 0
+  ) {
+    return false;
+  }
+
+  const todayStart = startOfDay(now).getTime();
+  const nowTime = now.getTime();
+
+  const completedToday = assignments.filter((assignment) => {
+    const completedAt = assignment.completedAt?.getTime();
+
+    return (
+      assignment.completed &&
+      completedAt !== undefined &&
+      Number.isFinite(completedAt) &&
+      completedAt >= todayStart &&
+      completedAt <= nowTime
+    );
+  });
+
+  if (completedToday.length === 0) return false;
+
+  // Check whether today's submitted assignments qualify under the same
+  // priority rules, without changing their actual saved completion.
+  const priorityBeforeCompletion = getHighPriorityTasks(
+    completedToday.map((assignment) => ({
+      ...assignment,
+      completed: false,
+    })),
+    now,
+    eventMinutesByDay,
+  );
+
+  return priorityBeforeCompletion.length > 0;
+}
