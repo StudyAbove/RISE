@@ -16,6 +16,7 @@
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 import {
+  buildCanvasNameProfileUpdate,
   findRemovedAssignmentIds,
   InvalidPayloadError,
   isPairingCode,
@@ -371,21 +372,53 @@ async function saveCourseChoices(supabase: SupabaseClient, userId: string, body:
 }
 
 /**
- * Saves the student's Canvas name for the Home greeting (#56), but only if
- * their profile doesn't have a name yet, so it never replaces one they set.
+ * Saves the latest Canvas name for account settings (#35).
+ *
+ * Home still reads profiles.display_name. When Canvas is the selected
+ * display-name source, the latest Canvas name also becomes display_name.
+ * A custom selection is never overwritten by Canvas sync.
+ *
  * A failure here shouldn't fail the sync.
  */
-async function saveStudentName(supabase: SupabaseClient, userId: string, name: string | null) {
+async function saveStudentName(
+  supabase: SupabaseClient,
+  userId: string,
+  name: string | null,
+) {
   if (!name) return;
+
+  const { data: profile, error: profileError } =
+    await supabase
+      .from('profiles')
+      .select('display_name_source')
+      .eq('id', userId)
+      .maybeSingle();
+
+  if (profileError) {
+    console.error(
+      'Could not read the display name source:',
+      profileError,
+    );
+    return;
+  }
+
+  const updates =
+    buildCanvasNameProfileUpdate(
+      name,
+      profile?.display_name_source,
+      new Date().toISOString(),
+    );
 
   const { error } = await supabase
     .from('profiles')
-    .update({ display_name: name, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .is('display_name', null);
+    .update(updates)
+    .eq('id', userId);
 
   if (error) {
-    console.error('Could not save the Canvas name:', error);
+    console.error(
+      'Could not save the Canvas name:',
+      error,
+    );
   }
 }
 

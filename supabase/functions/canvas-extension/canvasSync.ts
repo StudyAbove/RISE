@@ -38,6 +38,44 @@ export type SyncPayload = {
   assignments: SyncedAssignment[];
 };
 
+export type DisplayNameSource =
+  'canvas' | 'custom';
+
+export type CanvasNameProfileUpdate = {
+  canvas_display_name: string;
+  display_name?: string;
+  updated_at: string;
+};
+
+/**
+ * Builds the profile update used when Canvas sends the student's name.
+ *
+ * Canvas always refreshes its own stored name. It only replaces the
+ * effective display_name when Canvas is the selected source.
+ *
+ * A missing/unknown legacy source behaves like Canvas so existing users
+ * keep today's greeting behavior.
+ */
+export function buildCanvasNameProfileUpdate(
+  canvasName: string,
+  displayNameSource: unknown,
+  updatedAt: string,
+): CanvasNameProfileUpdate {
+  const update: CanvasNameProfileUpdate = {
+    canvas_display_name: canvasName,
+    updated_at: updatedAt,
+  };
+
+  if (
+    displayNameSource !== 'custom'
+  ) {
+    update.display_name =
+      canvasName;
+  }
+
+  return update;
+}
+
 export type SavedSyllabusReview = {
   courseId: string;
   confirmed: true;
