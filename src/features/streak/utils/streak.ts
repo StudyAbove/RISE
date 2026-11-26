@@ -16,6 +16,12 @@ export type StreakDay = {
   submittedOnTime: boolean;
 };
 
+/** An assignment turned in on time during the current streak (#10). */
+export type StreakAssignment = {
+  assignment: Assignment;
+  completedAt: Date;
+};
+
 export type StreakSummary = {
   current: number;
   longest: number;
@@ -23,9 +29,11 @@ export type StreakSummary = {
   totalWeeks: number;
   /** Monday to Sunday of the current week. */
   week: StreakDay[];
+  /** What kept the current streak going, newest first. Empty with no streak. */
+  currentAssignments: StreakAssignment[];
 };
 
-type StreakEvent = { type: 'submitted' | 'missed'; time: Date };
+type StreakEvent = { type: 'submitted' | 'missed'; time: Date; assignment: Assignment };
 
 function isOnTime(completedAt: Date, dueAt: Date) {
   return completedAt.getTime() <= dueAt.getTime();
@@ -35,20 +43,22 @@ function isOnTime(completedAt: Date, dueAt: Date) {
 function getStreakEvents(assignments: Assignment[], now: Date): StreakEvent[] {
   const events: StreakEvent[] = [];
 
-  for (const { completed, completedAt, dueAt, source } of assignments) {
+  for (const assignment of assignments) {
+    const { completed, completedAt, dueAt, source } = assignment;
+
     // Without a due date there's no "on time", so it doesn't affect the streak.
     if (!dueAt) continue;
 
     if (completed && completedAt) {
       events.push(
         isOnTime(completedAt, dueAt)
-          ? { type: 'submitted', time: completedAt }
-          : { type: 'missed', time: dueAt },
+          ? { type: 'submitted', time: completedAt, assignment }
+          : { type: 'missed', time: dueAt, assignment },
       );
     } else if (!completed && source !== 'rise' && dueAt.getTime() < now.getTime()) {
       // RISE has no way to mark its own assignments done yet, so they can't
       // count as missed; only Canvas reports what was turned in.
-      events.push({ type: 'missed', time: dueAt });
+      events.push({ type: 'missed', time: dueAt, assignment });
     }
     // Completed with no recorded date: we can't tell if it was on time.
   }
@@ -63,12 +73,20 @@ export function calculateStreak(assignments: Assignment[], now: Date): StreakSum
   let longest = 0;
   // The last day counted toward the current streak, so a day only counts once.
   let lastCountedDay: Date | null = null;
+  // Every on-time submission since the streak last broke, oldest first.
+  let currentAssignments: StreakAssignment[] = [];
 
   for (const event of events) {
     if (event.type === 'missed') {
       current = 0;
       lastCountedDay = null;
-    } else if (!lastCountedDay || !isSameDay(lastCountedDay, event.time)) {
+      currentAssignments = [];
+      continue;
+    }
+
+    currentAssignments.push({ assignment: event.assignment, completedAt: event.time });
+
+    if (!lastCountedDay || !isSameDay(lastCountedDay, event.time)) {
       current += 1;
       lastCountedDay = event.time;
       longest = Math.max(longest, current);
@@ -92,5 +110,11 @@ export function calculateStreak(assignments: Assignment[], now: Date): StreakSum
       .map((event) => startOfWeek(event.time, { weekStartsOn: 1 }).getTime()),
   );
 
-  return { current, longest, totalWeeks: weeksWithSubmissions.size, week };
+  return {
+    current,
+    longest,
+    totalWeeks: weeksWithSubmissions.size,
+    week,
+    currentAssignments: currentAssignments.reverse(),
+  };
 }
