@@ -94,6 +94,50 @@ describe('StreakScreen', () => {
 
     expect(await screen.findByText('0 days')).toBeTruthy();
     expect(screen.getByText('Turn something in on time to start a streak.')).toBeTruthy();
+    expect(screen.getByLabelText('Current Streak: 0')).toBeTruthy();
+    expect(screen.getByLabelText('Longest Streak: 0')).toBeTruthy();
+  });
+
+  describe('longest streak (#8)', () => {
+    it('keeps the personal best after the current streak resets', async () => {
+      mockFetchAssignments.mockResolvedValue([
+        onTime(5),
+        onTime(6),
+        onTime(7),
+        onTime(8),
+        { ...onTime(10), completed: false, completedAt: null },
+      ]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('0 days')).toBeTruthy();
+      expect(screen.getByLabelText('Current Streak: 0')).toBeTruthy();
+      expect(screen.getByLabelText('Longest Streak: 4')).toBeTruthy();
+    });
+
+    it('shows the same number for both when the current streak is the best', async () => {
+      mockFetchAssignments.mockResolvedValue([onTime(7), onTime(8), onTime(9), onTime(10), onTime(11)]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('5 days')).toBeTruthy();
+      expect(screen.getByLabelText('Current Streak: 5')).toBeTruthy();
+      expect(screen.getByLabelText('Longest Streak: 5')).toBeTruthy();
+    });
+
+    it('shows long streaks in full', async () => {
+      // 120 days in a row, ending today (dates before November roll back into
+      // earlier months).
+      mockFetchAssignments.mockResolvedValue(
+        Array.from({ length: 120 }, (_, index) => onTime(11 - index)),
+      );
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('120 days')).toBeTruthy();
+      expect(screen.getByLabelText('Current Streak: 120')).toBeTruthy();
+      expect(screen.getByLabelText('Longest Streak: 120')).toBeTruthy();
+    });
   });
 
   it('offers to try again when the streak fails to load', async () => {

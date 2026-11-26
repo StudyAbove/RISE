@@ -36,6 +36,11 @@ function onTime(day: number) {
   });
 }
 
+/** Due on November `day` at night and never turned in. */
+function missed(day: number) {
+  return assignment({ dueAt: new Date(2026, 10, day, 23, 59) });
+}
+
 describe('calculateStreak', () => {
   it('is 0 with no activity', () => {
     expect(calculateStreak([], now)).toMatchObject({ current: 0, longest: 0, totalWeeks: 0 });
@@ -70,6 +75,62 @@ describe('calculateStreak', () => {
     );
 
     expect(summary).toMatchObject({ current: 2, longest: 3 });
+  });
+
+  describe('longest streak (#8)', () => {
+    it('is the best of several past streaks, even when it was in the middle', () => {
+      // Streaks of 2 (1st–2nd), 4 (4th–7th), then 2 (9th–10th).
+      const summary = calculateStreak(
+        [
+          onTime(1),
+          onTime(2),
+          missed(3),
+          onTime(4),
+          onTime(5),
+          onTime(6),
+          onTime(7),
+          missed(8),
+          onTime(9),
+          onTime(10),
+        ],
+        now,
+      );
+
+      expect(summary).toMatchObject({ current: 2, longest: 4 });
+    });
+
+    it('is the current streak when the current streak is the best so far', () => {
+      const summary = calculateStreak(
+        [onTime(1), onTime(2), missed(3), onTime(5), onTime(6), onTime(7), onTime(8), onTime(9)],
+        now,
+      );
+
+      expect(summary).toMatchObject({ current: 5, longest: 5 });
+    });
+
+    it('stays after the current streak breaks', () => {
+      const summary = calculateStreak([onTime(4), onTime(5), onTime(6), missed(10)], now);
+
+      expect(summary).toMatchObject({ current: 0, longest: 3 });
+    });
+
+    it('counts days, not assignments', () => {
+      const summary = calculateStreak(
+        [onTime(9), onTime(9), onTime(9), onTime(10), missed(10)],
+        now,
+      );
+
+      expect(summary).toMatchObject({ current: 0, longest: 2 });
+    });
+
+    it('is the same no matter what order the assignments load in', () => {
+      const assignments = [onTime(1), onTime(2), missed(3), onTime(4), onTime(5), onTime(6)];
+
+      expect(calculateStreak([...assignments].reverse(), now)).toMatchObject({
+        current: 3,
+        longest: 3,
+      });
+    });
   });
 
   it('breaks when an assignment is turned in late', () => {
