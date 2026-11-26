@@ -10,6 +10,7 @@ const MAX_DESCRIPTION_LENGTH = 5000;
 const MAX_SYLLABUS_LENGTH = 50000;
 const MAX_LATE_WORK_LENGTH = 10000;
 const MAX_NAME_LENGTH = 100;
+const MAX_SUBMISSION_TYPES = 20;
 
 export type SyncedCourse = {
   canvasCourseId: string;
@@ -28,6 +29,10 @@ export type SyncedAssignment = {
   pointsPossible: number | null;
   htmlUrl: string | null;
   submitted: boolean;
+  /** When Canvas says the work was turned in (#175), if it was. */
+  submittedAt: string | null;
+  /** How the work is turned in, e.g. ["online_upload"] or ["on_paper"]. */
+  submissionTypes: string[] | null;
 };
 
 export type SyncPayload = {
@@ -200,6 +205,17 @@ function readDate(value: unknown): string | null {
   return new Date(value).toISOString();
 }
 
+/** Canvas submission types, e.g. "online_upload". Anything else is dropped. */
+function readSubmissionTypes(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  return value
+    .filter((type): type is string => typeof type === 'string' && /^[a-z_]{1,40}$/.test(type))
+    .slice(0, MAX_SUBMISSION_TYPES);
+}
+
 function readHttpsUrl(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -274,6 +290,8 @@ export function parseSyncPayload(body: unknown): SyncPayload {
           : null,
       htmlUrl: readHttpsUrl(assignment.htmlUrl),
       submitted: assignment.submitted === true,
+      submittedAt: readDate(assignment.submittedAt),
+      submissionTypes: readSubmissionTypes(assignment.submissionTypes),
     };
   });
 
