@@ -13,7 +13,10 @@ import { useHomeData } from '../hooks/useHomeData';
 import { calculateStreak } from '../../streak/utils/streak';
 import { useStudentFirstName } from '../hooks/useStudentFirstName';
 import { getTimeOfDay } from '../utils/greeting';
-import { getHighPriorityTasks } from '../utils/highPriorityTasks';
+import {
+  getHighPriorityTasks,
+  hasFinishedPriorityWorkToday,
+} from '../utils/highPriorityTasks';
 import { buildWeeklyForecast } from '../utils/weeklyForecast';
 
 // How far the sky picture extends below the date, so the date sits on the hills.
@@ -87,7 +90,15 @@ export function HomeScreen() {
       )}
       {/* The forecast card shows loading and errors for both sections. */}
       {status === 'ready' && (
-        <HighPriorityTasks tasks={highPriorityTasks} now={date} />
+        <HighPriorityTasks
+          tasks={highPriorityTasks}
+          now={date}
+          finishedPriorityWork={hasFinishedPriorityWorkToday(
+            assignments,
+            date,
+            eventMinutesByDay,
+          )}
+        />
       )}
 
       <HelpPopup
