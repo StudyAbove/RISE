@@ -18,7 +18,10 @@ const QUOTE = '“Progress, not perfection, leads to brighter tomorrows.”';
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
+      {/* Shrinks instead of wrapping if a streak ever gets very long. */}
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
