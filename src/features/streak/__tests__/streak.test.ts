@@ -113,6 +113,36 @@ describe('calculateStreak', () => {
     expect(calculateStreak([onTime(1), onTime(2), onTime(3), onTime(10)], now).totalWeeks).toBe(3);
   });
 
+  describe('streak resets (#11)', () => {
+    // Due on November `day` at night and never turned in.
+    const notDone = (day: number) => assignment({ dueAt: new Date(2026, 10, day, 23, 59) });
+
+    it('is 0 when no streak has ended', () => {
+      expect(calculateStreak([], now).lastBrokenStreak).toBe(0);
+      expect(calculateStreak([onTime(9), onTime(10)], now).lastBrokenStreak).toBe(0);
+      // A miss before any streak started doesn't count as one ending.
+      expect(calculateStreak([notDone(8), onTime(10)], now).lastBrokenStreak).toBe(0);
+    });
+
+    it('remembers how long the streak was when it ended', () => {
+      expect(
+        calculateStreak([onTime(6), onTime(7), onTime(8), notDone(9)], now),
+      ).toMatchObject({ current: 0, lastBrokenStreak: 3 });
+    });
+
+    it('keeps the ended streak through a second miss in a row', () => {
+      expect(
+        calculateStreak([onTime(6), onTime(7), notDone(8), notDone(9)], now).lastBrokenStreak,
+      ).toBe(2);
+    });
+
+    it('starts a new streak with the next on-time assignment', () => {
+      expect(
+        calculateStreak([onTime(6), onTime(7), notDone(8), onTime(10)], now),
+      ).toMatchObject({ current: 1, lastBrokenStreak: 2 });
+    });
+  });
+
   it('marks which days this week, Monday to Sunday, had an on-time submission', () => {
     const { week } = calculateStreak([onTime(8), onTime(9), onTime(11)], now);
 

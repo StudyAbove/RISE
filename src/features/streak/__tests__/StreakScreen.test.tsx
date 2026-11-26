@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { Assignment } from '../../../repositories/assignmentsRepository';
 import { StreakScreen } from '../screens/StreakScreen';
+import { getResetMessage } from '../utils/resetMessages';
 
 const mockFetchAssignments = jest.fn();
 
@@ -107,5 +108,40 @@ describe('StreakScreen', () => {
     await fireEvent.press(screen.getByText('Try again'));
 
     expect(await screen.findByText('1 day')).toBeTruthy();
+  });
+
+  describe('after a streak ends (#11)', () => {
+    const notDone = (day: number) => ({ ...onTime(day), completed: false, completedAt: null });
+
+    it('says how long the streak was and encourages starting again', async () => {
+      mockFetchAssignments.mockResolvedValue([onTime(6), onTime(7), onTime(8), notDone(9)]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('0 days')).toBeTruthy();
+      expect(screen.getByText('Your 3-day streak ended, and that still counts.')).toBeTruthy();
+      expect(screen.getByText(getResetMessage(mockNow))).toBeTruthy();
+      expect(screen.queryByText(/brighter tomorrows/)).toBeNull();
+    });
+
+    it('goes back to normal once a new streak starts', async () => {
+      mockFetchAssignments.mockResolvedValue([onTime(6), onTime(7), notDone(8), onTime(10)]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('1 day')).toBeTruthy();
+      expect(screen.getByText('days and counting!')).toBeTruthy();
+      expect(screen.getByText(/brighter tomorrows/)).toBeTruthy();
+      expect(screen.queryByText(getResetMessage(mockNow))).toBeNull();
+    });
+
+    it('keeps the first-streak message when no streak has ended', async () => {
+      mockFetchAssignments.mockResolvedValue([notDone(10)]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('Turn something in on time to start a streak.')).toBeTruthy();
+      expect(screen.getByText(/brighter tomorrows/)).toBeTruthy();
+    });
   });
 });

@@ -19,6 +19,11 @@ export type StreakDay = {
 export type StreakSummary = {
   current: number;
   longest: number;
+  /**
+   * How long the most recent streak was when a miss ended it, or 0 if no
+   * streak has ended yet (#11).
+   */
+  lastBrokenStreak: number;
   /** Weeks (Monday to Sunday) with at least one on-time submission. */
   totalWeeks: number;
   /** Monday to Sunday of the current week. */
@@ -61,11 +66,15 @@ export function calculateStreak(assignments: Assignment[], now: Date): StreakSum
 
   let current = 0;
   let longest = 0;
+  let lastBrokenStreak = 0;
   // The last day counted toward the current streak, so a day only counts once.
   let lastCountedDay: Date | null = null;
 
   for (const event of events) {
     if (event.type === 'missed') {
+      // Only a streak that was going counts as ended; a second miss in a row
+      // keeps the one before it.
+      if (current > 0) lastBrokenStreak = current;
       current = 0;
       lastCountedDay = null;
     } else if (!lastCountedDay || !isSameDay(lastCountedDay, event.time)) {
@@ -92,5 +101,5 @@ export function calculateStreak(assignments: Assignment[], now: Date): StreakSum
       .map((event) => startOfWeek(event.time, { weekStartsOn: 1 }).getTime()),
   );
 
-  return { current, longest, totalWeeks: weeksWithSubmissions.size, week };
+  return { current, longest, lastBrokenStreak, totalWeeks: weeksWithSubmissions.size, week };
 }
