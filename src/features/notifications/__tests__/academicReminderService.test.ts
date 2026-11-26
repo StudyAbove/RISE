@@ -520,7 +520,14 @@ describe(
             assignments,
           );
 
-        await refreshAcademicDeadlineReminders();
+        jest.useFakeTimers();
+        jest.setSystemTime(now);
+
+        try {
+          await refreshAcademicDeadlineReminders();
+        } finally {
+          jest.useRealTimers();
+        }
 
         expect(
           mockFetchAssignments,

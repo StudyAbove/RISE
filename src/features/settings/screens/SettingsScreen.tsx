@@ -25,6 +25,7 @@ import {
 } from '../../../components/BackButton';
 import { CanvasSettingsRow } from '../../canvas/components/CanvasSettingsRow';
 import { NotificationSettingsRow } from '../components/NotificationSettingsRow';
+import { AccountSettingsRow } from '../components/AccountSettingsRow';
 
 import {
   CalendarConnectionModal,
@@ -470,6 +471,8 @@ export function SettingsScreen() {
           styles.content
         }
       >
+        <AccountSettingsRow />
+
         <Pressable
           style={({
             pressed,

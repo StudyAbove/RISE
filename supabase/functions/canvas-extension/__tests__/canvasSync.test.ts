@@ -1,4 +1,5 @@
 import {
+  buildCanvasNameProfileUpdate,
   COURSE_COLOR_KEYS,
   findRemovedAssignmentIds,
   InvalidPayloadError,
@@ -34,7 +35,13 @@ describe('parseSyncPayload', () => {
       canvasDomain: 'csulb.instructure.com',
       studentName: null,
       courses: [
-        { canvasCourseId: '101', name: 'BIOL 201: Cell Biology', code: 'BIOL 201', term: 'Fall 2026' },
+        {
+          canvasCourseId: '101',
+          name: 'BIOL 201: Cell Biology',
+          code: 'BIOL 201',
+          term: 'Fall 2026',
+          syllabusText: null,
+        },
       ],
       assignments: [
         {
@@ -95,6 +102,69 @@ describe('parseSyncPayload', () => {
     expect(() => parseSyncPayload(body)).toThrow(InvalidPayloadError);
   });
 });
+
+describe(
+  'buildCanvasNameProfileUpdate',
+  () => {
+    const updatedAt =
+      '2026-11-18T20:00:00.000Z';
+
+    it(
+      'updates the Canvas name and effective display name when Canvas is selected',
+      () => {
+        expect(
+          buildCanvasNameProfileUpdate(
+            'Julia Matinyan',
+            'canvas',
+            updatedAt,
+          ),
+        ).toEqual({
+          canvas_display_name:
+            'Julia Matinyan',
+          display_name:
+            'Julia Matinyan',
+          updated_at: updatedAt,
+        });
+      },
+    );
+
+    it(
+      'updates only the saved Canvas name when Custom is selected',
+      () => {
+        expect(
+          buildCanvasNameProfileUpdate(
+            'Julia Matinyan',
+            'custom',
+            updatedAt,
+          ),
+        ).toEqual({
+          canvas_display_name:
+            'Julia Matinyan',
+          updated_at: updatedAt,
+        });
+      },
+    );
+
+    it(
+      'keeps legacy profiles on the existing Canvas-name behavior',
+      () => {
+        expect(
+          buildCanvasNameProfileUpdate(
+            'Julia Matinyan',
+            null,
+            updatedAt,
+          ),
+        ).toEqual({
+          canvas_display_name:
+            'Julia Matinyan',
+          display_name:
+            'Julia Matinyan',
+          updated_at: updatedAt,
+        });
+      },
+    );
+  },
+);
 
 describe('findRemovedAssignmentIds', () => {
   it('returns saved assignments that Canvas no longer lists', () => {
