@@ -10,6 +10,7 @@ import { HomeHeader } from '../components/HomeHeader';
 import { HomeSkyBackdrop } from '../components/HomeSkyBackdrop';
 import { WeeklyForecastCard } from '../components/WeeklyForecastCard';
 import { useHomeData } from '../hooks/useHomeData';
+import { calculateStreak } from '../../streak/utils/streak';
 import { useStudentFirstName } from '../hooks/useStudentFirstName';
 import { getTimeOfDay } from '../utils/greeting';
 import { getHighPriorityTasks } from '../utils/highPriorityTasks';
@@ -25,6 +26,14 @@ export function HomeScreen() {
   const date = useCurrentDate();
   const firstName = useStudentFirstName();
   const { status, assignments, eventMinutesByDay } = useHomeData();
+
+  const streakCount = useMemo(
+    () =>
+      status === 'ready'
+        ? calculateStreak(assignments, date).current
+        : null,
+    [assignments, date, status],
+  );
 
   const forecast = useMemo(
     () =>
@@ -61,7 +70,12 @@ export function HomeScreen() {
         />
       )}
       <View onLayout={handleHeaderLayout}>
-        <HomeHeader date={date} firstName={firstName} greetingRef={greetingRef} />
+        <HomeHeader
+          date={date}
+          firstName={firstName}
+          greetingRef={greetingRef}
+          streakCount={streakCount}
+        />
       </View>
       {status !== 'signedOut' && (
         <WeeklyForecastCard

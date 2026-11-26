@@ -9,6 +9,7 @@ import { styles } from './HomeHeader.styles';
 
 interface HomeHeaderProps {
   date: Date;
+  streakCount?: number | null;
   /** Left out of the greeting when null (e.g. still loading or not set). */
   firstName: string | null;
   /** Lets the screen move VoiceOver focus to the greeting (see TabScreenScrollView). */
@@ -19,7 +20,12 @@ interface HomeHeaderProps {
  * Top of the Home page: RISE wordmark, streak pill, and settings gear, then
  * the greeting and today's date.
  */
-export function HomeHeader({ date, firstName, greetingRef }: HomeHeaderProps) {
+export function HomeHeader({
+  date,
+  firstName,
+  greetingRef,
+  streakCount = null,
+}: HomeHeaderProps) {
   const greeting = getTimeOfDayGreeting(date);
 
   return (
@@ -27,7 +33,7 @@ export function HomeHeader({ date, firstName, greetingRef }: HomeHeaderProps) {
       <View style={styles.topRow}>
         <Text style={styles.wordmark}>RISE</Text>
         <View style={styles.topRowActions}>
-          <StreakIndicator />
+          <StreakIndicator count={streakCount} />
           <SettingsButton />
         </View>
       </View>
