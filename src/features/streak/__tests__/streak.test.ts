@@ -36,6 +36,11 @@ function onTime(day: number) {
   });
 }
 
+/** Due on November `day` at night and never turned in. */
+function missed(day: number) {
+  return assignment({ dueAt: new Date(2026, 10, day, 23, 59) });
+}
+
 describe('calculateStreak', () => {
   it('is 0 with no activity', () => {
     expect(calculateStreak([], now)).toMatchObject({ current: 0, longest: 0, totalWeeks: 0 });
@@ -70,6 +75,62 @@ describe('calculateStreak', () => {
     );
 
     expect(summary).toMatchObject({ current: 2, longest: 3 });
+  });
+
+  describe('longest streak (#8)', () => {
+    it('is the best of several past streaks, even when it was in the middle', () => {
+      // Streaks of 2 (1st–2nd), 4 (4th–7th), then 2 (9th–10th).
+      const summary = calculateStreak(
+        [
+          onTime(1),
+          onTime(2),
+          missed(3),
+          onTime(4),
+          onTime(5),
+          onTime(6),
+          onTime(7),
+          missed(8),
+          onTime(9),
+          onTime(10),
+        ],
+        now,
+      );
+
+      expect(summary).toMatchObject({ current: 2, longest: 4 });
+    });
+
+    it('is the current streak when the current streak is the best so far', () => {
+      const summary = calculateStreak(
+        [onTime(1), onTime(2), missed(3), onTime(5), onTime(6), onTime(7), onTime(8), onTime(9)],
+        now,
+      );
+
+      expect(summary).toMatchObject({ current: 5, longest: 5 });
+    });
+
+    it('stays after the current streak breaks', () => {
+      const summary = calculateStreak([onTime(4), onTime(5), onTime(6), missed(10)], now);
+
+      expect(summary).toMatchObject({ current: 0, longest: 3 });
+    });
+
+    it('counts days, not assignments', () => {
+      const summary = calculateStreak(
+        [onTime(9), onTime(9), onTime(9), onTime(10), missed(10)],
+        now,
+      );
+
+      expect(summary).toMatchObject({ current: 0, longest: 2 });
+    });
+
+    it('is the same no matter what order the assignments load in', () => {
+      const assignments = [onTime(1), onTime(2), missed(3), onTime(4), onTime(5), onTime(6)];
+
+      expect(calculateStreak([...assignments].reverse(), now)).toMatchObject({
+        current: 3,
+        longest: 3,
+      });
+    });
   });
 
   it('breaks when an assignment is turned in late', () => {
@@ -140,6 +201,77 @@ describe('calculateStreak', () => {
       expect(
         calculateStreak([onTime(6), onTime(7), notDone(8), onTime(10)], now),
       ).toMatchObject({ current: 1, lastBrokenStreak: 2 });
+    });
+  });
+
+  describe('assignments in the current streak (#10)', () => {
+    const titles = (assignments: Assignment[]) =>
+      calculateStreak(assignments, now).currentAssignments.map(({ assignment: { title } }) => title);
+
+    /** Turned in on November `day` at `hour`, due that night. */
+    function turnedIn(title: string, day: number, hour = 12) {
+      return assignment({
+        title,
+        completed: true,
+        completedAt: new Date(2026, 10, day, hour, 0),
+        dueAt: new Date(2026, 10, day, 23, 59),
+      });
+    }
+
+    it('lists what kept the streak going, newest first, with when each was turned in', () => {
+      const { currentAssignments } = calculateStreak(
+        [turnedIn('Lab 1', 9), turnedIn('Quiz 2', 10)],
+        now,
+      );
+
+      expect(currentAssignments.map(({ assignment, completedAt }) => [assignment.title, completedAt]))
+        .toEqual([
+          ['Quiz 2', new Date(2026, 10, 10, 12, 0)],
+          ['Lab 1', new Date(2026, 10, 9, 12, 0)],
+        ]);
+    });
+
+    it('leaves out work from before the streak last broke', () => {
+      expect(
+        titles([
+          turnedIn('Old work', 7),
+          assignment({ title: 'Missed', dueAt: new Date(2026, 10, 8, 23, 59) }),
+          turnedIn('Lab 1', 9),
+        ]),
+      ).toEqual(['Lab 1']);
+    });
+
+    it('includes every assignment turned in on the same day', () => {
+      expect(titles([turnedIn('Reading', 10, 9), turnedIn('Lab 1', 10, 15)])).toEqual([
+        'Lab 1',
+        'Reading',
+      ]);
+    });
+
+    it('leaves out late work and work with no due date', () => {
+      const late = assignment({
+        title: 'Late',
+        completed: true,
+        dueAt: new Date(2026, 10, 9, 23, 59),
+        completedAt: new Date(2026, 10, 10, 8, 0),
+      });
+      const undated = assignment({
+        title: 'No due date',
+        completed: true,
+        completedAt: new Date(2026, 10, 10, 9, 0),
+        dueAt: null,
+      });
+
+      // The late one breaks the streak, so only work after it counts.
+      expect(titles([turnedIn('Before', 9, 9), late, undated, turnedIn('Lab 1', 10, 12)])).toEqual([
+        'Lab 1',
+      ]);
+    });
+
+    it('is empty with no current streak', () => {
+      expect(
+        titles([turnedIn('Lab 1', 9), assignment({ dueAt: new Date(2026, 10, 10, 23, 59) })]),
+      ).toEqual([]);
     });
   });
 

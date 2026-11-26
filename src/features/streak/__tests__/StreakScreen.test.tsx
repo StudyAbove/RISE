@@ -9,10 +9,15 @@ const mockFetchAssignments = jest.fn();
 // Wednesday, November 11, 2026 at 9 PM, local time.
 const mockNow = new Date(2026, 10, 11, 21, 0);
 
+const mockNavigate = jest.fn();
+
 jest.mock('@react-navigation/native', () => {
   const { useEffect } = jest.requireActual('react');
   // Run the effect as if the screen is open.
-  return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) };
+  return {
+    useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]),
+    useNavigation: () => ({ navigate: mockNavigate }),
+  };
 });
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -61,6 +66,7 @@ function onTime(day: number): Assignment {
 describe('StreakScreen', () => {
   beforeEach(() => {
     mockFetchAssignments.mockReset();
+    mockNavigate.mockReset();
   });
 
   it('shows the current streak, longest streak, total weeks, and this week', async () => {
@@ -95,6 +101,50 @@ describe('StreakScreen', () => {
 
     expect(await screen.findByText('0 days')).toBeTruthy();
     expect(screen.getByText('Turn something in on time to start a streak.')).toBeTruthy();
+    expect(screen.getByLabelText('Current Streak: 0')).toBeTruthy();
+    expect(screen.getByLabelText('Longest Streak: 0')).toBeTruthy();
+  });
+
+  describe('longest streak (#8)', () => {
+    it('keeps the personal best after the current streak resets', async () => {
+      mockFetchAssignments.mockResolvedValue([
+        onTime(5),
+        onTime(6),
+        onTime(7),
+        onTime(8),
+        { ...onTime(10), completed: false, completedAt: null },
+      ]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('0 days')).toBeTruthy();
+      expect(screen.getByLabelText('Current Streak: 0')).toBeTruthy();
+      expect(screen.getByLabelText('Longest Streak: 4')).toBeTruthy();
+    });
+
+    it('shows the same number for both when the current streak is the best', async () => {
+      mockFetchAssignments.mockResolvedValue([onTime(7), onTime(8), onTime(9), onTime(10), onTime(11)]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('5 days')).toBeTruthy();
+      expect(screen.getByLabelText('Current Streak: 5')).toBeTruthy();
+      expect(screen.getByLabelText('Longest Streak: 5')).toBeTruthy();
+    });
+
+    it('shows long streaks in full', async () => {
+      // 120 days in a row, ending today (dates before November roll back into
+      // earlier months).
+      mockFetchAssignments.mockResolvedValue(
+        Array.from({ length: 120 }, (_, index) => onTime(11 - index)),
+      );
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('120 days')).toBeTruthy();
+      expect(screen.getByLabelText('Current Streak: 120')).toBeTruthy();
+      expect(screen.getByLabelText('Longest Streak: 120')).toBeTruthy();
+    });
   });
 
   it('offers to try again when the streak fails to load', async () => {
@@ -142,6 +192,57 @@ describe('StreakScreen', () => {
 
       expect(await screen.findByText('Turn something in on time to start a streak.')).toBeTruthy();
       expect(screen.getByText(/brighter tomorrows/)).toBeTruthy();
+    });
+  });
+
+  describe('this streak (#10)', () => {
+    it('lists what kept the streak going, newest first, and opens one when tapped', async () => {
+      mockFetchAssignments.mockResolvedValue([
+        { ...onTime(9), title: 'Lab 1' },
+        { ...onTime(10), title: 'Quiz 2' },
+      ]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByRole('header', { name: 'This streak' })).toBeTruthy();
+
+      const rows = screen.getAllByLabelText(/Turned in/);
+      expect(rows.map((row) => row.props.accessibilityLabel)).toEqual([
+        'Quiz 2, EE 381, Turned in Tue, Nov 10',
+        'Lab 1, EE 381, Turned in Mon, Nov 9',
+      ]);
+
+      await fireEvent.press(rows[1]);
+      expect(mockNavigate).toHaveBeenCalledWith('AssignmentDetails', { assignmentId: 'a9' });
+    });
+
+    it('shows the 5 newest until Show all is tapped', async () => {
+      mockFetchAssignments.mockResolvedValue(
+        Array.from({ length: 7 }, (_, index) => onTime(5 + index)),
+      );
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findAllByLabelText(/Turned in/)).toHaveLength(5);
+      expect(screen.getByLabelText(/Turned in Wed, Nov 11/)).toBeTruthy();
+      expect(screen.queryByLabelText(/Turned in Thu, Nov 5/)).toBeNull();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'Show all (7)' }));
+
+      expect(screen.getAllByLabelText(/Turned in/)).toHaveLength(7);
+      expect(screen.queryByRole('button', { name: /Show all/ })).toBeNull();
+    });
+
+    it('is hidden with no current streak', async () => {
+      mockFetchAssignments.mockResolvedValue([
+        onTime(8),
+        { ...onTime(10), completed: false, completedAt: null },
+      ]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('0 days')).toBeTruthy();
+      expect(screen.queryByRole('header', { name: 'This streak' })).toBeNull();
     });
   });
 });

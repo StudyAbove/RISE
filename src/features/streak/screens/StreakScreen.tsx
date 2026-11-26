@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '../../../components/BackButton';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { colors } from '../../../theme/colors';
+import { StreakAssignmentsList } from '../components/StreakAssignmentsList';
 import { StreakWeekRow } from '../components/StreakWeekRow';
 import { useStreakData } from '../hooks/useStreakData';
 import { getResetMessage } from '../utils/resetMessages';
@@ -27,7 +28,10 @@ function getCaption({ current, lastBrokenStreak }: StreakSummary) {
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
+      {/* Shrinks instead of wrapping if a streak ever gets very long. */}
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -117,6 +121,10 @@ export function StreakScreen() {
               <StatCard value={streak.longest} label="Longest Streak" />
               <StatCard value={streak.totalWeeks} label="Total Weeks" />
             </View>
+
+            {streak.currentAssignments.length > 0 && (
+              <StreakAssignmentsList assignments={streak.currentAssignments} />
+            )}
 
             {/* After a streak ends, encourage starting again instead (#11). */}
             {streak.current === 0 && streak.lastBrokenStreak > 0 ? (
