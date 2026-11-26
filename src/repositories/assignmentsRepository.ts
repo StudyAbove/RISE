@@ -27,6 +27,11 @@ export type Assignment = {
   /** Opens the assignment in Canvas, for synced assignments. */
   htmlUrl: string | null;
   /**
+   * How Canvas says the work is turned in, e.g. ["online_upload"] or
+   * ["on_paper"] (#175). Null for RISE's own assignments and until the next sync.
+   */
+  submissionTypes?: string[] | null;
+  /**
    * Saved by the estimate-assignments function. Null until it runs; use
    * getAssignmentEstimate() to always get a time.
    */
@@ -59,6 +64,7 @@ type AssignmentRow = {
   course_id: string | null;
   points_possible: number | null;
   html_url: string | null;
+  submission_types: string[] | null;
   estimated_minutes: number | null;
   kind: AssignmentKind | null;
   courses: {
@@ -77,7 +83,7 @@ type AssignmentRow = {
 };
 
 const ASSIGNMENT_COLUMNS =
-  'id, title, description, due_at, completed, completed_at, source, course_id, points_possible, html_url, estimated_minutes, kind, courses(name, code, color, sync_enabled), assignment_microtasks(id, title, position, estimated_minutes, completed)';
+  'id, title, description, due_at, completed, completed_at, source, course_id, points_possible, html_url, submission_types, estimated_minutes, kind, courses(name, code, color, sync_enabled), assignment_microtasks(id, title, position, estimated_minutes, completed)';
 
 function toMicrotaskSummaries(row: AssignmentRow): MicrotaskSummary[] {
   return (row.assignment_microtasks ?? [])
@@ -159,6 +165,7 @@ export async function fetchAssignments(): Promise<Assignment[]> {
         courseTint: tint,
         pointsPossible: row.points_possible,
         htmlUrl: row.html_url,
+        submissionTypes: row.submission_types,
         estimatedMinutes: row.estimated_minutes,
         kind: row.kind,
         microtasks: toMicrotaskSummaries(row),
@@ -220,6 +227,7 @@ export async function fetchAssignmentById(
     courseTint: tint,
     pointsPossible: row.points_possible,
     htmlUrl: row.html_url,
+    submissionTypes: row.submission_types,
     estimatedMinutes: row.estimated_minutes,
     kind: row.kind,
     microtasks: toMicrotaskSummaries(row),

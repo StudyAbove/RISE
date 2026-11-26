@@ -9,6 +9,8 @@ import type { Assignment } from '../../../repositories/assignmentsRepository';
  *   done late) breaks the streak.
  * - A day with nothing turned in and nothing missed doesn't add a day or
  *   break the streak.
+ * - Work that can't be turned in online (on paper, in class) doesn't count
+ *   either way, since Canvas has no submission time for it (#175).
  */
 
 export type StreakDay = {
@@ -27,6 +29,18 @@ export type StreakSummary = {
 
 type StreakEvent = { type: 'submitted' | 'missed'; time: Date };
 
+// Canvas submission types that mean the work isn't turned in on Canvas.
+const OFFLINE_SUBMISSION_TYPES = new Set(['on_paper', 'none', 'not_graded']);
+
+/** True when every way to turn the work in is offline. Unknown types count as online. */
+function isTurnedInOffline(submissionTypes: string[] | null | undefined) {
+  return (
+    !!submissionTypes &&
+    submissionTypes.length > 0 &&
+    submissionTypes.every((type) => OFFLINE_SUBMISSION_TYPES.has(type))
+  );
+}
+
 function isOnTime(completedAt: Date, dueAt: Date) {
   return completedAt.getTime() <= dueAt.getTime();
 }
@@ -35,9 +49,9 @@ function isOnTime(completedAt: Date, dueAt: Date) {
 function getStreakEvents(assignments: Assignment[], now: Date): StreakEvent[] {
   const events: StreakEvent[] = [];
 
-  for (const { completed, completedAt, dueAt, source } of assignments) {
+  for (const { completed, completedAt, dueAt, source, submissionTypes } of assignments) {
     // Without a due date there's no "on time", so it doesn't affect the streak.
-    if (!dueAt) continue;
+    if (!dueAt || isTurnedInOffline(submissionTypes)) continue;
 
     if (completed && completedAt) {
       events.push(

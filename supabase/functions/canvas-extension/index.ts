@@ -429,11 +429,16 @@ async function syncCanvas(supabase: SupabaseClient, userId: string, body: unknow
       points_possible: assignment.pointsPossible,
       html_url: assignment.htmlUrl,
       source: 'canvas',
+      submission_types: assignment.submissionTypes,
       removed_at: null,
       updated_at: syncedAt,
       // Only mark work done when Canvas says it was submitted, so a sync never
-      // un-checks something the student finished in RISE.
-      ...(assignment.submitted ? { completed: true } : {}),
+      // un-checks something the student finished in RISE. Canvas's submission
+      // time is kept as the completion date (#175); without one, the database
+      // uses the time of the sync.
+      ...(assignment.submitted
+        ? { completed: true, completed_at: assignment.submittedAt }
+        : {}),
     }));
 
     // Rows in one upsert need the same columns, so submitted and unsubmitted

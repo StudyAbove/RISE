@@ -23,6 +23,8 @@ function validPayload() {
         pointsPossible: 50,
         htmlUrl: 'https://csulb.instructure.com/courses/101/assignments/9001',
         submitted: true,
+        submittedAt: '2026-11-13T22:15:00Z',
+        submissionTypes: ['online_upload'],
       },
     ],
   };
@@ -34,7 +36,13 @@ describe('parseSyncPayload', () => {
       canvasDomain: 'csulb.instructure.com',
       studentName: null,
       courses: [
-        { canvasCourseId: '101', name: 'BIOL 201: Cell Biology', code: 'BIOL 201', term: 'Fall 2026' },
+        {
+          canvasCourseId: '101',
+          name: 'BIOL 201: Cell Biology',
+          code: 'BIOL 201',
+          term: 'Fall 2026',
+          syllabusText: null,
+        },
       ],
       assignments: [
         {
@@ -46,9 +54,32 @@ describe('parseSyncPayload', () => {
           pointsPossible: 50,
           htmlUrl: 'https://csulb.instructure.com/courses/101/assignments/9001',
           submitted: true,
+          submittedAt: '2026-11-13T22:15:00.000Z',
+          submissionTypes: ['online_upload'],
         },
       ],
     });
+  });
+
+  it('reads when and how each assignment is turned in (#175)', () => {
+    const read = (details: object) =>
+      parseSyncPayload({
+        ...validPayload(),
+        assignments: [{ ...validPayload().assignments[0], ...details }],
+      }).assignments[0];
+
+    expect(read({ submittedAt: 'not a date' }).submittedAt).toBeNull();
+    expect(read({ submittedAt: null }).submittedAt).toBeNull();
+    expect(read({ submissionTypes: ['on_paper'] }).submissionTypes).toEqual(['on_paper']);
+    // Older extensions don't send the types.
+    expect(read({ submissionTypes: undefined }).submissionTypes).toBeNull();
+    // Only Canvas-style names are kept.
+    expect(
+      read({ submissionTypes: ['online_url', 42, 'DROP TABLE', 'x'.repeat(41)] }).submissionTypes,
+    ).toEqual(['online_url']);
+    expect(
+      read({ submissionTypes: Array.from({ length: 30 }, () => 'online_upload') }).submissionTypes,
+    ).toHaveLength(20);
   });
 
   it("reads the student's Canvas name for the greeting", () => {
@@ -71,6 +102,8 @@ describe('parseSyncPayload', () => {
       pointsPossible: Number.NaN,
       htmlUrl: 'javascript:alert(1)',
       submitted: false,
+      submittedAt: '',
+      submissionTypes: [],
     };
 
     expect(parseSyncPayload(payload).assignments[0]).toMatchObject({
@@ -80,6 +113,8 @@ describe('parseSyncPayload', () => {
       pointsPossible: null,
       htmlUrl: null,
       submitted: false,
+      submittedAt: null,
+      submissionTypes: [],
     });
   });
 

@@ -432,6 +432,9 @@ const RiseCanvasApi = (() => {
         pointsPossible: assignment.points_possible,
         htmlUrl: assignment.html_url,
         submitted: isSubmitted(assignment.submission),
+        // When it was turned in, so on-time work isn't dated by the sync (#175).
+        submittedAt: assignment.submission?.submitted_at ?? null,
+        submissionTypes: assignment.submission_types ?? null,
       })),
     };
   }

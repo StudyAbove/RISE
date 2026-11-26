@@ -94,6 +94,35 @@ describe('calculateStreak', () => {
     expect(calculateStreak([onTime(9), onTime(10), addedInRise], now).current).toBe(2);
   });
 
+  describe('work turned in offline (#175)', () => {
+    // Due last night and not marked done.
+    const notDone = (submissionTypes: string[] | null) =>
+      assignment({ dueAt: new Date(2026, 10, 10, 23, 59), submissionTypes });
+
+    it("doesn't break for paper or in-class work that isn't marked done", () => {
+      expect(
+        calculateStreak([onTime(9), notDone(['on_paper']), notDone(['none'])], now).current,
+      ).toBe(1);
+    });
+
+    it("doesn't add a day for paper work once it's graded", () => {
+      const graded = assignment({ ...onTime(10), submissionTypes: ['on_paper'] });
+
+      expect(calculateStreak([graded], now).current).toBe(0);
+    });
+
+    it('still counts work that can also be turned in online', () => {
+      expect(
+        calculateStreak([onTime(9), notDone(['on_paper', 'online_upload'])], now).current,
+      ).toBe(0);
+    });
+
+    it('treats unknown or missing submission types as online', () => {
+      expect(calculateStreak([onTime(9), notDone([])], now).current).toBe(0);
+      expect(calculateStreak([onTime(9), notDone(null)], now).current).toBe(0);
+    });
+  });
+
   it('ignores assignments with no due date or no completion date', () => {
     expect(
       calculateStreak(
