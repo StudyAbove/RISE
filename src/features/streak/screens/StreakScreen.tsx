@@ -7,14 +7,23 @@ import { colors } from '../../../theme/colors';
 import { StreakAssignmentsList } from '../components/StreakAssignmentsList';
 import { StreakWeekRow } from '../components/StreakWeekRow';
 import { useStreakData } from '../hooks/useStreakData';
+import { getResetMessage } from '../utils/resetMessages';
+import type { StreakSummary } from '../utils/streak';
 import { styles } from './StreakScreen.styles';
 
 const SUN_IMAGE = require('../../../../assets/images/streak/sun.png');
 // Same hills as Home's morning sky, faded at the bottom of the page.
 const HILLS_IMAGE = require('../../../../assets/images/home/sky-morning.png');
 
-// Placeholder until the supportive messages story (#11).
+// Shown while a streak is going, or before the first one.
 const QUOTE = '“Progress, not perfection, leads to brighter tomorrows.”';
+
+/** The line under the streak count. */
+function getCaption({ current, lastBrokenStreak }: StreakSummary) {
+  if (current > 0) return 'days and counting!';
+  if (lastBrokenStreak > 0) return `Your ${lastBrokenStreak}-day streak ended, and that still counts.`;
+  return 'Turn something in on time to start a streak.';
+}
 
 function StatCard({ value, label }: { value: number; label: string }) {
   return (
@@ -101,9 +110,7 @@ export function StreakScreen() {
             <Text style={styles.streakCount}>
               {streak.current} {streak.current === 1 ? 'day' : 'days'}
             </Text>
-            <Text style={styles.streakCaption}>
-              {streak.current > 0 ? 'days and counting!' : 'Turn something in on time to start a streak.'}
-            </Text>
+            <Text style={styles.streakCaption}>{getCaption(streak)}</Text>
 
             <View style={styles.week}>
               <StreakWeekRow week={streak.week} today={now} />
@@ -119,9 +126,16 @@ export function StreakScreen() {
               <StreakAssignmentsList assignments={streak.currentAssignments} />
             )}
 
-            <View style={styles.quoteCard}>
-              <Text style={styles.quoteText}>{QUOTE}</Text>
-            </View>
+            {/* After a streak ends, encourage starting again instead (#11). */}
+            {streak.current === 0 && streak.lastBrokenStreak > 0 ? (
+              <View style={styles.quoteCard} accessibilityLiveRegion="polite">
+                <Text style={styles.quoteText}>{getResetMessage(now)}</Text>
+              </View>
+            ) : (
+              <View style={styles.quoteCard}>
+                <Text style={styles.quoteText}>{QUOTE}</Text>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
