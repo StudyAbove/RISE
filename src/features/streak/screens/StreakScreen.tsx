@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackButton } from '../../../components/BackButton';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { colors } from '../../../theme/colors';
+import { StreakAssignmentsList } from '../components/StreakAssignmentsList';
 import { StreakWeekRow } from '../components/StreakWeekRow';
 import { useStreakData } from '../hooks/useStreakData';
 import { styles } from './StreakScreen.styles';
@@ -113,6 +114,10 @@ export function StreakScreen() {
               <StatCard value={streak.longest} label="Longest Streak" />
               <StatCard value={streak.totalWeeks} label="Total Weeks" />
             </View>
+
+            {streak.currentAssignments.length > 0 && (
+              <StreakAssignmentsList assignments={streak.currentAssignments} />
+            )}
 
             <View style={styles.quoteCard}>
               <Text style={styles.quoteText}>{QUOTE}</Text>
