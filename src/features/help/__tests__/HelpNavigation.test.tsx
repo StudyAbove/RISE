@@ -54,7 +54,7 @@ async function renderApp() {
 
 describe('Help menu navigation (#70)', () => {
   it.each([
-    ['Take a breath', 'A short breathing reset to settle your head before you start.'],
+    ['Take a breath', 'Take a moment. Follow the sun.'],
     ['Ask for an extension', 'Pick your class and fill in the blanks. We’ll write the rest.'],
     ['Book office hours', 'Pick your class, then choose a time that works.'],
   ])('opens "%s" from the help menu, and Back returns', async (option, subtitle) => {
