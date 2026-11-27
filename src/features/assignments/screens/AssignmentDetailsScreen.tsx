@@ -29,6 +29,7 @@ import { PriorityPill } from '../components/PriorityPill';
 import { getPriorityLevel } from '../utils/assignmentPriority';
 import { AssignmentDescription } from '../components/AssignmentDescription';
 import { AssignmentMicrotasks } from '../components/AssignmentMicrotasks';
+import { StudyTaskSelectionModal } from '../components/StudyTaskSelectionModal';
 import type { Microtask } from '../../../repositories/microtasksRepository';
 
 type Props = NativeStackScreenProps<
@@ -254,6 +255,8 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
             }
           />
 
+          {!route.params.selectTasks && (
+            <>
           {/* Saved microtasks for this specific assignment (#42). */}
           <AssignmentMicrotasks
             key={assignment.id}
@@ -309,7 +312,32 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
               Start Study Session
             </Text>
           </Pressable>
+            </>
+          )}
         </View>
+      )}
+      {status === 'ready' && assignment && route.params.selectTasks && (
+        <StudyTaskSelectionModal
+          key={assignment.id}
+          assignment={assignment}
+          onClose={() => {
+            setSelectedTasks([]);
+            navigation.setParams({ selectTasks: false });
+          }}
+          onStart={(tasks) => {
+            navigation.setParams({ selectTasks: false });
+
+            navigation.navigate('FocusSession', {
+              assignmentId: assignment.id,
+              assignmentTitle: assignment.title,
+              microtasks: tasks.map((task) => ({
+                id: task.id,
+                title: task.title,
+                estimatedMinutes: task.estimatedMinutes,
+              })),
+            });
+          }}
+        />
       )}
     </ScrollView>
   );

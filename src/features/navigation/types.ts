@@ -20,7 +20,10 @@ export type RootStackParamList = {
   OnboardingComplete: { calendarConnected: boolean };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Settings: undefined;
-  AssignmentDetails: { assignmentId: string };
+  AssignmentDetails: {
+    assignmentId: string;
+    selectTasks?: boolean;
+  };
   // The tools in the "Feeling stuck?" help menu (#70).
   Breathing: undefined;
   ExtensionEmail: undefined;
