@@ -27,6 +27,7 @@ import {
 type Props = {
   assignment: Assignment;
   onSelectionChange?: (tasks: Microtask[]) => void;
+  selectionOnly?: boolean;
 };
 
 type LoadStatus = 'loading' | 'ready' | 'error';
@@ -36,6 +37,7 @@ type LoadStatus = 'loading' | 'ready' | 'error';
 export function AssignmentMicrotasks({
   assignment,
   onSelectionChange,
+  selectionOnly = false,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [tasks, setTasks] = useState<Microtask[]>([]);
@@ -345,7 +347,7 @@ export function AssignmentMicrotasks({
 
   return (
     <View style={styles.section}>
-      {status === 'ready' && tasks.length > 0 && (
+      {!selectionOnly && status === 'ready' && tasks.length > 0 && (
         <>
           <Text accessibilityRole="header" style={styles.heading}>
             Progress
@@ -491,7 +493,7 @@ export function AssignmentMicrotasks({
             </Text>
           )}
 
-          {tasks.map((task) => {
+          {tasks.filter((task) => !selectionOnly || !task.completed).map((task) => {
               const canSelect =
                 !assignment.completed &&
                 !task.completed &&
@@ -513,7 +515,20 @@ export function AssignmentMicrotasks({
                     task.completed && styles.completedCard,
                   ]}
                 >
-                  {/* Circle controls completion only. */}
+                  {selectionOnly ? (
+                    <View
+                      accessible={false}
+                      style={[
+                        styles.taskCircle,
+                        selected && styles.completedCircle,
+                      ]}
+                    >
+                      {selected && (
+                        <Text style={{ color: colors.softWhite }}>✓</Text>
+                      )}
+                    </View>
+                  ) : (
+
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={
@@ -575,6 +590,7 @@ export function AssignmentMicrotasks({
                       )}
                     </View>
                   </Pressable>
+                  )}
 
                   {/* Rest of card selects the task for studying. */}
                   <Pressable

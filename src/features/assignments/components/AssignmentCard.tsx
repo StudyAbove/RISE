@@ -110,10 +110,15 @@ export function AssignmentCard({
           ? `${assignment.title}. Course: ${courseLabel}. ${getAhead ? 'Get ahead. ' : ''}${dueLabel}.`
           : `${assignment.title}. ${priority ? `${PRIORITY_ACCESSIBILITY_LABELS[priority]}. ` : ''}Course: ${courseLabel}. ${dueLabel}. ${description}. ${completionPercent}% complete.`
       }
-      accessibilityHint="Opens assignment details"
+      accessibilityHint={
+        isHome
+          ? 'Opens task selection for a study session'
+          : 'Opens assignment details'
+      }
       onPress={() =>
         navigation.navigate('AssignmentDetails', {
           assignmentId: assignment.id,
+          ...(isHome ? { selectTasks: true } : {}),
         })
       }
       style={({ pressed }) => [
