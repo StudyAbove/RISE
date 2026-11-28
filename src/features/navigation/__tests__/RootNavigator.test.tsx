@@ -1410,3 +1410,7 @@ describe(
     );
   },
 );
+jest.mock('../../appTour/AppTourController', () => ({
+  AppTourController: () => null,
+  requestAppTourReplay: jest.fn(),
+}));

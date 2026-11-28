@@ -13,6 +13,13 @@ jest.mock('../src/lib/supabase', () => ({
   supabase: {
     auth: {
       getSession: jest.fn(async () => ({ data: { session: null } })),
+      onAuthStateChange: jest.fn(() => ({
+        data: {
+          subscription: {
+            unsubscribe: jest.fn(),
+          },
+        },
+      })),
     },
     from: jest.fn(() => ({
       select: () => ({
