@@ -26,6 +26,7 @@ import {
 
 type Props = {
   assignment: Assignment;
+  refreshKey?: number;
   onSelectionChange?: (tasks: Microtask[]) => void;
 };
 
@@ -35,6 +36,7 @@ type LoadStatus = 'loading' | 'ready' | 'error';
 // Session selection is separate from saved completion.
 export function AssignmentMicrotasks({
   assignment,
+  refreshKey = 0,
   onSelectionChange,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -49,6 +51,7 @@ export function AssignmentMicrotasks({
 
   // Ignore old requests after this component reloads or unmounts.
   const requestVersion = useRef(0);
+  const loadedTasksAssignmentRef = useRef<string | null>(null);
 
   // Prevent duplicate generation within the current load.
   const generationInProgress = useRef<number | null>(null);
@@ -57,8 +60,11 @@ export function AssignmentMicrotasks({
     const version = ++requestVersion.current;
 
     async function loadTasks() {
-      setStatus('loading');
-      setTasks([]);
+      if (loadedTasksAssignmentRef.current !== assignment.id) {
+        setStatus('loading');
+        setTasks([]);
+        setSelectedIds([]);
+      }
       setNotice('');
       setGenerating(false);
 
@@ -67,7 +73,13 @@ export function AssignmentMicrotasks({
 
         if (requestVersion.current !== version) return;
 
+        loadedTasksAssignmentRef.current = assignment.id;
         setTasks(savedTasks);
+        setSelectedIds((previous) =>
+          previous.filter((id) =>
+            savedTasks.some((task) => task.id === id && !task.completed),
+          ),
+        );
         setStatus('ready');
 
         if (
@@ -105,7 +117,11 @@ export function AssignmentMicrotasks({
       } catch {
         if (requestVersion.current !== version) return;
 
-        setStatus('error');
+        if (loadedTasksAssignmentRef.current !== assignment.id) {
+          setStatus('error');
+        } else {
+          setNotice('Could not refresh tasks. Your saved tasks are still shown.');
+        }
       }
     }
 
@@ -119,6 +135,7 @@ export function AssignmentMicrotasks({
     assignment.estimatedMinutes,
     assignment.completed,
     reloadCount,
+    refreshKey,
   ]);
 
   const hasSavedEstimate =
@@ -297,7 +314,13 @@ export function AssignmentMicrotasks({
         throw new Error('No saved tasks were returned.');
       }
 
-      setTasks(savedTasks);
+      loadedTasksAssignmentRef.current = assignment.id;
+        setTasks(savedTasks);
+        setSelectedIds((previous) =>
+          previous.filter((id) =>
+            savedTasks.some((task) => task.id === id && !task.completed),
+          ),
+        );
 
       if (result.status === 'outdated') {
         setNotice(

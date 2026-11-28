@@ -45,6 +45,7 @@ export function StudyScreen() {
 
   // A pull-to-refresh keeps the sections on screen while it reloads.
   const isPullRefresh = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   const sections = useMemo(
     () => getStudySections(assignments, date),
@@ -57,9 +58,8 @@ export function StudyScreen() {
       let active = true;
 
       async function loadAssignments() {
-        if (!isPullRefresh.current) {
+        if (!hasLoadedRef.current && !isPullRefresh.current) {
           setStatus('loading');
-          setAssignments([]);
         }
 
         try {
@@ -70,6 +70,8 @@ export function StudyScreen() {
 
           // Skipping the login screen does not create a real session.
           if (!data.session) {
+            hasLoadedRef.current = false;
+            setAssignments([]);
             setStatus('signedOut');
             return;
           }
@@ -78,13 +80,18 @@ export function StudyScreen() {
 
           if (!active) return;
 
+          hasLoadedRef.current = true;
           setAssignments(loadedAssignments);
           setStatus('ready');
         } catch {
           if (!active) return;
 
-          setAssignments([]);
-          setStatus('error');
+          if (!hasLoadedRef.current) {
+            setAssignments([]);
+            setStatus('error');
+          } else {
+            console.log('Could not refresh assignments; keeping the current list.');
+          }
         } finally {
           isPullRefresh.current = false;
           setRefreshing(false);
