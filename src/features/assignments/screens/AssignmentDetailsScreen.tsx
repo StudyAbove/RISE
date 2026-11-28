@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -43,10 +43,12 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const now = useCurrentDate();
   const { assignmentId } = route.params;
+  const loadedAssignmentIdRef = useRef<string | null>(null);
 
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [reloadCount, setReloadCount] = useState(0);
+  const [tasksRefreshKey, setTasksRefreshKey] = useState(0);
   // Recorded study time for this assignment (#49); 0 hides the row.
   const [studySeconds, setStudySeconds] = useState(0);
     // Selection prepares a session; it does not mark tasks complete.
@@ -63,21 +65,29 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
       let active = true;
 
       async function loadAssignment() {
-        setStatus('loading');
-        setAssignment(null);
-        setSelectedTasks([]);
+        if (loadedAssignmentIdRef.current !== assignmentId) {
+          setStatus('loading');
+          setAssignment(null);
+          setSelectedTasks([]);
+        }
 
         try {
           const result = await fetchAssignmentById(assignmentId);
 
           if (!active) return;
 
+          loadedAssignmentIdRef.current = assignmentId;
           setAssignment(result);
+          setTasksRefreshKey((value) => value + 1);
           setStatus(result ? 'ready' : 'missing');
         } catch {
           if (!active) return;
 
-          setStatus('error');
+          if (loadedAssignmentIdRef.current !== assignmentId) {
+            setStatus('error');
+          } else {
+            console.log('Could not refresh assignment details.');
+          }
         }
       }
 
@@ -258,6 +268,7 @@ export function AssignmentDetailsScreen({ route, navigation }: Props) {
           <AssignmentMicrotasks
             key={assignment.id}
             assignment={assignment}
+            refreshKey={tasksRefreshKey}
             onSelectionChange={setSelectedTasks}
           />
           {/* Open the focus screen for this selected assignment. */}
