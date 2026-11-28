@@ -17,7 +17,8 @@ import { fonts, textStyles } from '../../../theme/typography';
 import type { RootStackParamList } from '../../navigation/types';
 import { useFocusCountdown } from '../../studySessions/hooks/useFocusCountdown';
 import { BREAK_CATALOG } from '../data/breakTypes';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { recordBreakSession } from '../../../repositories/breakSessionsRepository';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -79,6 +80,76 @@ export function BreakSessionScreen({ route, navigation }: Props) {
       : 0;
 
   const returningRef = useRef(false);
+  const recordedRef = useRef(false);
+  const startedAtRef = useRef(new Date());
+  const elapsedMsRef = useRef(0);
+  const focusedSinceRef = useRef<number | null>(null);
+
+  // Match the countdown: time continues in the background while focused,
+  // but pauses when another screen covers this screen.
+  useEffect(() => {
+    if (!isFocused || !validBreak) return;
+
+    focusedSinceRef.current = Date.now();
+
+    return () => {
+      if (focusedSinceRef.current !== null) {
+        elapsedMsRef.current += Math.max(
+          0,
+          Date.now() - focusedSinceRef.current,
+        );
+        focusedSinceRef.current = null;
+      }
+    };
+  }, [isFocused, validBreak]);
+
+  const saveBreak = useCallback(() => {
+    const assignmentId = route.params.assignmentId;
+
+    if (recordedRef.current || !validBreak || !assignmentId) return;
+
+    recordedRef.current = true;
+
+    const endedAt = new Date();
+    const activeMs =
+      focusedSinceRef.current === null
+        ? 0
+        : Math.max(0, endedAt.getTime() - focusedSinceRef.current);
+
+    const duration = Math.min(
+      durationSeconds,
+      Math.floor((elapsedMsRef.current + activeMs) / 1000),
+    );
+
+    if (duration < 1) return;
+
+    void recordBreakSession({
+      clientSessionId: route.key,
+      assignmentId,
+      breakType: route.params.breakId,
+      startedAt: startedAtRef.current,
+      endedAt,
+      durationSeconds: duration,
+    }).catch((error: unknown) => {
+      console.log('Could not save break time:', error);
+    });
+  }, [
+    durationSeconds,
+    route.key,
+    route.params.assignmentId,
+    route.params.breakId,
+    validBreak,
+  ]);
+
+  // Include system back/gestures and removal by a parent navigator.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', saveBreak);
+
+    return () => {
+      unsubscribe();
+      saveBreak();
+    };
+  }, [navigation, saveBreak]);
 
   useEffect(() => {
     if (!isFocused || !validBreak || !hasEnded || returningRef.current) {
@@ -86,13 +157,15 @@ export function BreakSessionScreen({ route, navigation }: Props) {
     }
 
     returningRef.current = true;
+    saveBreak();
     navigation.goBack();
-  }, [isFocused, validBreak, hasEnded, navigation]);
+  }, [isFocused, validBreak, hasEnded, navigation, saveBreak]);
 
   function returnFromBreak() {
     if (returningRef.current) return;
 
     returningRef.current = true;
+    saveBreak();
     navigation.goBack();
   }
 

@@ -1,3 +1,4 @@
+import type { RouteProp } from '@react-navigation/native';
 import {
   useMemo,
   useState,
@@ -59,7 +60,11 @@ import type {
   BreakType,
 } from '../types';
 
-export function TakeABreakScreen() {
+export function TakeABreakScreen({
+  route,
+}: {
+  route?: RouteProp<RootStackParamList, 'TakeABreak'>;
+}) {
   const navigation =
     useNavigation<
       NativeStackNavigationProp<RootStackParamList, 'TakeABreak'>
@@ -171,6 +176,9 @@ export function TakeABreakScreen() {
             onComplete={() =>
               navigation.replace('BreakSession', {
                 breakId: selectedBreak.id,
+                ...(route?.params?.assignmentId
+                  ? { assignmentId: route.params.assignmentId }
+                  : {}),
               })
             }
           />
