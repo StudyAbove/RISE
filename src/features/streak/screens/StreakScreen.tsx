@@ -5,6 +5,7 @@ import { BackButton } from '../../../components/BackButton';
 import { useCurrentDate } from '../../../hooks/useCurrentDate';
 import { colors } from '../../../theme/colors';
 import { StreakAssignmentsList } from '../components/StreakAssignmentsList';
+import { StreakBadges } from '../components/StreakBadges';
 import { StreakWeekRow } from '../components/StreakWeekRow';
 import { useStreakData } from '../hooks/useStreakData';
 import { getResetMessage } from '../utils/resetMessages';
@@ -45,7 +46,7 @@ function StatCard({ value, label }: { value: number; label: string }) {
 export function StreakScreen() {
   const insets = useSafeAreaInsets();
   const now = useCurrentDate();
-  const { status, streak, reload } = useStreakData(now);
+  const { status, streak, badges, reload } = useStreakData(now);
 
   return (
     <View style={styles.screen}>
@@ -121,6 +122,8 @@ export function StreakScreen() {
               <StatCard value={streak.longest} label="Longest Streak" />
               <StatCard value={streak.totalWeeks} label="Total Weeks" />
             </View>
+
+            {badges && <StreakBadges badges={badges} />}
 
             {streak.currentAssignments.length > 0 && (
               <StreakAssignmentsList assignments={streak.currentAssignments} />

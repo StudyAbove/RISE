@@ -245,4 +245,32 @@ describe('StreakScreen', () => {
       expect(screen.queryByRole('header', { name: 'This streak' })).toBeNull();
     });
   });
+
+  describe('badges (#9)', () => {
+    it('shows earned badges with their date and locked ones with progress', async () => {
+      // 12 on time, one a day, ending today: the 5th on Nov 4, the 10th on Nov 9.
+      mockFetchAssignments.mockResolvedValue(
+        Array.from({ length: 12 }, (_, index) => onTime(11 - index)),
+      );
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByRole('header', { name: 'Badges' })).toBeTruthy();
+      expect(screen.getByLabelText('5 on-time assignments badge, earned November 4')).toBeTruthy();
+      expect(screen.getByLabelText('10 on-time assignments badge, earned November 9')).toBeTruthy();
+      expect(screen.getByLabelText('25 on-time assignments badge, locked, 12 of 25')).toBeTruthy();
+      expect(screen.getByText('Earned Nov 4')).toBeTruthy();
+      expect(screen.getByText('12 / 25')).toBeTruthy();
+    });
+
+    it('shows all three locked before any on-time work', async () => {
+      mockFetchAssignments.mockResolvedValue([]);
+
+      await render(<StreakScreen />);
+
+      expect(await screen.findByText('0 / 5')).toBeTruthy();
+      expect(screen.getByText('0 / 10')).toBeTruthy();
+      expect(screen.getByText('0 / 25')).toBeTruthy();
+    });
+  });
 });
