@@ -486,7 +486,7 @@ export function FocusSessionScreen({ route, navigation }: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Take a break"
-          onPress={() => navigation.navigate('TakeABreak')}
+          onPress={() => navigation.navigate('TakeABreak', { assignmentId: route.params.assignmentId })}
           style={({ pressed }) => [
             styles.actionButton,
             styles.breakButton,

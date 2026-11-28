@@ -1,3 +1,4 @@
+import { BreakTimeCard } from '../components/BreakTimeCard';
 import { useCallback, useRef, useState } from 'react';
 import type { Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -47,6 +48,7 @@ export function AnalyticsScreen() {
         titleRef={titleRef}
       />
       <StudyTimeCard seconds={studySeconds} />
+      <BreakTimeCard />
     </TabScreenScrollView>
   );
 }

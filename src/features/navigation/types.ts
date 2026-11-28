@@ -38,9 +38,10 @@ export type RootStackParamList = {
       estimatedMinutes: number;
     }[];
   };
-  TakeABreak: undefined;
+  TakeABreak: { assignmentId?: string } | undefined;
   BreakSession: {
     breakId: string;
+    assignmentId?: string;
   };
 };
 

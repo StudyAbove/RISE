@@ -39,6 +39,7 @@ function breakScreen(breakId: string) {
     },
     navigation: {
       goBack: mockGoBack,
+      addListener: jest.fn(() => jest.fn()),
     },
   } as unknown as Props;
 
