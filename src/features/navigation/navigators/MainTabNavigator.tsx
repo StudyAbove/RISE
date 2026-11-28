@@ -4,6 +4,7 @@ import { BottomNavBar } from '../components/BottomNavBar';
 import { TabBarIcon } from '../components/TabBarIcon';
 import { MAIN_TABS } from '../config/mainTabs';
 import type { MainTabParamList } from '../types';
+import { AppTourController } from '../../appTour/AppTourController';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -21,7 +22,12 @@ export function MainTabNavigator() {
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={{ headerShown: false }}
-      tabBar={(props) => <BottomNavBar {...props} />}
+      tabBar={(props) => (
+        <>
+          <BottomNavBar {...props} />
+          <AppTourController navigation={props.navigation} />
+        </>
+      )}
     >
       {MAIN_TABS.map(({ name, label, component, icon }) => (
         <Tab.Screen

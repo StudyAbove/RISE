@@ -26,6 +26,8 @@ import {
 import { CanvasSettingsRow } from '../../canvas/components/CanvasSettingsRow';
 import { NotificationSettingsRow } from '../components/NotificationSettingsRow';
 import { AccountSettingsRow } from '../components/AccountSettingsRow';
+import { useNavigation } from '@react-navigation/native';
+import { requestAppTourReplay } from '../../appTour/AppTourController';
 
 import {
   CalendarConnectionModal,
@@ -73,6 +75,7 @@ const chevronRightIcon =
   );
 
 export function SettingsScreen() {
+  const navigation = useNavigation();
   const insets =
     useSafeAreaInsets();
 
@@ -572,6 +575,27 @@ export function SettingsScreen() {
         </View>
 
         <NotificationSettingsRow />
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Replay app tour"
+          onPress={() => {
+            requestAppTourReplay();
+            navigation.navigate('MainTabs', { screen: 'Home' });
+          }}
+          style={({ pressed }) => [
+            styles.logoutCard,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.logoutText, { flex: 1 }]}>
+            App tour
+          </Text>
+
+          <View style={styles.settingsChevronContainer}>
+            <SettingsChevronIcon width={24} height={24} />
+          </View>
+        </Pressable>
 
         <Pressable
           style={({
