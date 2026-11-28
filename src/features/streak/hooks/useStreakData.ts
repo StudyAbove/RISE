@@ -7,6 +7,7 @@ import {
   fetchAssignments,
   type Assignment,
 } from '../../../repositories/assignmentsRepository';
+import { getBadges, type Badge } from '../utils/badges';
 import { calculateStreak, type StreakSummary } from '../utils/streak';
 
 export type StreakDataStatus = 'loading' | 'ready' | 'error' | 'signedOut';
@@ -17,7 +18,7 @@ export type StreakDataStatus = 'loading' | 'ready' | 'error' | 'signedOut';
  * Reloads whenever the Streak page is opened and when the app comes back to
  * the foreground on it, so newly finished or synced assignments show up.
  *
- * `streak` is null until the assignments have loaded. `reload` tries again
+ * `streak` and `badges` (#9) are null until the assignments have loaded. `reload` tries again
  * after an error.
  */
 export function useStreakData(now: Date) {
@@ -72,8 +73,13 @@ export function useStreakData(now: Date) {
     [assignments, now, status],
   );
 
+  const badges = useMemo<Badge[] | null>(
+    () => (status === 'ready' ? getBadges(assignments, now) : null),
+    [assignments, now, status],
+  );
+
   // Tries loading again, e.g. from "Try again" after an error.
   const reload = useCallback(() => setReloadCount((count) => count + 1), []);
 
-  return { status, streak, reload };
+  return { status, streak, badges, reload };
 }

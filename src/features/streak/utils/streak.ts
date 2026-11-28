@@ -71,6 +71,16 @@ function getStreakEvents(assignments: Assignment[], now: Date): StreakEvent[] {
   return events.sort((a, b) => a.time.getTime() - b.time.getTime());
 }
 
+/**
+ * Every assignment turned in on time, oldest first, using the same rules as
+ * the streak. Badges (#9) count these.
+ */
+export function getOnTimeSubmissions(assignments: Assignment[], now: Date): StreakAssignment[] {
+  return getStreakEvents(assignments, now)
+    .filter((event) => event.type === 'submitted')
+    .map(({ assignment, time }) => ({ assignment, completedAt: time }));
+}
+
 export function calculateStreak(assignments: Assignment[], now: Date): StreakSummary {
   const events = getStreakEvents(assignments, now);
 
